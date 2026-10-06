@@ -84,6 +84,26 @@ function ReportIcon() {
   );
 }
 
+function RequestIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10, flexShrink: 0 }}>
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+      <path d="M9 12h6" />
+      <path d="M9 16h6" />
+    </svg>
+  );
+}
+
+function NavGearIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 10, flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.96 19a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.96a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06-.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06-.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15Z" />
+    </svg>
+  );
+}
+
 /** Financial Year + Refresh Data are global controls, shared by every Client Portal page via
  * this context (provided by ClientPortalLayout, rendered in the shared topbar) — not owned by
  * any single page. A page that has its own data to refresh calls registerRefresh(fn) in a
@@ -152,7 +172,11 @@ function NavGroup({ item, location, closeSidebar }) {
             className={isItemActive(child, location) ? 'active' : undefined}
             onClick={closeSidebar}
           >
-            {child.label}
+            <span className="bp-sub-tree">
+              <span className="bp-sub-line" />
+              <span className="bp-sub-dot" />
+            </span>
+            <span className="bp-sub-text">{child.label}</span>
           </Link>
         ))}
       </div>
@@ -486,7 +510,7 @@ export function RequireAuth({ roles }) {
 
 function PortalFrame({
   brand, subtitle, title, userLabel, nav, loginPath, extraTopRight, footLinks = [],
-  shellClassName = '', headerContent, rightContent, sidebarFoot,
+  shellClassName = '', headerContent, rightContent, sidebarFoot, logoClickable = true,
 }) {
   const { logout } = useAuth();
   const navigate = useNavigate();
@@ -499,13 +523,23 @@ function PortalFrame({
       {open && <div className="bp-backdrop" role="presentation" onClick={() => setOpen(false)} />}
       <aside className={`bp-sidebar ${open ? 'open' : ''}`}>
         <div className="bp-brand">
-          <Link to="/" className="bp-brand-link" title="A B Khan & Associates">
-            <img src="/assets/ca-india-logo.png" alt="A B Khan & Associates" className="bp-brand-logo" />
-            <span className="bp-brand-text">
-              <strong className="bp-brand-name">A B KHAN & ASSOCIATES</strong>
-              <span className="bp-brand-tagline">Chartered Accountants</span>
-            </span>
-          </Link>
+          {logoClickable ? (
+            <Link to="/" className="bp-brand-link" title="A B Khan & Associates">
+              <img src="/assets/ca-india-logo.png" alt="A B Khan & Associates" className="bp-brand-logo" />
+              <span className="bp-brand-text">
+                <strong className="bp-brand-name">A B KHAN & ASSOCIATES</strong>
+                <span className="bp-brand-tagline">Chartered Accountants</span>
+              </span>
+            </Link>
+          ) : (
+            <div className="bp-brand-link" style={{ cursor: 'default', userSelect: 'none' }} title="A B Khan & Associates">
+              <img src="/assets/ca-india-logo.png" alt="A B Khan & Associates" className="bp-brand-logo" />
+              <span className="bp-brand-text">
+                <strong className="bp-brand-name">A B KHAN & ASSOCIATES</strong>
+                <span className="bp-brand-tagline">Chartered Accountants</span>
+              </span>
+            </div>
+          )}
           {brand ? <div className="bp-brand-portal">{brand}</div> : null}
           {subtitle ? <div className="bp-brand-sub">{subtitle}</div> : null}
         </div>
@@ -647,6 +681,166 @@ function ClientTopbarControls() {
   );
 }
 
+function ClockIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function RefreshIcon({ size = 15 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <polyline points="23 4 23 10 17 10" />
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+    </svg>
+  );
+}
+
+function AdminTopbarHeader() {
+  return (
+    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1e3a8a', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+      Welcome Back to the Admin Portal
+    </h1>
+  );
+}
+
+function formatLastLogin(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[d.getMonth()];
+  const year = d.getFullYear();
+  let hours = d.getHours();
+  const mins = String(d.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  const strHours = String(hours).padStart(2, '0');
+  return `${day} ${month} ${year}, ${strHours}:${mins} ${ampm}`;
+}
+
+function AdminTopbarControls() {
+  const { user } = useAuth();
+  const [fy, setFy] = useState(currentFyLabel());
+  const [refreshing, setRefreshing] = useState(false);
+  const fyOptions = buildFyOptions();
+  const range = fyDateRange(fy);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      {/* Financial Year Selector */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '6px 14px',
+          border: '1px solid #e2e8f0',
+          borderRadius: 8,
+          background: '#fff',
+        }}
+      >
+        <span style={{ color: '#2563eb', display: 'flex', alignItems: 'center' }}>
+          <CalendarIcon size={20} />
+        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+          <span style={{ fontSize: 10, color: '#64748b' }}>Financial Year</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <select
+              value={fy}
+              onChange={(e) => setFy(e.target.value)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                fontWeight: 700,
+                fontSize: 13,
+                color: '#0f172a',
+                cursor: 'pointer',
+                padding: 0,
+                outline: 'none',
+              }}
+            >
+              {fyOptions.map((f) => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#64748b', pointerEvents: 'none' }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+          <span style={{ fontSize: 10, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+            {ddMonYyyy(range.from)} - {ddMonYyyy(range.to)}
+          </span>
+        </div>
+      </div>
+
+      {/* Refresh Data Button */}
+      <button
+        type="button"
+        onClick={() => {
+          setRefreshing(true);
+          setTimeout(() => setRefreshing(false), 600);
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '10px 16px',
+          border: '1px solid #bfdbfe',
+          borderRadius: 8,
+          background: '#fff',
+          color: '#2563eb',
+          fontWeight: 600,
+          fontSize: 13,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+          transition: 'all 0.15s ease',
+        }}
+      >
+        <RefreshIcon size={15} />
+        {refreshing ? 'Refreshing…' : 'Refresh Data'}
+      </button>
+
+      {/* Last Login */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#475569' }}>
+        <ClockIcon size={18} />
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+          <span style={{ fontSize: 10, color: '#64748b' }}>Last Login</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap' }}>
+            {formatLastLogin(user?.last_login_at)}
+          </span>
+        </div>
+      </div>
+
+      {/* Notification Bell with red dot */}
+      <div
+        title="Notifications"
+        style={{
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 38,
+          height: 38,
+          borderRadius: '50%',
+          border: '1px solid #e2e8f0',
+          background: '#fff',
+          cursor: 'pointer',
+          flexShrink: 0,
+        }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        <span style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: '#ef4444' }} />
+      </div>
+    </div>
+  );
+}
+
 export function ClientPortalLayout() {
   const { user } = useAuth();
   const profile = user?.client_profile;
@@ -772,24 +966,73 @@ export function ClientReportsLayout() {
 export function AdminPortalLayout() {
   const { user } = useAuth();
 
+  const nav = [
+    { to: '/admin', label: 'Dashboard', end: true, icon: HomeIcon },
+    { to: '/admin/clients', label: 'Clients', icon: UsersIcon },
+    { to: '/admin/billing', label: 'Billing', icon: InvoiceIcon },
+    {
+      label: 'GST Compliance',
+      icon: ShieldCheckIcon,
+      children: [
+        {
+          to: '/admin/gst-returns?tab=gstr-1',
+          label: 'GSTR-1',
+          isActive: (_, { pathname, search }) => pathname === '/admin/gst-returns' && search.includes('gstr-1'),
+        },
+        { to: '/admin/gstr-2b', label: 'GSTR-2B' },
+        {
+          to: '/admin/gst-returns?tab=gstr-3b',
+          label: 'GSTR-3B',
+          isActive: (_, { pathname, search }) => pathname === '/admin/gst-returns' && (search.includes('gstr-3b') || (!search.includes('gstr-1') && !search.includes('cmp-08'))),
+        },
+        {
+          to: '/admin/gst-returns?tab=cmp-08',
+          label: 'CMP-08',
+          isActive: (_, { pathname, search }) => pathname === '/admin/gst-returns' && search.includes('cmp-08'),
+        },
+      ],
+    },
+    {
+      to: '/admin/gst-filing-requests',
+      label: 'Request',
+      icon: RequestIcon,
+      isActive: (_, { pathname }) =>
+        pathname.startsWith('/admin/gst-filing-requests') ||
+        pathname.startsWith('/admin/edit-requests') ||
+        pathname.startsWith('/admin/pending-approval'),
+    },
+    { to: '/admin/firm-billing/reports', label: 'Reports', icon: ReportIcon },
+    { to: '/admin/configuration', label: 'Configuration', icon: NavGearIcon },
+    {
+      label: 'Settings',
+      icon: NavGearIcon,
+      children: [
+        {
+          to: '/admin/settings',
+          label: 'Admin Security',
+          isActive: (_, { pathname, search }) => pathname === '/admin/settings' && !search.includes('company-deletion'),
+        },
+        { to: '/admin/staff', label: 'Sub-User Management' },
+        {
+          to: '/admin/settings?tab=company-deletion',
+          label: 'Company Deletion',
+          isActive: (_, { pathname, search }) => pathname === '/admin/settings' && search.includes('company-deletion'),
+        },
+      ],
+    },
+  ];
+
   return (
     <PortalFrame
       brand=""
       title="Admin Portal"
       userLabel={`${user?.name || ''} · ${user?.role || ''}`}
       loginPath="/login"
-      nav={[
-        { to: '/admin', label: 'Overview', end: true },
-        { to: '/admin/clients', label: 'Clients' },
-        { to: '/admin/billing', label: 'Billing' },
-        { to: '/admin/gstr-2b', label: 'GSTR-2B' },
-        { to: '/admin/gst-returns', label: 'GST Returns' },
-        { to: '/admin/gst-filing-requests', label: 'Filing Requests' },
-        { to: '/admin/edit-requests', label: 'Edit Requests' },
-        { to: '/admin/pending-approval', label: 'Pending Approval' },
-        { to: '/admin/configuration', label: 'Configuration' },
-        { to: '/admin/settings', label: 'Settings' },
-      ]}
+      logoClickable={false}
+      shellClassName="bp-shell-admin"
+      headerContent={<AdminTopbarHeader />}
+      rightContent={<AdminTopbarControls />}
+      nav={nav}
     />
   );
 }
@@ -802,6 +1045,8 @@ export function AdminBillingLayout() {
       title="Billing"
       userLabel={`${user?.name || ''} · ${user?.role || ''}`}
       loginPath="/login"
+      logoClickable={false}
+      shellClassName="bp-shell-admin"
       nav={ADMIN_BILLING_NAV}
       footLinks={[{ to: '/admin', label: '← Back to Admin' }]}
     />

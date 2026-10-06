@@ -2456,6 +2456,137 @@ select.bp-filter-control {
   background: rgba(255, 255, 255, 0.14);
 }
 
+/* ---- Admin Portal: Sidebar styling & Dropdown Submenu Design ---- */
+.bp-shell-admin .bp-sidebar {
+  background: #002244;
+}
+
+.bp-shell-admin .bp-nav a.active {
+  box-shadow: none !important;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.bp-shell-admin .bp-nav-group.open .bp-nav-chevron {
+  transform: rotate(180deg);
+}
+
+.bp-shell-admin .bp-nav-group.open .bp-nav-group-header {
+  background: transparent;
+}
+
+.bp-shell-admin .bp-nav-group.open .bp-nav-group-header:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Hide children completely when collapsed so pseudo-elements never leak */
+.bp-shell-admin .bp-nav-group:not(.open) .bp-nav-children {
+  display: none !important;
+}
+
+.bp-shell-admin .bp-nav-group.open .bp-nav-children {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 4px 10px 8px 12px;
+  padding: 6px 4px 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+  max-height: 400px;
+  overflow: visible;
+}
+
+/* Vertical connecting line ONLY inside the open submenu container */
+.bp-shell-admin .bp-nav-group.open .bp-nav-children::before {
+  content: '';
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  left: 17px;
+  width: 1px;
+  background: #2563eb;
+  opacity: 0.7;
+  z-index: 1;
+}
+
+/* Suppress legacy pseudo-elements */
+.bp-shell-admin .bp-nav-children a::before,
+.bp-shell-admin .bp-nav-children a::after,
+.bp-shell-client .bp-nav-children a::before,
+.bp-shell-client .bp-nav-children a::after {
+  content: none !important;
+  display: none !important;
+}
+
+.bp-shell-admin .bp-nav-children a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.88);
+  text-decoration: none;
+  border-radius: 6px;
+  z-index: 2;
+  transition: all 0.15s ease;
+}
+
+/* Tree node with horizontal branch and circular dot */
+.bp-shell-admin .bp-sub-tree {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.bp-shell-admin .bp-sub-line {
+  width: 9px;
+  height: 1px;
+  background: #2563eb;
+  opacity: 0.7;
+}
+
+.bp-shell-admin .bp-sub-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #3b82f6;
+  box-shadow: 0 0 3px rgba(59, 130, 246, 0.8);
+  flex-shrink: 0;
+}
+
+.bp-shell-admin .bp-sub-text {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.bp-shell-admin .bp-nav-children a:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.bp-shell-admin .bp-nav-children a.active {
+  background: rgba(47, 111, 219, 0.25);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Client Portal sub-nav dot fallback */
+.bp-shell-client .bp-sub-line {
+  display: none;
+}
+
+.bp-shell-client .bp-sub-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #2f6fdb;
+  margin-right: 8px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
 /* ---- Client Portal: notification bell + avatar dropdown ---- */
 .bp-topbar-icon-btn {
   position: relative;
