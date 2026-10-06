@@ -244,6 +244,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'role' => $user->role,
             'phone' => $user->phone,
+            'last_login_at' => $user->last_login_at?->toIso8601String(),
             'client_profile' => $user->clientProfile,
         ];
     }
