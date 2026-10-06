@@ -102,12 +102,7 @@ class GstReturnController extends Controller
     /** Indian FY: 1 Apr – 31 Mar. e.g. "2026-27" -> starts 2026. */
     private function fyStartYear(?string $fy): int
     {
-        if ($fy && preg_match('/^(\d{4})-\d{2}$/', $fy, $m)) {
-            return (int) $m[1];
-        }
-        $now = now();
-
-        return $now->month >= 4 ? $now->year : $now->year - 1;
+        return \App\Services\Gst\GstPeriodService::fyStartYear($fy);
     }
 
     /**
@@ -120,47 +115,7 @@ class GstReturnController extends Controller
      */
     private function buildPeriods(bool $quarterly, int $startYear, string $dueField, bool $qrmp = false): array
     {
-        $periods = [];
-        if ($quarterly) {
-            // Indian GST quarters follow the FY: Apr-Jun, Jul-Sep, Oct-Dec, Jan-Mar.
-            $quarters = [
-                ['q' => 1, 'year' => $startYear, 'label' => 'Apr-Jun', 'endMonth' => 6, 'endYear' => $startYear],
-                ['q' => 2, 'year' => $startYear, 'label' => 'Jul-Sep', 'endMonth' => 9, 'endYear' => $startYear],
-                ['q' => 3, 'year' => $startYear, 'label' => 'Oct-Dec', 'endMonth' => 12, 'endYear' => $startYear],
-                ['q' => 4, 'year' => $startYear + 1, 'label' => 'Jan-Mar', 'endMonth' => 3, 'endYear' => $startYear + 1],
-            ];
-            foreach ($quarters as $q) {
-                // GSTR-1 (QRMP): 13th of the month after the quarter. GSTR-3B (QRMP): 22nd.
-                // CMP-08: 18th of the month after the quarter.
-                $after = \Carbon\Carbon::createFromDate($q['endYear'], $q['endMonth'], 1)->addMonth();
-                $day = ['due_gstr1' => 13, 'due_gstr3b' => 22, 'due_cmp08' => 18][$dueField];
-                $periods[] = [
-                    'period' => "{$q['year']}-Q{$q['q']}",
-                    'label' => $q['label'],
-                    'due_date' => $after->copy()->day($day)->toDateString(),
-                ];
-            }
-        } else {
-            for ($i = 0; $i < 12; $i++) {
-                $month = 4 + $i;
-                $year = $startYear;
-                if ($month > 12) {
-                    $month -= 12;
-                    $year += 1;
-                }
-                // GSTR-1 (plain Monthly): 11th of the following month. GSTR-1 (QRMP monthly
-                // IFF): 13th. GSTR-3B (Monthly): 20th.
-                $after = \Carbon\Carbon::createFromDate($year, $month, 1)->addMonth();
-                $day = $dueField === 'due_gstr3b' ? 20 : ($qrmp ? 13 : 11);
-                $periods[] = [
-                    'period' => sprintf('%04d-%02d', $year, $month),
-                    'label' => \Carbon\Carbon::createFromDate($year, $month, 1)->format('M \'y'),
-                    'due_date' => $after->copy()->day($day)->toDateString(),
-                ];
-            }
-        }
-
-        return $periods;
+        return \App\Services\Gst\GstPeriodService::buildPeriods($quarterly, $startYear, $dueField, $qrmp);
     }
 
     /**

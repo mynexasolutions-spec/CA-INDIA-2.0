@@ -2458,12 +2458,15 @@ select.bp-filter-control {
 
 /* ---- Admin Portal: Sidebar styling & Dropdown Submenu Design ---- */
 .bp-shell-admin .bp-sidebar {
-  background: #002244;
+  background: #091e3a;
 }
 
 .bp-shell-admin .bp-nav a.active {
-  box-shadow: none !important;
-  background: rgba(255, 255, 255, 0.15);
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35) !important;
 }
 
 .bp-shell-admin .bp-nav-group.open .bp-nav-chevron {
