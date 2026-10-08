@@ -20,6 +20,8 @@ use App\Http\Controllers\Api\Client\DocumentEditRequestController as ClientDocum
 use App\Http\Controllers\Api\Admin\DocumentEditRequestController as AdminDocumentEditRequestController;
 use App\Http\Controllers\Api\Admin\MasterConfigController;
 use App\Http\Controllers\Api\Admin\ClientsUnlockController;
+use App\Http\Controllers\Api\Admin\LookupController;
+use App\Http\Controllers\Api\Admin\ClientAdditionalInfoController;
 use App\Http\Controllers\Api\Client\DashboardController as ClientDashboard;
 use App\Http\Controllers\Api\Public\ContactController;
 use App\Http\Controllers\Api\Public\ContentController;
@@ -150,6 +152,23 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/clients/{id}', [ClientProfileController::class, 'update']);
         Route::post('/clients/{id}', [ClientProfileController::class, 'update']);
         Route::delete('/clients/{id}', [ClientProfileController::class, 'destroy']);
+        Route::post('/clients/{id}/password', [ClientProfileController::class, 'setPassword']);
+        Route::get('/clients/{id}/additional-info', [ClientAdditionalInfoController::class, 'index']);
+        Route::post('/clients/{id}/additional-info', [ClientAdditionalInfoController::class, 'store']);
+        Route::put('/clients/{id}/additional-info/{infoId}', [ClientAdditionalInfoController::class, 'update']);
+        Route::delete('/clients/{id}/additional-info/{infoId}', [ClientAdditionalInfoController::class, 'destroy']);
+        Route::get('/clients/{id}/bank-accounts', [\App\Http\Controllers\Api\Admin\ClientBankAccountController::class, 'index']);
+        Route::post('/clients/{id}/bank-accounts', [\App\Http\Controllers\Api\Admin\ClientBankAccountController::class, 'store']);
+        Route::put('/clients/{id}/bank-accounts/{bankId}', [\App\Http\Controllers\Api\Admin\ClientBankAccountController::class, 'update']);
+        Route::delete('/clients/{id}/bank-accounts/{bankId}', [\App\Http\Controllers\Api\Admin\ClientBankAccountController::class, 'destroy']);
+        Route::get('/clients/{id}/notes', [\App\Http\Controllers\Api\Admin\ClientNoteController::class, 'index']);
+        Route::post('/clients/{id}/notes', [\App\Http\Controllers\Api\Admin\ClientNoteController::class, 'store']);
+        Route::put('/clients/{id}/notes/{noteId}', [\App\Http\Controllers\Api\Admin\ClientNoteController::class, 'update']);
+        Route::delete('/clients/{id}/notes/{noteId}', [\App\Http\Controllers\Api\Admin\ClientNoteController::class, 'destroy']);
+
+        Route::get('/lookup/pin/{pin}', [LookupController::class, 'pin']);
+        Route::get('/lookup/ifsc/{ifsc}', [LookupController::class, 'ifsc']);
+        Route::get('/gst-filing-rules', [ClientProfileController::class, 'getGstFilingRules']);
         
         Route::get('/gst-filing/requests', [\App\Http\Controllers\Api\Admin\GstFilingController::class, 'index']);
         Route::get('/gst-filing/requests/{id}', [\App\Http\Controllers\Api\Admin\GstFilingController::class, 'show']);

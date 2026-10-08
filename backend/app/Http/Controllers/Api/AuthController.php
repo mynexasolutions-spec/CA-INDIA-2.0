@@ -103,7 +103,11 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['email' => ['Invalid or expired reset token.']]);
         }
         $user = User::where('email', $data['email'])->firstOrFail();
-        $user->update(['password' => Hash::make($data['password'])]);
+        $user->update([
+            'password' => Hash::make($data['password']),
+            'password_updated_at' => now(),
+            'password_updated_by' => 'client',
+        ]);
         DB::table('password_reset_tokens')->where('email', $data['email'])->delete();
         return response()->json(['message' => 'Password updated. You can sign in now.']);
     }
@@ -201,7 +205,11 @@ class AuthController extends Controller
         }
 
         $user = User::where('email', $data['email'])->firstOrFail();
-        $user->update(['password' => Hash::make($data['password'])]);
+        $user->update([
+            'password' => Hash::make($data['password']),
+            'password_updated_at' => now(),
+            'password_updated_by' => 'client',
+        ]);
         DB::table('password_reset_otps')->where('email', $data['email'])->delete();
 
         return response()->json(['message' => 'Your password has been reset successfully.']);
@@ -225,7 +233,11 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['current_password' => ['Current password is incorrect.']]);
         }
 
-        $user->update(['password' => Hash::make($data['password'])]);
+        $user->update([
+            'password' => Hash::make($data['password']),
+            'password_updated_at' => now(),
+            'password_updated_by' => $user->isClient() ? 'client' : 'admin',
+        ]);
         ActivityLog::create([
             'user_id' => $user->id,
             'action' => 'changed_password',

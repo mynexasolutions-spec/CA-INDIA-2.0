@@ -1,0 +1,329 @@
+
+--- pdf page 1 ---
+ 
+P a g e 1 | 7 
+ 
+0) Admin Portal Navigation & Dropdown Behaviour 
+Before Dropdown 
+ 
+After Dropdown 
+ 
+1. Overall Admin Portal Layout 
+• 
+Maintain the existing Admin Portal layout exactly as shown in the reference images. 
+• 
+Keep the left sidebar fixed. 
+• 
+Keep the main content area on the right. 
+• 
+Maintain the existing: 
+
+--- pdf page 2 ---
+ 
+P a g e 2 | 7 
+ 
+o 
+Font style 
+o 
+Font sizes 
+o 
+Icons 
+o 
+Spacing 
+o 
+Alignment 
+o 
+Colours 
+o 
+Sidebar width 
+o 
+Header design 
+• 
+Do not add any additional dashboard content to the blank main-content area. 
+2. Left Sidebar Menu 
+The sidebar menu must appear in this exact order: 
+1. Dashboard 
+2. Clients 
+3. Billing 
+4. GST Compliance ▼ 
+5. Request 
+6. Reports 
+7. Configuration 
+8. Settings ▼ 
+Maintain the existing icon and text style from the reference images. 
+3. A B KHAN & ASSOCIATES Logo / Name – NON-CLICKABLE 
+The A B KHAN & ASSOCIATES logo/name displayed at the top-left of the sidebar is currently clickable. 
+Required change: 
+• 
+Make the entire logo/name area completely non-clickable. 
+• 
+It must not function as a button or hyperlink. 
+• 
+Clicking anywhere on: 
+o 
+CA logo 
+o 
+A B KHAN & ASSOCIATES name 
+o 
+CHARTERED ACCOUNTANTS text 
+o 
+Entire logo/header area 
+must result in No Action. 
+Navigation restriction 
+
+--- pdf page 3 ---
+ 
+P a g e 3 | 7 
+ 
+Clicking the logo/name must NOT: 
+• 
+Redirect to Dashboard 
+• 
+Redirect to Home 
+• 
+Open Profile 
+• 
+Open any other page 
+• 
+Refresh/navigate the application 
+Interaction 
+• 
+Remove any click interaction. 
+• 
+Remove any hover effect that indicates the logo is clickable. 
+• 
+Cursor should not indicate a clickable element. 
+• 
+Do not show button/link styling. 
+• 
+Keep the logo, company name, position, size, colours and existing design exactly as shown. 
+Important: This is a visual/header branding area only and should have no navigation functionality. 
+4. GST Compliance – Collapsed State 
+As shown in Reference Image 1: 
+When GST Compliance is collapsed: 
+• 
+Display GST Compliance. 
+• 
+Display the dropdown arrow on the right. 
+• 
+Do not display: 
+o 
+GSTR-1 
+o 
+GSTR-2B 
+o 
+GSTR-3B 
+o 
+CMP-08 
+The sidebar should remain compact. 
+5. GST Compliance – Expanded State 
+When the user clicks GST Compliance, expand the submenu as shown in Reference Image 2. 
+Display: 
+• 
+GSTR-1 
+• 
+GSTR-2B 
+• 
+GSTR-3B 
+• 
+CMP-08 
+Submenu design 
+
+--- pdf page 4 ---
+ 
+P a g e 4 | 7 
+ 
+Use the same design shown in the reference: 
+• 
+Vertical connecting line 
+• 
+Small blue circular indicators 
+• 
+Proper indentation 
+• 
+Subtle bordered submenu container 
+• 
+Consistent vertical spacing 
+• 
+Same font style as reference 
+The dropdown arrow should change orientation appropriately between collapsed and expanded states. 
+6. GST Compliance Interaction 
+First click 
+GST Compliance ▼ → Expand 
+Show: 
+GSTR-1 
+GSTR-2B 
+GSTR-3B 
+CMP-08 
+Second click 
+GST Compliance ▲ → Collapse 
+Hide all four submenu options. 
+Only the submenu should expand/collapse. 
+Do not redesign or resize the sidebar. 
+7. Settings – Dropdown 
+Settings should also support an expandable submenu. 
+When Settings is expanded, display: 
+• 
+Admin Security 
+• 
+Sub-User Management 
+• 
+Company Deletion 
+Use the same submenu design as GST Compliance: 
+• 
+Vertical connecting line 
+• 
+Blue circular indicators 
+• 
+Proper indentation 
+• 
+Subtle border/container 
+• 
+Consistent spacing 
+
+--- pdf page 5 ---
+ 
+P a g e 5 | 7 
+ 
+When Settings is collapsed, these options must not be visible. 
+8. GST Compliance & Settings Must Work Independently 
+The two dropdowns must operate independently. 
+Required behaviour: 
+• 
+Opening GST Compliance should not automatically open Settings. 
+• 
+Opening Settings should not automatically open GST Compliance. 
+• 
+Each dropdown must have its own expand/collapse state. 
+• 
+Clicking one parent menu should not unintentionally trigger another menu. 
+ 
+9. Submenu Navigation 
+The following submenu items should be clickable and navigate to their respective pages: 
+GST Compliance 
+• 
+GSTR-1 
+• 
+GSTR-2B 
+• 
+GSTR-3B 
+• 
+CMP-08 
+Settings 
+• 
+Admin Security 
+• 
+Sub-User Management 
+• 
+Company Deletion 
+Only these submenu items should have navigation functionality. 
+10. Active / Highlighted State 
+• 
+Do not show unnecessary highlighted backgrounds. 
+• 
+A menu should appear active/highlighted only when the user is actually on that page. 
+• 
+Opening a dropdown by itself should not incorrectly make the parent menu look like a selected page. 
+• 
+Maintain the existing visual style. 
+11. Financial Year Selector 
+Keep the Financial Year selector in the top header exactly as shown. 
+Display: 
+Financial Year 
+2026-27 
+01 Apr 2026 – 31 Mar 2027 
+Keep: 
+
+--- pdf page 6 ---
+ 
+P a g e 6 | 7 
+ 
+• 
+Calendar icon 
+• 
+Dropdown arrow 
+• 
+Existing border 
+• 
+Existing size 
+• 
+Existing position 
+• 
+Existing typography 
+12. Header Elements 
+The following header elements must remain unchanged: 
+Left 
+Welcome Back to the Admin Portal 
+ 
+Right 
+• 
+Financial Year selector 
+• 
+Refresh Data button 
+• 
+Last Login information 
+• 
+Notification/bell icon 
+Maintain the existing alignment and spacing. 
+13. Sidebar Visual Requirements 
+Maintain the current visual design: 
+• 
+Dark blue sidebar 
+• 
+White icons 
+• 
+White menu text 
+• 
+Existing blue/white theme 
+• 
+Existing logo 
+• 
+Existing sidebar width 
+• 
+Existing icon sizes 
+• 
+Existing menu spacing 
+• 
+Existing typography 
+Do not redesign the sidebar. 
+14. Required Final States 
+State A – Default / Collapsed 
+The sidebar should appear like Reference Image 1: 
+
+--- pdf page 7 ---
+ 
+P a g e 7 | 7 
+ 
+• 
+GST Compliance collapsed 
+• 
+Settings collapsed 
+• 
+No submenu items visible 
+• 
+Logo/name visible but non-clickable 
+State B – GST Compliance Expanded 
+The sidebar should appear like the GST section in Reference Image 2: 
+• 
+GST Compliance expanded 
+• 
+GSTR-1 visible 
+• 
+GSTR-2B visible 
+• 
+GSTR-3B visible 
+• 
+CMP-08 visible 
+• 
+Settings can remain independently collapsed 
+State C – Settings Expanded 
+• 
+Settings expanded 
+• 
+Admin Security visible 
+• 
+Sub-User Management visible 
+• 
+Company Deletion visible 
+• 
+GST Compliance can remain independently collapsed 

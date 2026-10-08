@@ -1,0 +1,171 @@
+
+--- pdf page 8 ---
+P a g e 1 | 3 
+ 
+1) Dashboard 
+1. GST Return Status – Show Only Actionable Returns 
+The GST Return Status section should display only returns that currently require attention. 
+Display: 
+• 
+Pending / Due Returns 
+• 
+Overdue Returns 
+Do NOT display: 
+• 
+Filed Returns 
+Logic: 
+If Return Status = Pending / Due / Overdue → Display on Dashboard 
+If Return Status = Filed → Do not display 
+Once a return is successfully filed, it should automatically be removed from the GST Return Status table. 
+ 
+2. GST Filing Requests – Show Only Open/Actionable Requests 
+The GST Filing Requests section should display only requests where some action is still pending. 
+Case 1 – Confirmation Received + Filing Pending 
+If: 
+• 
+Confirmation Status = Received 
+• 
+Filing Status = Pending 
+→ Display the request 
+Reason: The client has provided confirmation, but the GST return has not yet been filed. 
+ 
+Case 2 – Confirmation Pending + Filing Not Started 
+If: 
+• 
+Confirmation Status = Pending 
+• 
+Filing Status = Not Started 
+→ Display the request 
+Reason: Confirmation is still required from the client before the filing process can proceed. 
+ 
+Do NOT Display Completed Requests 
+If: 
+• 
+Confirmation Status = Received 
+• 
+Filing Status = Filed 
+→ Do NOT display 
+Because the entire filing process has been completed. 
+ 
+3. Client Request Overview 
+The Client Request Overview should provide a clear summary of all client requests, categorized by request type. 
+It should show: 
+• 
+Total Requests 
+• 
+Pending 
+• 
+Approved 
+• 
+Rejected 
+Example: 
+Example – Profile Update 
+If there are 18 Profile Update Requests: 
+• 
+Total = 18 
+• 
+Pending = 12 
+• 
+Approved = 5 
+• 
+Rejected = 1 
+The counts should update dynamically based on the actual request status. 
+ 
+ 
+
+--- pdf page 9 ---
+P a g e 2 | 3 
+ 
+Status Logic: 
+• 
+New request → Pending 
+• 
+Admin approves request → Approved 
+• 
+Admin rejects request → Rejected 
+• 
+Approved/Rejected requests should no longer be included in the Pending count. 
+• 
+Total should include all requests within the selected period. 
+ 
+4. Upcoming Due Dates – Dynamic Current-Month Logic 
+The Upcoming Due Dates section should show the GST returns that are applicable and due in the current 
+month/period. 
+The dashboard should not display every possible GST return every month. 
+The system should automatically determine which returns are applicable based on: 
+• 
+Client type 
+• 
+GST registration type 
+• 
+Filing frequency 
+• 
+Monthly / Monthly (QRMP) selection 
+• 
+Current Financial Year 
+• 
+Current month 
+• 
+Applicable return due date 
+Main Principle: 
+Only applicable GST returns whose due date falls within the current month/period should be displayed. 
+ 
+5. GSTR-1 – Monthly 
+For clients whose filing frequency is Monthly: 
+GSTR-1 → Monthly 
+The GSTR-1 monthly due date should appear in Upcoming Due Dates whenever the applicable due date falls in the 
+current month. 
+Example: 
+GSTR-1 (Monthly) – Due Date: 11th of Subsequent Month 
+ 
+6. GSTR-3B – Monthly 
+For clients whose filing frequency is Monthly: 
+GSTR-3B → Monthly 
+The applicable GSTR-3B due date should appear in Upcoming Due Dates when it falls in the current month. 
+Example: 
+GSTR-3B (Monthly) – Due Date: 20th of Subsequent Month 
+ 
+7. GSTR-1 – Monthly (QRMP) 
+For clients under the Monthly (QRMP), GSTR-1 should follow whose filing frequency is Monthly. 
+Example: 
+GSTR-1 Monthly (QRMP) – Due Date: 13th of Subsequent Month 
+ 
+8. GSTR-3B – Quarterly 
+This should be handled separately because GSTR-3B is based on the quarterly filing cycle. 
+It should not appear every month. 
+Logic: 
+If the current month/period is the applicable quarter's GSTR-3B due period: 
+→ Display 
+Otherwise: 
+→ Hide 
+Example: 
+GSTR-3B Quarterly – Due Date: 22nd of Subsequent Month after completion of Each Quarter (Examples: April-June 
+2026, the Due Date = 22nd July 2026) 
+The dashboard should dynamically determine whether this return is due based on the applicable quarterly period. 
+
+--- pdf page 10 ---
+P a g e 3 | 3 
+ 
+ 
+9. CMP-08 
+CMP-08 is also a quarterly return/payment statement for applicable composition taxpayers. 
+Therefore, it should not be displayed every month. 
+Logic: 
+If CMP-08 is due in the current month: 
+→ Display 
+If CMP-08 is not due in the current month: 
+→ Hide 
+Example: 
+CMP-08 – Due Date: 18th of Subsequent Month after completion of Each Quarter (Examples: April-June 2026, the 
+Due Date = 18th July 2026) 
+ 
+10. Recommended Upcoming Due Dates Table 
+The table should look like: 
+Important: The order should remain: 
+1. GSTR-1 (Monthly) 
+2. GSTR-3B (Monthly) 
+3. GSTR-1 (QRMP) 
+4. GSTR-3B (Quarterly) 
+5. CMP-08 
+ 
+ 

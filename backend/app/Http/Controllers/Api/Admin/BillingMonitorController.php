@@ -379,7 +379,12 @@ class BillingMonitorController extends Controller
     {
         $data = $request->validate(['password' => 'required|string|min:8']);
         $profile = ClientProfile::with('user')->findOrFail($id);
-        $profile->user->update(['password' => Hash::make($data['password'])]);
+        $profile->user->update([
+            'password' => Hash::make($data['password']),
+            'password_updated_at' => now(),
+            'password_updated_by' => 'admin',
+        ]);
+        $profile->touch();
         ActivityLog::create([
             'user_id' => $request->user()->id,
             'action' => 'reset_client_password',
@@ -388,7 +393,11 @@ class BillingMonitorController extends Controller
             'ip_address' => $request->ip(),
         ]);
 
-        return response()->json(['message' => 'Password updated']);
+        return response()->json([
+            'message' => 'Password updated',
+            'password_updated_at' => $profile->user->password_updated_at?->toIso8601String(),
+            'password_updated_by' => 'admin',
+        ]);
     }
 
     /** Firm-wide GST matrix — always 4 columns with actual aggregates. */

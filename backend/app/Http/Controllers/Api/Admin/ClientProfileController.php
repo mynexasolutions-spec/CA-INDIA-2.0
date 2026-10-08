@@ -54,6 +54,13 @@ class ClientProfileController extends Controller
                 default => null,
             };
         }
+        if ($request->filled('gst_status')) {
+            if ($request->gst_status === 'registered') {
+                $q->where(fn ($w) => $w->where('has_gst', 1)->orWhere(fn ($sq) => $sq->whereNotNull('gstin')->where('gstin', '!=', '')));
+            } elseif ($request->gst_status === 'unregistered') {
+                $q->where(fn ($w) => $w->where(fn ($sq) => $sq->where('has_gst', 0)->orWhereNull('has_gst'))->where(fn ($sq) => $sq->whereNull('gstin')->orWhere('gstin', '')));
+            }
+        }
         if ($request->filled('registered_from')) {
             $q->whereDate('created_at', '>=', $request->registered_from);
         }
@@ -77,14 +84,15 @@ class ClientProfileController extends Controller
 
         $sort = $request->input('sort', 'created_at');
         $dir = $request->input('dir', 'desc');
-        $allowed = ['client_name', 'business_name', 'client_code', 'created_at', 'updated_at'];
+        $allowed = ['client_name', 'business_name', 'client_code', 'created_at', 'updated_at', 'constitution_type', 'pan', 'gstin', 'mobile'];
         if (in_array($sort, $allowed, true)) {
             $q->orderBy($sort, $dir === 'asc' ? 'asc' : 'desc');
         } else {
             $q->latest();
         }
 
-        return response()->json($q->paginate(25));
+        $perPage = max(1, min(100, (int) $request->input('per_page', 10)));
+        return response()->json($q->paginate($perPage));
     }
 
     /** Lightweight client directory for Admin Billing picker (no clients-unlock required). */
@@ -111,7 +119,12 @@ class ClientProfileController extends Controller
     public function show(Request $request, int $id)
     {
         $this->assertClientsUnlocked($request);
-        $profile = ClientProfile::with('user:id,name,email,phone,role,is_active')->findOrFail($id);
+        $profile = ClientProfile::with([
+            'user:id,name,email,phone,role,is_active,password_updated_at,password_updated_by,created_at,updated_at',
+            'additionalInfos',
+            'bankAccounts',
+            'notes',
+        ])->findOrFail($id);
         $data = $profile->toArray();
         foreach (self::ENCRYPTED as $field) {
             if (! empty($data[$field])) {
@@ -226,8 +239,20 @@ class ClientProfileController extends Controller
 
             $profileData = $this->profileFields($data);
             $profileData['user_id'] = $user->id;
-            $profileData['client_code'] = $data['client_code'] ?? $this->nextClientCode();
+            $profileData['client_code'] = \App\Services\Client\ClientIdService::generateNext();
             $profile = ClientProfile::create($profileData);
+            if (!empty($profileData['bank_name']) && !empty($profileData['bank_account'])) {
+                $profile->bankAccounts()->create([
+                    'bank_name' => $profileData['bank_name'],
+                    'account_holder_name' => $profileData['account_holder_name'] ?? $profileData['client_name'] ?? '',
+                    'account_number' => $profileData['bank_account'],
+                    'ifsc_code' => strtoupper($profileData['bank_ifsc'] ?? ''),
+                    'branch' => $profileData['bank_branch'] ?? null,
+                    'account_type' => $profileData['account_type'] ?? 'Current Account',
+                    'is_primary' => true,
+                    'status' => 'Active',
+                ]);
+            }
             $this->handleUploads($request, $profile);
 
             ActivityLog::create([
@@ -258,17 +283,69 @@ class ClientProfileController extends Controller
                 ], fn ($v) => $v !== null);
                 if (! empty($data['password'])) {
                     $userUpdate['password'] = Hash::make($data['password']);
+                    $userUpdate['password_updated_at'] = now();
+                    $userUpdate['password_updated_by'] = 'admin';
                 }
                 if ($userUpdate) {
                     $profile->user->update($userUpdate);
                 }
             }
 
+            unset($data['client_code']); // Client ID is system-generated and read-only
             $profile->update($this->profileFields($data, $profile));
             $this->handleUploads($request, $profile);
 
             return response()->json($profile->fresh()->load('user'));
         });
+    }
+
+    /**
+     * Dedicated admin endpoint to set or reset a client's password.
+     */
+    public function setPassword(Request $request, int $id)
+    {
+        $this->assertClientsUnlocked($request);
+        $data = $request->validate([
+            'password' => 'required|string|min:8',
+        ]);
+
+        $profile = ClientProfile::with('user')->findOrFail($id);
+        $profile->user->update([
+            'password' => Hash::make($data['password']),
+            'password_updated_at' => now(),
+            'password_updated_by' => 'admin',
+        ]);
+
+        $profile->touch();
+
+        ActivityLog::create([
+            'user_id' => $request->user()->id,
+            'action' => 'set_client_password',
+            'subject_type' => User::class,
+            'subject_id' => $profile->user_id,
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json([
+            'message' => 'Password updated successfully.',
+            'password_updated_at' => $profile->user->password_updated_at?->toIso8601String(),
+            'password_updated_by' => 'admin',
+        ]);
+    }
+
+    /**
+     * Get dynamic GST filing frequency rules via GstPeriodService.
+     */
+    public function getGstFilingRules(Request $request)
+    {
+        $this->assertClientsUnlocked($request);
+        $dealerType = $request->query('dealer_type', 'regular');
+        $optOut = $request->query('opt_out', 'Monthly');
+        $applicableFrom = $request->query('applicable_from');
+
+        $rules = \App\Services\Gst\GstPeriodService::getFilingRules($dealerType, $optOut, $applicableFrom);
+
+        return response()->json($rules);
     }
 
     public function billingDashboard(Request $request, int $id)
@@ -606,6 +683,34 @@ class ClientProfileController extends Controller
 
     private function validatePayload(Request $request, bool $creating, ?ClientProfile $profile = null): array
     {
+        $isGstOn = filter_var($request->input('gst_enabled', $request->input('has_gst', $profile?->has_gst ?? false)), FILTER_VALIDATE_BOOLEAN);
+        $isPanOn = filter_var($request->input('pan_enabled', $profile?->pan_enabled ?? false), FILTER_VALIDATE_BOOLEAN);
+        $isTanOn = filter_var($request->input('tan_enabled', $profile?->tan_enabled ?? false), FILTER_VALIDATE_BOOLEAN);
+        $isCinOn = filter_var($request->input('cin_enabled', $profile?->cin_enabled ?? false), FILTER_VALIDATE_BOOLEAN);
+        $isUdyamOn = filter_var($request->input('udyam_enabled', $profile?->udyam_enabled ?? false), FILTER_VALIDATE_BOOLEAN);
+        $isFssaiOn = filter_var($request->input('fssai_enabled', $profile?->fssai_enabled ?? false), FILTER_VALIDATE_BOOLEAN);
+        $isPtrcOn = filter_var($request->input('ptrc_enabled', $profile?->ptrc_enabled ?? false), FILTER_VALIDATE_BOOLEAN);
+        $isPtecOn = filter_var($request->input('ptec_enabled', $profile?->ptec_enabled ?? false), FILTER_VALIDATE_BOOLEAN);
+
+        // Fallbacks for Name as per PAN and CIN Date if primary is empty but alternate was supplied
+        if ($isPanOn && empty($request->input('name_as_per_pan')) && $request->filled('client_name')) {
+            $request->merge(['name_as_per_pan' => $request->input('client_name')]);
+        }
+        if ($isCinOn && empty($request->input('cin_incorporation_date')) && $request->filled('date_of_incorporation')) {
+            $request->merge(['cin_incorporation_date' => $request->input('date_of_incorporation')]);
+        }
+
+        // On create or full form save, require card fields if the card is ON.
+        // For partial API updates, only require if the card toggle or related fields are touched.
+        $reqGst = $creating ? $isGstOn : (($request->has('gst_enabled') || $request->has('has_gst') || $request->has('gstin')) && $isGstOn);
+        $reqPan = $creating ? $isPanOn : (($request->has('pan_enabled') || $request->has('pan')) && $isPanOn);
+        $reqTan = $creating ? $isTanOn : (($request->has('tan_enabled') || $request->has('tan')) && $isTanOn);
+        $reqCin = $creating ? $isCinOn : (($request->has('cin_enabled') || $request->has('cin')) && $isCinOn);
+        $reqUdyam = $creating ? $isUdyamOn : (($request->has('udyam_enabled') || $request->has('udyam')) && $isUdyamOn);
+        $reqFssai = $creating ? $isFssaiOn : (($request->has('fssai_enabled') || $request->has('fssai_no')) && $isFssaiOn);
+        $reqPtrc = $creating ? $isPtrcOn : (($request->has('ptrc_enabled') || $request->has('pt_reg') || $request->has('ptrc_state')) && $isPtrcOn);
+        $reqPtec = $creating ? $isPtecOn : (($request->has('ptec_enabled') || $request->has('ptec_no')) && $isPtecOn);
+
         $rules = [
             'client_name' => ($creating ? 'required' : 'sometimes').'|string',
             'business_name' => 'nullable|string',
@@ -623,18 +728,33 @@ class ClientProfileController extends Controller
             'client_code' => 'nullable|string|unique:client_profiles,client_code'.($profile ? ','.$profile->id : ''),
             'constitution_type' => 'nullable|string',
             'business_type' => 'nullable|string',
+            'contact_person_name' => 'nullable|string',
+            'designation' => 'nullable|string',
+            'gender' => 'nullable|string',
+            'applicable_from' => ($creating && $isGstOn ? 'required' : 'nullable').'|date',
             'date_of_incorporation' => 'nullable|date',
             'date_of_birth' => 'nullable|date',
             'alt_mobile' => 'nullable|string',
             'alt_email' => 'nullable|email',
             'address' => 'nullable|string',
+            'address_line_1' => 'nullable|string',
+            'address_line_2' => 'nullable|string',
             'city' => 'nullable|string',
             'state' => 'nullable|string',
             'state_code' => 'nullable|string|max:2',
             'pincode' => 'nullable|string',
             'country' => 'nullable|string',
+            'comm_same_as_above' => 'nullable|boolean',
+            'comm_address_line_1' => 'nullable|string',
+            'comm_address_line_2' => 'nullable|string',
+            'comm_city' => 'nullable|string',
+            'comm_state' => 'nullable|string',
+            'comm_state_code' => 'nullable|string|max:2',
+            'comm_pincode' => 'nullable|string',
+            'comm_country' => 'nullable|string',
             'website' => 'nullable|string',
-            'gstin' => 'nullable|string',
+            'gstin' => ($reqGst ? 'required' : 'nullable').'|string',
+            'registration_type' => ($reqGst ? 'required' : 'nullable').'|string|in:Regular,Composition,regular,composition',
             'has_gst' => 'nullable|boolean',
             'gst_compliance_enabled' => 'nullable|boolean',
             'dealer_type' => 'nullable|in:regular,composition',
@@ -642,19 +762,65 @@ class ClientProfileController extends Controller
             'gstr1_filing_frequency' => 'nullable|in:monthly,quarterly',
             'gstr2b_filing_frequency' => 'nullable|in:monthly,quarterly',
             'composition_rate' => 'nullable|numeric|min:0|max:99.99',
-            'pan' => 'nullable|string',
+            'pan' => ($reqPan ? 'required' : 'nullable').'|string',
             'aadhaar' => 'nullable|string',
             'gst_portal_username' => 'nullable|string',
             'gst_portal_password' => 'nullable|string',
-            'tan' => 'nullable|string',
+            'tan' => ($reqTan ? 'required' : 'nullable').'|string',
             'tan_portal_password' => 'nullable|string',
             'it_portal_password' => 'nullable|string',
-            'udyam' => 'nullable|string',
+            'udyam' => ($reqUdyam ? 'required' : 'nullable').'|string',
             'shop_establishment' => 'nullable|string',
             'iec' => 'nullable|string',
-            'cin' => 'nullable|string',
+            'cin' => ($reqCin ? 'required' : 'nullable').'|string',
             'llpin' => 'nullable|string',
             'pt_reg' => 'nullable|string',
+            'esic' => 'nullable|string',
+            'pf' => 'nullable|string',
+            'pan_status' => ($reqPan ? 'required' : 'nullable').'|string',
+            'name_as_per_pan' => ($reqPan ? 'required' : 'nullable').'|string',
+            'pan_allotment_date' => 'nullable|date',
+            'pan_enabled' => 'nullable|boolean',
+            'gst_status' => ($reqGst ? 'required' : 'nullable').'|string',
+            'gst_registration_date' => ($reqGst ? 'required' : 'nullable').'|date',
+            'state_jurisdiction' => ($reqGst ? 'required' : 'nullable').'|string',
+            'gst_enabled' => 'nullable|boolean',
+            'tan_status' => ($reqTan ? 'required' : 'nullable').'|string',
+            'tan_allotment_date' => 'nullable|date',
+            'tan_enabled' => 'nullable|boolean',
+            'cin_incorporation_date' => ($reqCin ? 'required' : 'nullable').'|date',
+            'cin_certificate_no' => 'nullable|string',
+            'cin_incorporation_place' => 'nullable|string',
+            'cin_enabled' => 'nullable|boolean',
+            'udyam_enterprise_type' => ($reqUdyam ? 'required' : 'nullable').'|string',
+            'udyam_registration_date' => ($reqUdyam ? 'required' : 'nullable').'|date',
+            'udyam_status' => ($reqUdyam ? 'required' : 'nullable').'|string',
+            'udyam_enabled' => 'nullable|boolean',
+            'shop_act_issuing_authority' => 'nullable|string',
+            'shop_act_registration_date' => 'nullable|date',
+            'shop_act_status' => 'nullable|string',
+            'shop_act_enabled' => 'nullable|boolean',
+            'fssai_no' => ($reqFssai ? 'required' : 'nullable').'|string',
+            'fssai_license_type' => 'nullable|string',
+            'fssai_registration_date' => 'nullable|date',
+            'fssai_status' => ($reqFssai ? 'required' : 'nullable').'|string',
+            'fssai_enabled' => 'nullable|boolean',
+            'iec_registration_date' => 'nullable|date',
+            'iec_status' => 'nullable|string',
+            'iec_enabled' => 'nullable|boolean',
+            'ptrc_state' => ($reqPtrc ? 'required' : 'nullable').'|string',
+            'ptrc_registration_date' => 'nullable|date',
+            'ptrc_status' => 'nullable|string',
+            'ptrc_enabled' => 'nullable|boolean',
+            'ptec_no' => ($reqPtec ? 'required' : 'nullable').'|string',
+            'ptec_state' => ($reqPtec ? 'required' : 'nullable').'|string',
+            'ptec_registration_date' => 'nullable|date',
+            'ptec_status' => ($reqPtec ? 'required' : 'nullable').'|string',
+            'ptec_enabled' => 'nullable|boolean',
+            'tan_portal_username' => 'nullable|string',
+            'it_portal_username' => 'nullable|string',
+            'two_factor_enabled' => 'nullable|boolean',
+            'session_timeout_minutes' => 'nullable|integer|min:1|max:1440',
             'esic' => 'nullable|string',
             'pf' => 'nullable|string',
             'bank_name' => 'nullable|string',
@@ -679,9 +845,38 @@ class ClientProfileController extends Controller
             'debit_note_next_number' => 'nullable|integer|min:1',
             'quotation_next_number' => 'nullable|integer|min:1',
             'amendment_next_number' => 'nullable|integer|min:1',
+            'delivery_challan_prefix' => 'nullable|string|max:40',
+            'delivery_challan_next_number' => 'nullable|integer|min:1',
+            'document_numbering_settings' => 'nullable',
         ];
 
-        $data = $request->validate($rules);
+        $messages = [
+            'applicable_from.required' => 'The applicable from date is required when GST is enabled.',
+            'gstin.required' => 'The GSTIN is required when GST is enabled.',
+            'registration_type.required' => 'The registration type is required when GST is enabled.',
+            'gst_status.required' => 'The GST status is required when GST is enabled.',
+            'gst_registration_date.required' => 'The GST registration date is required when GST is enabled.',
+            'state_jurisdiction.required' => 'The state jurisdiction is required when GST is enabled.',
+            'pan.required' => 'The PAN is required when PAN card is enabled.',
+            'pan_status.required' => 'The PAN status is required when PAN card is enabled.',
+            'name_as_per_pan.required' => 'The name as per PAN is required when PAN card is enabled.',
+            'tan.required' => 'The TAN is required when TAN card is enabled.',
+            'tan_status.required' => 'The TAN status is required when TAN card is enabled.',
+            'cin.required' => 'The CIN is required when CIN card is enabled.',
+            'cin_incorporation_date.required' => 'The date of incorporation is required when CIN card is enabled.',
+            'udyam.required' => 'The UDYAM number is required when UDYAM card is enabled.',
+            'udyam_enterprise_type.required' => 'The enterprise type is required when UDYAM card is enabled.',
+            'udyam_registration_date.required' => 'The UDYAM registration date is required when UDYAM card is enabled.',
+            'udyam_status.required' => 'The UDYAM status is required when UDYAM card is enabled.',
+            'fssai_no.required' => 'The FSSAI number is required when FSSAI card is enabled.',
+            'fssai_status.required' => 'The FSSAI status is required when FSSAI card is enabled.',
+            'ptrc_state.required' => 'The PTRC state is required when PTRC card is enabled.',
+            'ptec_no.required' => 'The PTEC number is required when PTEC card is enabled.',
+            'ptec_state.required' => 'The PTEC state is required when PTEC card is enabled.',
+            'ptec_status.required' => 'The PTEC status is required when PTEC card is enabled.',
+        ];
+
+        $data = $request->validate($rules, $messages);
 
         if (array_key_exists('login_prefix', $data)) {
             $loginEmail = strtolower(trim($data['login_prefix'])).'@'.self::LOGIN_EMAIL_DOMAIN;
@@ -697,6 +892,15 @@ class ClientProfileController extends Controller
 
     private function normalizeGstFields(array $data): array
     {
+        // Align registration_type (spec Master) and dealer_type
+        if (array_key_exists('registration_type', $data) && ! empty($data['registration_type'])) {
+            $regNorm = ucfirst(strtolower(trim($data['registration_type'])));
+            $data['registration_type'] = $regNorm;
+            $data['dealer_type'] = strtolower($regNorm);
+        } elseif (array_key_exists('dealer_type', $data) && ! empty($data['dealer_type'])) {
+            $data['registration_type'] = ucfirst(strtolower(trim($data['dealer_type'])));
+        }
+
         // Only touch GST fields when this request actually included has_gst — a narrow
         // partial update (e.g. toggling just gst_compliance_enabled) must never silently
         // reset has_gst/dealer_type/filing frequencies to their "not GST registered" state.
@@ -708,15 +912,18 @@ class ClientProfileController extends Controller
         $data['has_gst'] = $hasGst;
         if (! $hasGst) {
             $data['dealer_type'] = null;
+            $data['registration_type'] = null;
             $data['gst_filing_frequency'] = null;
             $data['gstr1_filing_frequency'] = null;
             $data['gstr2b_filing_frequency'] = null;
         } else {
             if (empty($data['dealer_type'])) {
                 $data['dealer_type'] = 'regular';
+                $data['registration_type'] = 'Regular';
             }
             if ($data['dealer_type'] === 'composition') {
                 // Composition dealers file CMP-08, not GSTR-1/2B/3B — the split doesn't apply.
+                $data['registration_type'] = 'Composition';
                 $data['gst_filing_frequency'] = 'quarterly';
                 $data['gstr1_filing_frequency'] = null;
                 $data['gstr2b_filing_frequency'] = null;
@@ -724,6 +931,7 @@ class ClientProfileController extends Controller
                     $data['composition_rate'] = 1.00; // default: traders/manufacturers rate
                 }
             } else {
+                $data['registration_type'] = 'Regular';
                 if (empty($data['gst_filing_frequency'])) {
                     $data['gst_filing_frequency'] = 'monthly'; // default for regular if omitted
                 }
@@ -749,24 +957,57 @@ class ClientProfileController extends Controller
     private function profileFields(array $data, ?ClientProfile $existing = null): array
     {
         $data = $this->normalizeGstFields($data);
+
+        // Keep address and address_line_1 in sync if only one was provided
+        if (! empty($data['address_line_1']) && empty($data['address'])) {
+            $data['address'] = $data['address_line_1'];
+        } elseif (! empty($data['address']) && empty($data['address_line_1'])) {
+            $data['address_line_1'] = $data['address'];
+        }
+
         $fields = [
             'client_name', 'business_name', 'constitution_type', 'business_type',
+            'contact_person_name', 'designation', 'gender', 'applicable_from',
             'date_of_incorporation', 'date_of_birth', 'mobile', 'alt_mobile', 'alt_email',
-            'email', 'address', 'city', 'state', 'state_code', 'pincode', 'country', 'website',
-            'gstin', 'has_gst', 'gst_compliance_enabled', 'dealer_type', 'gst_filing_frequency', 'gstr1_filing_frequency', 'gstr2b_filing_frequency', 'composition_rate', 'pan', 'aadhaar', 'gst_portal_username', 'tan', 'udyam', 'shop_establishment',
+            'email', 'address', 'address_line_1', 'address_line_2', 'city', 'state', 'state_code', 'pincode', 'country', 'website',
+            'comm_same_as_above', 'comm_address_line_1', 'comm_address_line_2', 'comm_city', 'comm_state', 'comm_state_code', 'comm_pincode', 'comm_country',
+            'gstin', 'registration_type', 'has_gst', 'gst_compliance_enabled', 'dealer_type', 'gst_filing_frequency', 'gstr1_filing_frequency', 'gstr2b_filing_frequency', 'composition_rate', 'pan', 'aadhaar', 'gst_portal_username', 'tan', 'udyam', 'shop_establishment',
             'iec', 'cin', 'llpin', 'pt_reg', 'esic', 'pf',
+            'pan_status', 'name_as_per_pan', 'pan_allotment_date', 'pan_enabled',
+            'gst_status', 'gst_registration_date', 'state_jurisdiction', 'gst_enabled',
+            'tan_status', 'tan_allotment_date', 'tan_enabled',
+            'cin_incorporation_date', 'cin_certificate_no', 'cin_incorporation_place', 'cin_enabled',
+            'udyam_enterprise_type', 'udyam_registration_date', 'udyam_status', 'udyam_enabled',
+            'shop_act_issuing_authority', 'shop_act_registration_date', 'shop_act_status', 'shop_act_enabled',
+            'fssai_no', 'fssai_license_type', 'fssai_registration_date', 'fssai_status', 'fssai_enabled',
+            'iec_registration_date', 'iec_status', 'iec_enabled',
+            'ptrc_state', 'ptrc_registration_date', 'ptrc_status', 'ptrc_enabled',
+            'ptec_no', 'ptec_state', 'ptec_registration_date', 'ptec_status', 'ptec_enabled',
+            'tan_portal_username', 'it_portal_username',
+            'two_factor_enabled', 'session_timeout_minutes',
             'bank_name', 'bank_branch', 'bank_account', 'account_holder_name', 'bank_ifsc',
             'swift_code', 'account_type', 'upi_id', 'signatory_name', 'terms_conditions', 'client_code',
             'invoice_prefix', 'bill_of_supply_prefix', 'credit_note_prefix', 'debit_note_prefix',
-            'quotation_prefix', 'amendment_prefix',
+            'quotation_prefix', 'amendment_prefix', 'delivery_challan_prefix',
             'invoice_next_number', 'bill_of_supply_next_number', 'credit_note_next_number',
             'debit_note_next_number', 'quotation_next_number', 'amendment_next_number',
+            'delivery_challan_next_number',
         ];
 
         $out = [];
         foreach ($fields as $f) {
             if (array_key_exists($f, $data)) {
                 $out[$f] = $data[$f];
+            }
+        }
+
+        if (array_key_exists('document_numbering_settings', $data)) {
+            $settings = $data['document_numbering_settings'];
+            if (is_string($settings)) {
+                $decoded = json_decode($settings, true);
+                $out['document_numbering_settings'] = is_array($decoded) ? $decoded : null;
+            } elseif (is_array($settings)) {
+                $out['document_numbering_settings'] = $settings;
             }
         }
 

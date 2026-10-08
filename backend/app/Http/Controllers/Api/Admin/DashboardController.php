@@ -214,6 +214,11 @@ class DashboardController extends Controller
             }
 
             foreach ($applicableReturns as $ret) {
+                // If period is before client's applicable_from date, it is Non-Applicable
+                if (! GstPeriodService::isPeriodApplicable($ret['period'], $client->applicable_from)) {
+                    continue;
+                }
+
                 // Check if filed in DB
                 $isFiled = ClientGstReturn::where('client_profile_id', $client->id)
                     ->where('return_type', $ret['db_type'])
