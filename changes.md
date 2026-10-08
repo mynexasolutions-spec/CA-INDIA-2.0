@@ -486,4 +486,122 @@
 - Prepared simulation and diff of proposed one-off tinker command to update local SQLite database without `migrate:fresh`.
 - Stopping for user confirmation before applying the updates to the local database.
 
+---
+
+# Changes Log - Module 2B (Clients, Part 2B) - Stage A Backend & Schema Implementation
+
+## Spec Reference: `docs/spec/04-clients-2b.md` (PDF Module 2, sections 17-20, mockups p25-p27)
+
+### 1. Migrations & Database Changes (SQLite + MySQL Compatible, No Raw SQL)
+- **Database Backup Created**:
+  - `backend/database/database.sqlite.bak_20261008_111309` created prior to running migrations.
+- **Migration `2026_10_08_000100_add_layout_and_watermark_to_client_profiles_table.php`**:
+  - Added columns to `client_profiles`:
+    - `default_layout_id` (unsigned tinyint, default `1`)
+    - `default_colour_scheme` (string 50, default `'slate_blue'`)
+    - `layout_applied_from` (date, nullable)
+    - `layout_updated_at` (timestamp, nullable)
+    - `watermark_enabled` (boolean, default `false`)
+    - `watermark_text` (string 255, nullable)
+    - `gst_reminder_enabled` (boolean, default `false`)
+  - Backfill: Existing 4 client profiles set to `default_layout_id = 1` and `default_colour_scheme = 'slate_blue'`.
+- **Migration `2026_10_08_000200_create_client_document_settings_table.php`**:
+  - Created `client_document_settings` table:
+    - `id` (bigint auto-increment PK)
+    - `client_profile_id` (FK to `client_profiles.id`, cascade on delete)
+    - `document_type` (string 50: `tax_invoice`, `bill_of_supply`, `credit_note`, `debit_note`, `quotation`, `delivery_challan`)
+    - `layout_id` (unsigned tinyint, default `1`)
+    - `colour_scheme` (string 50, default `'slate_blue'`)
+    - `watermark_applies` (boolean, default `false`)
+    - `created_at`, `updated_at` (timestamps)
+    - Unique constraint: `['client_profile_id', 'document_type']`
+  - Backfill: Seeded 6 document rows for every existing client profile (4 clients x 6 document types = 24 rows).
+- **Migration `2026_10_08_000300_create_client_subscriptions_table.php`**:
+  - Created `client_subscriptions` table:
+    - `id` (bigint auto-increment PK)
+    - `client_profile_id` (unique FK to `client_profiles.id`, cascade on delete)
+    - `status` (string 20: `active` / `inactive`, default `'active'`)
+    - `from_date` (date)
+    - `to_date` (date, nullable)
+    - `total_fees` (decimal 12,2 nullable)
+    - `amount_paid` (decimal 12,2 nullable)
+    - `amount_receivable` (decimal 12,2 nullable)
+    - `outstanding` (decimal 12,2 nullable)
+    - `created_at`, `updated_at` (timestamps)
+  - Backfill: Seeded 1 row per existing client profile (4 clients = 4 rows) with `status = 'active'`, `from_date = client.created_at` (date portion), `to_date = null`, and real fee columns set to `null` (Option A).
+
+### 2. Eloquent Models
+- **`App\Models\ClientDocumentSetting`**:
+  - Constants for `DOCUMENT_TYPES` (6 types), `LAYOUTS` (1-4), `COLOUR_SCHEMES` (6 approved slugs: `slate_blue`, `charcoal_grey`, `dusty_plum`, `mocha_brown`, `deep_teal`, `antique_gold`).
+  - Casts: `layout_id => integer`, `watermark_applies => boolean`.
+  - Relationship: `clientProfile()` belongsTo.
+- **`App\Models\ClientSubscription`**:
+  - Constants for `STATUS_ACTIVE` and `STATUS_INACTIVE`.
+  - Casts: `from_date => date`, `to_date => date`, decimal casts for fee columns.
+  - Relationship: `clientProfile()` belongsTo.
+- **`App\Models\ClientProfile`**:
+  - Added fillables and casts for layout and watermark fields.
+  - Added relationships `documentSettings()` (hasMany) and `subscription()` (hasOne).
+
+### 3. Backend Controllers & API Endpoints
+- **Layout Controller (`backend/app/Http/Controllers/Api/Admin/ClientLayoutController.php`)**:
+  - `GET /api/admin/clients/{id}/layout`: returns client layout default, applied from date, updated at timestamp, labels.
+  - `PUT|POST /api/admin/clients/{id}/layout`:
+    - Strict validation: `layout_id` must be in `1,2,3,4`; `colour_scheme` must be one of the 6 approved slugs (rejects `forest_green`, `burgundy`, etc.).
+    - Overwrite transaction: In a single database transaction, updates client profile defaults and overwrites all 6 rows in `client_document_settings` for that client.
+  - `initializeDefaultsForProfile()`: utility to ensure new clients created via `ClientProfileController::store` immediately receive default layout and document settings.
+- **Configuration Controller (`backend/app/Http/Controllers/Api/Admin/ClientConfigurationController.php`)**:
+  - `GET /api/admin/clients/{id}/configuration`: returns watermark toggle, watermark text, GST return reminder toggle, and all 6 document type settings.
+  - `PUT|POST /api/admin/clients/{id}/configuration`: validates each document row, watermark text, and reminder toggle; updates in a transaction.
+- **Subscription Controller (`backend/app/Http/Controllers/Api/Admin/ClientSubscriptionController.php`)**:
+  - `GET /api/admin/clients/{id}/subscription`: returns subscription details and real-time usage (`documents_count` counted directly from `CommercialDocument`, `storage_used` as `null` placeholder).
+  - Inactive subscription masking: If `status === 'inactive'`, the API returns `0` (`0.00`) for `total_fees`, `amount_paid`, `amount_receivable`, and `outstanding`, while the database table preserves the actual real stored values. Includes alert notice for inactive state.
+  - `PUT|POST /api/admin/clients/{id}/subscription`: stores real values provided without inventing formulas.
+- **Service Access Controller (`backend/app/Http/Controllers/Api/Admin/ClientServiceAccessController.php`)**:
+  - No database table created: service access state is dynamically derived in API from subscription status.
+  - Active subscription:
+    - Client Data Management: always ON (`access = true`, `disabled = true`, remark "Always enabled for all clients").
+    - Billing, Document Change, Requests, Reports: ON (`access = true`).
+    - GST Compliance: reads `client_profiles.gst_compliance_enabled`.
+  - Inactive subscription:
+    - Client Data Management: ON (`access = true`, `disabled = true`).
+    - Remaining 5 services (Billing, Document Change, Requests, GST Compliance, Reports): all OFF (`access = false`), disabled (`disabled = true`), with remark `"Not Applicable (Subscription Inactive)"`.
+  - `PUT|POST|PATCH /api/admin/clients/{id}/service-access`: writes directly to `client_profiles.gst_compliance_enabled` when subscription is active; returns 422 error if subscription is inactive.
+- **Route Registration (`backend/routes/api.php`)**:
+  - Registered all 4 resource routes inside the admin role/audit middleware group with clients unlock authentication guards.
+
+### 4. Automated Feature Tests (`backend/tests/Feature/ClientModule2bTest.php`)
+- `test_default_overwrite_transaction_updates_all_document_types`: verifies saving default layout/colour updates `client_profiles` and overwrites all 6 `client_document_settings` rows in a single atomic transaction.
+- `test_bad_colour_and_bad_layout_are_rejected`: verifies 422 validation errors for invalid layouts (`0`, `5`) and unapproved colours (`forest_green`, `burgundy`).
+- `test_subscription_put_inactive_preserves_stored_fee_fields_untouched`: verifies that sending PUT with status `inactive` does NOT modify or null out existing stored fee values in DB; stored values remain completely untouched.
+- `test_new_client_creation_initializes_document_settings_and_subscription`: verifies that creating a new client (`POST /api/admin/clients`) automatically initializes 6 rows in `client_document_settings` and 1 row in `client_subscriptions` (`status = 'active'`, `from_date = today`, `to_date = null`, `total_fees = null`, `amount_paid = null`, `amount_receivable = null`, `outstanding = null`).
+- `test_active_subscription_with_null_fees_returns_null_in_api`: verifies that active subscriptions with null fees strictly return `null` in the API, not `0`.
+- `test_service_access_gst_row_reads_from_gst_compliance_enabled_flag`: verifies that the GST compliance row in Service Access dynamically reflects the `gst_compliance_enabled` flag on the client profile in the DB and is never hard-coded.
+- `test_configuration_put_rejects_duplicate_or_missing_document_types`: verifies that `PUT /api/admin/clients/{id}/configuration` rejects missing document types (e.g. only 5 provided) or duplicate document types with `422 Unprocessable Entity`.
+- `test_configuration_saves_per_document_settings_watermark_and_reminder`: verifies custom per-document layout and colour settings, watermark text, and GST reminder toggle saving and reloading.
+- Result: **8 passed, 108 assertions, 0 errors**.
+
+### 5. Production Backfill & Deployment Note (`abkhanassociates` MySQL)
+When deploying Module 2B migrations to production:
+1. **Pre-requisite / Pre-flight**:
+   - Ensure a complete mysqldump backup of the production database is taken prior to running migrations.
+2. **Migration Order & Backfill Execution**:
+   - All migrations are standard Laravel Schema builder calls without raw SQL or SQLite-specific syntax, fully compatible with MySQL 8.x.
+   - **`2026_10_08_000100_add_layout_and_watermark_to_client_profiles_table.php`**:
+     - Adds layout columns (`default_layout_id`, `default_colour_scheme`, `layout_applied_from`, `layout_updated_at`, `watermark_enabled`, `watermark_text`, `gst_reminder_enabled`).
+     - Backfills all existing clients to `default_layout_id = 1` and `default_colour_scheme = 'slate_blue'`.
+     - Explicitly sets `layout_updated_at = null` and leaves `layout_applied_from = null` for existing records (dates only populate when an administrator explicitly saves changes in the Layout tab).
+   - **`2026_10_08_000200_create_client_document_settings_table.php`**:
+     - Creates table with unique index `(client_profile_id, document_type)`.
+     - Automatically backfills exactly 6 rows for each client in `client_profiles` (`tax_invoice`, `bill_of_supply`, `credit_note`, `debit_note`, `quotation`, `delivery_challan`), defaulting to Layout 1 and Slate Blue (`watermark_applies = false`).
+     - Uses `insertOrIgnore` with timestamps for idempotence.
+   - **`2026_10_08_000300_create_client_subscriptions_table.php`**:
+     - Creates table with unique foreign key `client_profile_id`.
+     - Automatically backfills 1 row for each client in `client_profiles` with `status = 'active'`, `from_date = client.created_at` date, `to_date = null`, and real fee fields as `null` (Option A).
+     - Uses `insertOrIgnore` with timestamps for idempotence.
+3. **Service Access**:
+   - Requires **no database backfill**, as service access is derived in real-time by the API based on subscription status (`active` vs `inactive`) and the existing `client_profiles.gst_compliance_enabled` flag.
+
+
+
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, getAuthToken } from '../../api/client';
 import AddressFields from '../../components/AddressFields';
@@ -6,6 +6,7 @@ import AddInformationModal from '../../components/AddInformationModal';
 import AddClientNoteModal from '../../components/AddClientNoteModal';
 import ClientCreateSuccessModal from '../../components/ClientCreateSuccessModal';
 import ClientSaveSuccessModal from '../../components/ClientSaveSuccessModal';
+import ClientLayoutTab from '../../components/ClientLayoutTab';
 import DiscardChangesModal from '../../components/DiscardChangesModal';
 import PasswordField from '../../components/PasswordField';
 import SetPasswordModal from '../../components/SetPasswordModal';
@@ -361,6 +362,22 @@ export default function ClientProfileForm() {
   const tab = searchParams.get('tab') || 'personal';
   const setTab = (newTab) => {
     setSearchParams({ tab: newTab });
+  };
+
+  // Tab 7 Layout Tab dirty tracking & discard guard
+  const [layoutIsDirty, setLayoutIsDirty] = useState(false);
+  const layoutDiscardRef = useRef(null);
+  const [pendingTabChange, setPendingTabChange] = useState(null);
+  const [showLayoutDiscardModal, setShowLayoutDiscardModal] = useState(false);
+
+  const handleTabClick = (newTab) => {
+    if (newTab === tab) return;
+    if (tab === 'layout' && layoutIsDirty) {
+      setPendingTabChange(newTab);
+      setShowLayoutDiscardModal(true);
+      return;
+    }
+    setTab(newTab);
   };
 
   // State Engine: Default is read-only for existing clients; editable for new clients
@@ -1519,7 +1536,7 @@ export default function ClientProfileForm() {
               key={t.id}
               type="button"
               className={`cp-tab-btn ${isActive ? 'active' : ''}`}
-              onClick={() => setTab(t.id)}
+              onClick={() => handleTabClick(t.id)}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -4602,19 +4619,14 @@ export default function ClientProfileForm() {
           </div>
         )}
 
-        {/* Tab 7: Layout (Placeholder for Module 2B) */}
+        {/* Tab 7: Layout (Module 2B - Section B) */}
         {tab === 'layout' && (
-          <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-            <div style={{ width: 48, height: 48, margin: '0 auto 14px', borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}>
-              <TabIcon name="layout" active={false} />
-            </div>
-            <h3 style={{ fontSize: 17, fontWeight: 700, color: '#1d4ed8', margin: '0 0 6px' }}>
-              Layout Configuration
-            </h3>
-            <p style={{ fontSize: 13, color: 'var(--bp-muted, #64748b)', margin: 0 }}>
-              Layout customisation and document formatting settings will be available in Module 2B.
-            </p>
-          </div>
+          <ClientLayoutTab
+            clientId={id}
+            isNewClient={!isEdit}
+            onDirtyChange={setLayoutIsDirty}
+            discardRef={layoutDiscardRef}
+          />
         )}
 
         {/* Tab 8: Configuration (Placeholder for Module 2B) */}
@@ -4988,100 +5000,102 @@ export default function ClientProfileForm() {
           </div>
         )}
 
-        {/* Persistent Bottom Action Bar (Edit / Save Changes / Cancel) */}
-        <div
-          className="cp-actions-bar"
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            gap: 12,
-            marginTop: 24,
-            paddingTop: 16,
-            borderTop: '1px solid var(--bp-border, #e2e8f0)',
-          }}
-        >
-          {isEdit ? (
-            <>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={handleCancel}
-                style={{
-                  background: '#ffffff',
-                  border: '1px solid #cbd5e1',
-                  color: '#334155',
-                  padding: '7px 20px',
-                  borderRadius: 6,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setIsEditing(true);
-                  showToast('Edit mode enabled. You can now modify client details.', 'info');
-                }}
-                style={{
-                  background: '#2563eb',
-                  border: '1px solid #2563eb',
-                  color: '#ffffff',
-                  padding: '7px 20px',
-                  borderRadius: 6,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={save}
-                style={{
-                  background: '#2563eb',
-                  border: '1px solid #2563eb',
-                  color: '#ffffff',
-                  padding: '7px 20px',
-                  borderRadius: 6,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: busy ? 'not-allowed' : 'pointer',
-                  opacity: busy ? 0.7 : 1,
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {busy ? 'Saving Changes…' : 'Save Changes'}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="bp-btn bp-btn-outline"
-                disabled={busy}
-                onClick={() => navigate('/admin/clients')}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="bp-btn bp-btn-primary"
-                disabled={busy}
-                onClick={save}
-              >
-                {busy ? 'Adding Client…' : 'Save Profile'}
-              </button>
-            </>
-          )}
-        </div>
+        {/* Persistent Bottom Action Bar (Edit / Save Changes / Cancel) - Hidden on Layout tab which has its own action bar */}
+        {tab !== 'layout' && (
+          <div
+            className="cp-actions-bar"
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: 12,
+              marginTop: 24,
+              paddingTop: 16,
+              borderTop: '1px solid var(--bp-border, #e2e8f0)',
+            }}
+          >
+            {isEdit ? (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={handleCancel}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    color: '#334155',
+                    padding: '7px 20px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setIsEditing(true);
+                    showToast('Edit mode enabled. You can now modify client details.', 'info');
+                  }}
+                  style={{
+                    background: '#2563eb',
+                    border: '1px solid #2563eb',
+                    color: '#ffffff',
+                    padding: '7px 20px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={save}
+                  style={{
+                    background: '#2563eb',
+                    border: '1px solid #2563eb',
+                    color: '#ffffff',
+                    padding: '7px 20px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: busy ? 'not-allowed' : 'pointer',
+                    opacity: busy ? 0.7 : 1,
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {busy ? 'Saving Changes…' : 'Save Changes'}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="bp-btn bp-btn-outline"
+                  disabled={busy}
+                  onClick={() => navigate('/admin/clients')}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="bp-btn bp-btn-primary"
+                  disabled={busy}
+                  onClick={save}
+                >
+                  {busy ? 'Adding Client…' : 'Save Profile'}
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Discard Changes Modal Guard */}
@@ -5093,6 +5107,25 @@ export default function ClientProfileForm() {
             setIsEditing(false);
             setShowDiscardModal(false);
             showToast('Changes discarded. Exited edit mode.', 'warning');
+          }}
+        />
+      )}
+
+      {/* Layout Tab Discard Changes Guard */}
+      {showLayoutDiscardModal && (
+        <DiscardChangesModal
+          onContinueEditing={() => {
+            setShowLayoutDiscardModal(false);
+            setPendingTabChange(null);
+          }}
+          onConfirmCancel={() => {
+            layoutDiscardRef.current?.();
+            setLayoutIsDirty(false);
+            setShowLayoutDiscardModal(false);
+            if (pendingTabChange) {
+              setTab(pendingTabChange);
+              setPendingTabChange(null);
+            }
           }}
         />
       )}

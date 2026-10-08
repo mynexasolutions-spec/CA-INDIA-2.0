@@ -166,6 +166,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/clients/{id}/notes/{noteId}', [\App\Http\Controllers\Api\Admin\ClientNoteController::class, 'update']);
         Route::delete('/clients/{id}/notes/{noteId}', [\App\Http\Controllers\Api\Admin\ClientNoteController::class, 'destroy']);
 
+        Route::get('/clients/{id}/layout', [\App\Http\Controllers\Api\Admin\ClientLayoutController::class, 'show']);
+        Route::match(['put', 'post'], '/clients/{id}/layout', [\App\Http\Controllers\Api\Admin\ClientLayoutController::class, 'update']);
+        Route::get('/clients/{id}/configuration', [\App\Http\Controllers\Api\Admin\ClientConfigurationController::class, 'show']);
+        Route::match(['put', 'post'], '/clients/{id}/configuration', [\App\Http\Controllers\Api\Admin\ClientConfigurationController::class, 'update']);
+        Route::get('/clients/{id}/subscription', [\App\Http\Controllers\Api\Admin\ClientSubscriptionController::class, 'show']);
+        Route::match(['put', 'post'], '/clients/{id}/subscription', [\App\Http\Controllers\Api\Admin\ClientSubscriptionController::class, 'update']);
+        Route::get('/clients/{id}/service-access', [\App\Http\Controllers\Api\Admin\ClientServiceAccessController::class, 'show']);
+        Route::match(['put', 'post', 'patch'], '/clients/{id}/service-access', [\App\Http\Controllers\Api\Admin\ClientServiceAccessController::class, 'update']);
+
         Route::get('/lookup/pin/{pin}', [LookupController::class, 'pin']);
         Route::get('/lookup/ifsc/{ifsc}', [LookupController::class, 'ifsc']);
         Route::get('/gst-filing-rules', [ClientProfileController::class, 'getGstFilingRules']);

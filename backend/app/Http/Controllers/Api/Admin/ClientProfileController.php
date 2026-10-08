@@ -124,6 +124,8 @@ class ClientProfileController extends Controller
             'additionalInfos',
             'bankAccounts',
             'notes',
+            'documentSettings',
+            'subscription',
         ])->findOrFail($id);
         $data = $profile->toArray();
         foreach (self::ENCRYPTED as $field) {
@@ -196,6 +198,12 @@ class ClientProfileController extends Controller
             if (DB::getSchemaBuilder()->hasTable('compliance_tasks')) {
                 DB::table('compliance_tasks')->where('client_profile_id', $profileId)->delete();
             }
+            if (DB::getSchemaBuilder()->hasTable('client_document_settings')) {
+                DB::table('client_document_settings')->where('client_profile_id', $profileId)->delete();
+            }
+            if (DB::getSchemaBuilder()->hasTable('client_subscriptions')) {
+                DB::table('client_subscriptions')->where('client_profile_id', $profileId)->delete();
+            }
 
             foreach (['logo_path', 'signature_path', 'seal_path', 'qr_code_path'] as $asset) {
                 if (! empty($profile->{$asset}) && Storage::disk('public')->exists($profile->{$asset})) {
@@ -241,6 +249,7 @@ class ClientProfileController extends Controller
             $profileData['user_id'] = $user->id;
             $profileData['client_code'] = \App\Services\Client\ClientIdService::generateNext();
             $profile = ClientProfile::create($profileData);
+            ClientLayoutController::initializeDefaultsForProfile($profile);
             if (!empty($profileData['bank_name']) && !empty($profileData['bank_account'])) {
                 $profile->bankAccounts()->create([
                     'bank_name' => $profileData['bank_name'],

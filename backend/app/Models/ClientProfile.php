@@ -35,12 +35,19 @@ class ClientProfile extends Model
         'invoice_next_number', 'bill_of_supply_next_number', 'credit_note_next_number',
         'debit_note_next_number', 'quotation_next_number', 'amendment_next_number',
         'delivery_challan_next_number', 'document_numbering_settings',
+        'default_layout_id', 'default_colour_scheme', 'layout_applied_from', 'layout_updated_at',
+        'watermark_enabled', 'watermark_text', 'gst_reminder_enabled',
     ];
 
     protected function casts(): array
     {
         return [
             'document_numbering_settings' => 'array',
+            'default_layout_id' => 'integer',
+            'layout_applied_from' => 'date',
+            'layout_updated_at' => 'datetime',
+            'watermark_enabled' => 'boolean',
+            'gst_reminder_enabled' => 'boolean',
             'applicable_from' => 'date',
             'comm_same_as_above' => 'boolean',
             'date_of_incorporation' => 'date',
@@ -131,5 +138,15 @@ class ClientProfile extends Model
     public function notes()
     {
         return $this->hasMany(ClientNote::class)->latest();
+    }
+
+    public function documentSettings()
+    {
+        return $this->hasMany(ClientDocumentSetting::class);
+    }
+
+    public function subscription()
+    {
+        return $this->hasOne(ClientSubscription::class);
     }
 }
