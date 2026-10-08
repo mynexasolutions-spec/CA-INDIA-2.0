@@ -8,6 +8,7 @@ import ClientCreateSuccessModal from '../../components/ClientCreateSuccessModal'
 import ClientSaveSuccessModal from '../../components/ClientSaveSuccessModal';
 import ClientLayoutTab from '../../components/ClientLayoutTab';
 import ClientConfigurationTab from '../../components/ClientConfigurationTab';
+import ClientSubscriptionTab from '../../components/ClientSubscriptionTab';
 import DiscardChangesModal from '../../components/DiscardChangesModal';
 import PasswordField from '../../components/PasswordField';
 import SetPasswordModal from '../../components/SetPasswordModal';
@@ -373,9 +374,14 @@ export default function ClientProfileForm() {
   const [configIsDirty, setConfigIsDirty] = useState(false);
   const configDiscardRef = useRef(null);
 
+  // Tab 10 Subscription Tab dirty tracking & discard guard
+  const [subscriptionIsDirty, setSubscriptionIsDirty] = useState(false);
+  const subscriptionDiscardRef = useRef(null);
+
   const [pendingTabChange, setPendingTabChange] = useState(null);
   const [showLayoutDiscardModal, setShowLayoutDiscardModal] = useState(false);
   const [showConfigDiscardModal, setShowConfigDiscardModal] = useState(false);
+  const [showSubscriptionDiscardModal, setShowSubscriptionDiscardModal] = useState(false);
 
   const handleTabClick = (newTab) => {
     if (newTab === tab) return;
@@ -387,6 +393,11 @@ export default function ClientProfileForm() {
     if (tab === 'configuration' && configIsDirty) {
       setPendingTabChange(newTab);
       setShowConfigDiscardModal(true);
+      return;
+    }
+    if (tab === 'subscription' && subscriptionIsDirty) {
+      setPendingTabChange(newTab);
+      setShowSubscriptionDiscardModal(true);
       return;
     }
     setTab(newTab);
@@ -5034,23 +5045,18 @@ export default function ClientProfileForm() {
       </div>
     )}
 
-        {/* Tab 10: Subscription (Placeholder for Module 2B) */}
+        {/* Tab 10: Subscription (Module 2B - Section D & E) */}
         {tab === 'subscription' && (
-          <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-            <div style={{ width: 48, height: 48, margin: '0 auto 14px', borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}>
-              <TabIcon name="subscription" active={false} />
-            </div>
-            <h3 style={{ fontSize: 17, fontWeight: 700, color: '#1d4ed8', margin: '0 0 6px' }}>
-              Client Subscription
-            </h3>
-            <p style={{ fontSize: 13, color: 'var(--bp-muted, #64748b)', margin: 0 }}>
-              Subscription plans and service access controls will be available in Module 2B.
-            </p>
-          </div>
+          <ClientSubscriptionTab
+            clientId={id}
+            isNewClient={!isEdit}
+            onDirtyChange={setSubscriptionIsDirty}
+            discardRef={subscriptionDiscardRef}
+          />
         )}
 
-        {/* Persistent Bottom Action Bar (Edit / Save Changes / Cancel) - Hidden on Layout and Configuration tabs which have their own action bars */}
-        {!['layout', 'configuration'].includes(tab) && (
+        {/* Persistent Bottom Action Bar (Edit / Save Changes / Cancel) - Hidden on Layout, Configuration, and Subscription tabs which have their own action bars */}
+        {!['layout', 'configuration', 'subscription'].includes(tab) && (
           <div
             className="cp-actions-bar"
             style={{
@@ -5192,6 +5198,25 @@ export default function ClientProfileForm() {
             configDiscardRef.current?.();
             setConfigIsDirty(false);
             setShowConfigDiscardModal(false);
+            if (pendingTabChange) {
+              setTab(pendingTabChange);
+              setPendingTabChange(null);
+            }
+          }}
+        />
+      )}
+
+      {/* Subscription Tab Discard Changes Guard */}
+      {showSubscriptionDiscardModal && (
+        <DiscardChangesModal
+          onContinueEditing={() => {
+            setShowSubscriptionDiscardModal(false);
+            setPendingTabChange(null);
+          }}
+          onConfirmCancel={() => {
+            subscriptionDiscardRef.current?.();
+            setSubscriptionIsDirty(false);
+            setShowSubscriptionDiscardModal(false);
             if (pendingTabChange) {
               setTab(pendingTabChange);
               setPendingTabChange(null);

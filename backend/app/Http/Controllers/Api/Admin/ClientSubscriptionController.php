@@ -80,11 +80,11 @@ class ClientSubscriptionController extends Controller
         $data = $request->validate([
             'status' => 'required|string|in:active,inactive',
             'from_date' => 'required|date',
-            'to_date' => 'nullable|date',
+            'to_date' => 'nullable|date|after_or_equal:from_date',
             'total_fees' => 'nullable|numeric|min:0',
             'amount_paid' => 'nullable|numeric|min:0',
-            'amount_receivable' => 'nullable|numeric',
-            'outstanding' => 'nullable|numeric',
+            'amount_receivable' => 'nullable|numeric|min:0',
+            'outstanding' => 'nullable|numeric|min:0',
         ]);
 
         // (1) When status is active: update the real fee fields.

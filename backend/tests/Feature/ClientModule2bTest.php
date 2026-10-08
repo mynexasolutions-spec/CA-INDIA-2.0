@@ -473,4 +473,79 @@ class ClientModule2bTest extends TestCase
         $respDisabled->assertOk()
             ->assertJsonPath('watermark_enabled', false);
     }
+
+    /**
+     * Test: Subscription update fails (422) when to_date is earlier than from_date.
+     */
+    public function test_subscription_update_fails_when_to_date_is_before_from_date(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $response = $this->putJson("/api/admin/clients/{$this->profile->id}/subscription", [
+            'status' => 'active',
+            'from_date' => '2026-06-01',
+            'to_date' => '2026-05-31',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['to_date']);
+    }
+
+    /**
+     * Test: Subscription update fails (422) when amount_receivable is negative.
+     */
+    public function test_subscription_update_fails_when_amount_receivable_is_negative(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $response = $this->putJson("/api/admin/clients/{$this->profile->id}/subscription", [
+            'status' => 'active',
+            'from_date' => '2026-04-01',
+            'amount_receivable' => -100,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['amount_receivable']);
+    }
+
+    /**
+     * Test: Subscription update fails (422) when outstanding is negative.
+     */
+    public function test_subscription_update_fails_when_outstanding_is_negative(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $response = $this->putJson("/api/admin/clients/{$this->profile->id}/subscription", [
+            'status' => 'active',
+            'from_date' => '2026-04-01',
+            'outstanding' => -50,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['outstanding']);
+    }
+
+    /**
+     * Test: Subscription update succeeds (200) when to_date is on or after from_date and fees are non-negative.
+     */
+    public function test_subscription_update_succeeds_when_dates_and_fees_are_valid(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $response = $this->putJson("/api/admin/clients/{$this->profile->id}/subscription", [
+            'status' => 'active',
+            'from_date' => '2026-04-01',
+            'to_date' => '2026-04-01',
+            'total_fees' => 1000,
+            'amount_paid' => 500,
+            'amount_receivable' => 500,
+            'outstanding' => 500,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'active')
+            ->assertJsonPath('total_fees', 1000)
+            ->assertJsonPath('amount_receivable', 500)
+            ->assertJsonPath('outstanding', 500);
+    }
 }
