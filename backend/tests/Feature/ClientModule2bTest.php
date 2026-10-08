@@ -426,4 +426,51 @@ class ClientModule2bTest extends TestCase
         $this->assertEquals('dusty_plum', $docs['bill_of_supply']['colour_scheme']);
         $this->assertFalse($docs['bill_of_supply']['watermark_applies']);
     }
+
+    /**
+     * Test: watermark_text is required (422) when watermark_enabled is true.
+     */
+    public function test_configuration_update_requires_watermark_text_when_watermark_is_enabled(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $validDocuments = [
+            ['document_type' => 'tax_invoice', 'layout_id' => 1, 'colour_scheme' => 'slate_blue', 'watermark_applies' => false],
+            ['document_type' => 'bill_of_supply', 'layout_id' => 1, 'colour_scheme' => 'slate_blue', 'watermark_applies' => false],
+            ['document_type' => 'credit_note', 'layout_id' => 1, 'colour_scheme' => 'slate_blue', 'watermark_applies' => false],
+            ['document_type' => 'debit_note', 'layout_id' => 1, 'colour_scheme' => 'slate_blue', 'watermark_applies' => false],
+            ['document_type' => 'quotation', 'layout_id' => 1, 'colour_scheme' => 'slate_blue', 'watermark_applies' => false],
+            ['document_type' => 'delivery_challan', 'layout_id' => 1, 'colour_scheme' => 'slate_blue', 'watermark_applies' => false],
+        ];
+
+        // 1. watermark_enabled = true with null watermark_text => 422
+        $respNull = $this->putJson("/api/admin/clients/{$this->profile->id}/configuration", [
+            'watermark_enabled' => true,
+            'watermark_text' => null,
+            'gst_reminder_enabled' => false,
+            'documents' => $validDocuments,
+        ]);
+        $respNull->assertStatus(422)
+            ->assertJsonValidationErrors(['watermark_text']);
+
+        // 2. watermark_enabled = true with empty string watermark_text => 422
+        $respEmpty = $this->putJson("/api/admin/clients/{$this->profile->id}/configuration", [
+            'watermark_enabled' => true,
+            'watermark_text' => '',
+            'gst_reminder_enabled' => false,
+            'documents' => $validDocuments,
+        ]);
+        $respEmpty->assertStatus(422)
+            ->assertJsonValidationErrors(['watermark_text']);
+
+        // 3. watermark_enabled = false with null watermark_text => 200 OK
+        $respDisabled = $this->putJson("/api/admin/clients/{$this->profile->id}/configuration", [
+            'watermark_enabled' => false,
+            'watermark_text' => null,
+            'gst_reminder_enabled' => false,
+            'documents' => $validDocuments,
+        ]);
+        $respDisabled->assertOk()
+            ->assertJsonPath('watermark_enabled', false);
+    }
 }

@@ -7,6 +7,7 @@ import AddClientNoteModal from '../../components/AddClientNoteModal';
 import ClientCreateSuccessModal from '../../components/ClientCreateSuccessModal';
 import ClientSaveSuccessModal from '../../components/ClientSaveSuccessModal';
 import ClientLayoutTab from '../../components/ClientLayoutTab';
+import ClientConfigurationTab from '../../components/ClientConfigurationTab';
 import DiscardChangesModal from '../../components/DiscardChangesModal';
 import PasswordField from '../../components/PasswordField';
 import SetPasswordModal from '../../components/SetPasswordModal';
@@ -367,14 +368,25 @@ export default function ClientProfileForm() {
   // Tab 7 Layout Tab dirty tracking & discard guard
   const [layoutIsDirty, setLayoutIsDirty] = useState(false);
   const layoutDiscardRef = useRef(null);
+
+  // Tab 8 Configuration Tab dirty tracking & discard guard
+  const [configIsDirty, setConfigIsDirty] = useState(false);
+  const configDiscardRef = useRef(null);
+
   const [pendingTabChange, setPendingTabChange] = useState(null);
   const [showLayoutDiscardModal, setShowLayoutDiscardModal] = useState(false);
+  const [showConfigDiscardModal, setShowConfigDiscardModal] = useState(false);
 
   const handleTabClick = (newTab) => {
     if (newTab === tab) return;
     if (tab === 'layout' && layoutIsDirty) {
       setPendingTabChange(newTab);
       setShowLayoutDiscardModal(true);
+      return;
+    }
+    if (tab === 'configuration' && configIsDirty) {
+      setPendingTabChange(newTab);
+      setShowConfigDiscardModal(true);
       return;
     }
     setTab(newTab);
@@ -4629,19 +4641,14 @@ export default function ClientProfileForm() {
           />
         )}
 
-        {/* Tab 8: Configuration (Placeholder for Module 2B) */}
+        {/* Tab 8: Configuration (Module 2B - Section C) */}
         {tab === 'configuration' && (
-          <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-            <div style={{ width: 48, height: 48, margin: '0 auto 14px', borderRadius: 10, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}>
-              <TabIcon name="configuration" active={false} />
-            </div>
-            <h3 style={{ fontSize: 17, fontWeight: 700, color: '#1d4ed8', margin: '0 0 6px' }}>
-              Client Configuration
-            </h3>
-            <p style={{ fontSize: 13, color: 'var(--bp-muted, #64748b)', margin: 0 }}>
-              Advanced client settings and document options will be available in Module 2B.
-            </p>
-          </div>
+          <ClientConfigurationTab
+            clientId={id}
+            isNewClient={!isEdit}
+            onDirtyChange={setConfigIsDirty}
+            discardRef={configDiscardRef}
+          />
         )}
 
         {/* Tab 9: GST Filing Frequency (Module 2A - Section E, PDF Page 19) */}
@@ -5000,8 +5007,8 @@ export default function ClientProfileForm() {
           </div>
         )}
 
-        {/* Persistent Bottom Action Bar (Edit / Save Changes / Cancel) - Hidden on Layout tab which has its own action bar */}
-        {tab !== 'layout' && (
+        {/* Persistent Bottom Action Bar (Edit / Save Changes / Cancel) - Hidden on Layout and Configuration tabs which have their own action bars */}
+        {!['layout', 'configuration'].includes(tab) && (
           <div
             className="cp-actions-bar"
             style={{
@@ -5122,6 +5129,25 @@ export default function ClientProfileForm() {
             layoutDiscardRef.current?.();
             setLayoutIsDirty(false);
             setShowLayoutDiscardModal(false);
+            if (pendingTabChange) {
+              setTab(pendingTabChange);
+              setPendingTabChange(null);
+            }
+          }}
+        />
+      )}
+
+      {/* Configuration Tab Discard Changes Guard */}
+      {showConfigDiscardModal && (
+        <DiscardChangesModal
+          onContinueEditing={() => {
+            setShowConfigDiscardModal(false);
+            setPendingTabChange(null);
+          }}
+          onConfirmCancel={() => {
+            configDiscardRef.current?.();
+            setConfigIsDirty(false);
+            setShowConfigDiscardModal(false);
             if (pendingTabChange) {
               setTab(pendingTabChange);
               setPendingTabChange(null);

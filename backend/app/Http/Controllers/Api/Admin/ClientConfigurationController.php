@@ -68,7 +68,12 @@ class ClientConfigurationController extends Controller
 
         $data = $request->validate([
             'watermark_enabled' => 'nullable|boolean',
-            'watermark_text' => 'nullable|string|max:255',
+            'watermark_text' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::requiredIf(fn () => (bool) $request->input('watermark_enabled')),
+            ],
             'gst_reminder_enabled' => 'nullable|boolean',
             'documents' => 'required|array',
             'documents.*.document_type' => ['required', 'string', Rule::in(array_keys(ClientDocumentSetting::DOCUMENT_TYPES))],
