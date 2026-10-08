@@ -466,8 +466,18 @@ export default function ClientProfileForm() {
 
   // Document Numbering State & Helpers (Tab 5)
   const [selectedPreviewDoc, setSelectedPreviewDoc] = useState('invoice');
+  const [numberingErrors, setNumberingErrors] = useState({});
+  const [gapWarning, setGapWarning] = useState(null);
 
   const updateDocNumberingField = (key, field, val) => {
+    const errKey = `document_numbering_settings.${key}.${field}`;
+    if (numberingErrors[errKey]) {
+      setNumberingErrors((prev) => {
+        const next = { ...prev };
+        delete next[errKey];
+        return next;
+      });
+    }
     setForm((f) => ({
       ...f,
       document_numbering_settings: {
@@ -1069,9 +1079,11 @@ export default function ClientProfileForm() {
     }));
   };
 
-  const save = async () => {
+  const save = async (confirmGap = false) => {
+    const shouldConfirm = confirmGap === true;
     setBusy(true);
     setErr('');
+    setNumberingErrors({});
 
     // Tab 3 & Tab 9 Validation: For every card whose toggle is ON, validate required (*) fields
     if (form.gst_enabled) {
@@ -1355,6 +1367,10 @@ export default function ClientProfileForm() {
         }
       }
 
+      if (shouldConfirm) {
+        fd.append('confirm_gap', '1');
+      }
+
       const token = getAuthToken();
       const url = isEdit ? `/api/admin/clients/${id}` : '/api/admin/clients';
       if (isEdit) fd.append('_method', 'PUT');
@@ -1365,7 +1381,25 @@ export default function ClientProfileForm() {
         body: fd,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Save failed');
+      if (!res.ok) {
+        if (res.status === 409 && data.requires_confirmation) {
+          setGapWarning(data);
+          setBusy(false);
+          return;
+        }
+        if (res.status === 422 && data.errors) {
+          setNumberingErrors(data.errors);
+          const firstErr = Object.values(data.errors)[0]?.[0] || data.message || 'Validation error';
+          setErr(firstErr);
+          showToast(firstErr, 'error');
+          setBusy(false);
+          return;
+        }
+        throw new Error(data.message || 'Save failed');
+      }
+
+      setNumberingErrors({});
+      setGapWarning(null);
 
       if (isEdit) {
         const nextData = {
@@ -3745,8 +3779,16 @@ export default function ClientProfileForm() {
                                   fontSize: '12px',
                                   textAlign: 'center',
                                   fontWeight: 600,
+                                  borderColor: numberingErrors[`document_numbering_settings.${doc.key}.next_number`] ? '#dc2626' : undefined,
                                 }}
                               />
+                              {numberingErrors[`document_numbering_settings.${doc.key}.next_number`] && (
+                                <div style={{ color: '#dc2626', fontSize: '11px', marginTop: '4px', textAlign: 'center', lineHeight: '1.2' }}>
+                                  {Array.isArray(numberingErrors[`document_numbering_settings.${doc.key}.next_number`])
+                                    ? numberingErrors[`document_numbering_settings.${doc.key}.next_number`][0]
+                                    : numberingErrors[`document_numbering_settings.${doc.key}.next_number`]}
+                                </div>
+                              )}
                             </td>
 
                             {/* Prefix Position */}
@@ -5112,6 +5154,8 @@ export default function ClientProfileForm() {
           onConfirmCancel={() => {
             setForm({ ...originalForm });
             setIsEditing(false);
+            setNumberingErrors({});
+            setGapWarning(null);
             setShowDiscardModal(false);
             showToast('Changes discarded. Exited edit mode.', 'warning');
           }}
@@ -5162,6 +5206,40 @@ export default function ClientProfileForm() {
           isOpen={showSaveSuccess}
           onClose={() => setShowSaveSuccess(false)}
         />
+      )}
+
+      {/* Document Numbering Gap Warning Modal (Tab 5 Guard C) */}
+      {gapWarning && (
+        <div className="bp-modal-backdrop" role="presentation" onClick={() => setGapWarning(null)}>
+          <div className="bp-modal" role="dialog" aria-modal="true" aria-label="Sequence Gap Warning" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="bp-modal-close" onClick={() => setGapWarning(null)} aria-label="Close">×</button>
+            <div className="bp-modal-icon" style={{ color: '#d97706', background: '#fef3c7' }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
+            <p className="bp-modal-title" style={{ color: '#b45309' }}>Sequence Gap Warning</p>
+            <p className="bp-modal-text">{gapWarning.message}</p>
+            <div className="bp-modal-actions">
+              <button type="button" className="bp-btn bp-btn-outline" onClick={() => setGapWarning(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="bp-btn bp-btn-primary"
+                onClick={() => {
+                  setGapWarning(null);
+                  save(true);
+                }}
+                autoFocus
+              >
+                Confirm & Save
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Create Success Modal */}

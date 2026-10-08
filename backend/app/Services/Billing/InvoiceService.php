@@ -34,17 +34,17 @@ class InvoiceService
             );
 
             $allocateNumber = $status === 'issued';
-            $number = $data['number'] ?? ($allocateNumber
-                ? $this->nextNumber($profile, $type)
-                : $this->draftNumber($profile, $type, $data['document_date'] ?? null));
+            if (! empty($data['number'])) {
+                $number = $data['number'];
+            } elseif ($allocateNumber) {
+                $number = $this->allocateNextNumber($profile, $type);
+            } else {
+                $number = $this->draftNumber($profile, $type, $data['document_date'] ?? null);
+            }
             BillingPolicy::assertUniqueNumber($profile, $number);
 
             $doc = CommercialDocument::create($this->docPayload($profile, $data, $calc, $type, $number, $isInter, $isRcm, $status, $allocateNumber, $taxDeductionType, $tdsSection, $tdsRate));
             $this->syncLines($doc, $calc['lines']);
-
-            if ($allocateNumber && empty($data['number'])) {
-                $this->bumpNextNumber($profile, $type);
-            }
 
             return $doc->load(['lineItems', 'customer', 'clientProfile', 'referenceDocument']);
         });
@@ -318,7 +318,7 @@ class InvoiceService
 
         return DB::transaction(function () use ($doc, $profile) {
             $wasDraftNumber = str_starts_with($doc->number, 'DRAFT-');
-            $number = $wasDraftNumber ? $this->nextNumber($profile, $doc->type) : $doc->number;
+            $number = $wasDraftNumber ? $this->allocateNextNumber($profile, $doc->type) : $doc->number;
             BillingPolicy::assertUniqueNumber($profile, $number, $doc->id);
 
             $doc->update([
@@ -327,10 +327,6 @@ class InvoiceService
                 'issued_at' => now(),
                 'share_token' => $doc->share_token ?: Str::random(40),
             ]);
-
-            if ($wasDraftNumber) {
-                $this->bumpNextNumber($profile, $doc->type);
-            }
 
             $doc = $doc->fresh()->load(['lineItems', 'customer', 'clientProfile', 'referenceDocument']);
             $this->generatePdf($doc);
@@ -371,18 +367,155 @@ class InvoiceService
 
     public function nextNumber(ClientProfile $profile, string $type): string
     {
-        // Lock so concurrent issues cannot reuse the same sequence.
         $locked = ClientProfile::whereKey($profile->id)->lockForUpdate()->first();
         if ($locked) {
             $profile->setRawAttributes($locked->getAttributes());
             $profile->syncOriginal();
         }
 
-        $prefix = $this->prefixFor($profile, $type);
+        [$prefix, $separator, $position, $padLen] = $this->resolveNumberingConfig($profile, $type);
         $field = $this->nextNumberField($type);
         $seq = max(1, (int) ($profile->{$field} ?? 1));
 
-        return $this->formatNumber($prefix, $seq);
+        return $this->formatDocNumber($prefix, $seq, $separator, $position, $padLen);
+    }
+
+    /**
+     * Atomically locks the profile row, allocates the current sequence number,
+     * increments the sequence counter on the locked row, updates document_numbering_settings JSON,
+     * and returns the formatted document number.
+     * Must be executed within a DB::transaction.
+     */
+    public function allocateNextNumber(ClientProfile $profile, string $type): string
+    {
+        $locked = ClientProfile::whereKey($profile->id)->lockForUpdate()->first() ?? $profile;
+
+        [$prefix, $separator, $position, $padLen] = $this->resolveNumberingConfig($locked, $type);
+        $field = $this->nextNumberField($type);
+        $seq = max(1, (int) ($locked->{$field} ?? 1));
+
+        $formatted = $this->formatDocNumber($prefix, $seq, $separator, $position, $padLen);
+
+        $nextSeq = $seq + 1;
+        $updates = [
+            $field => $nextSeq,
+        ];
+
+        // Keep document_numbering_settings JSON in sync
+        $settings = $locked->document_numbering_settings;
+        if (! is_array($settings)) {
+            $settings = [];
+        }
+        $docKey = self::typeToSettingsKey($type);
+        if (! isset($settings[$docKey]) || ! is_array($settings[$docKey])) {
+            $settings[$docKey] = [];
+        }
+        $settings[$docKey]['prefix'] = $prefix;
+        $settings[$docKey]['separator'] = $separator;
+        $settings[$docKey]['prefix_position'] = $position;
+        $settings[$docKey]['next_number'] = str_pad((string) $nextSeq, max(2, $padLen), '0', STR_PAD_LEFT);
+        if (! isset($settings[$docKey]['numbering_type'])) {
+            $settings[$docKey]['numbering_type'] = 'auto';
+        }
+        if (! isset($settings[$docKey]['status'])) {
+            $settings[$docKey]['status'] = true;
+        }
+        $updates['document_numbering_settings'] = $settings;
+
+        $locked->update($updates);
+
+        $profile->setRawAttributes($locked->getAttributes());
+        $profile->syncOriginal();
+
+        return $formatted;
+    }
+
+    /**
+     * Resolves the prefix, separator, position and padding length for a document type.
+     * Priority: document_numbering_settings JSON > client_profiles legacy column > default constant.
+     */
+    public function resolveNumberingConfig(ClientProfile $profile, string $type): array
+    {
+        $docKey = self::typeToSettingsKey($type);
+        $settings = $profile->document_numbering_settings;
+        $cfg = is_array($settings) && isset($settings[$docKey]) && is_array($settings[$docKey])
+            ? $settings[$docKey]
+            : [];
+
+        $defaultPrefix = match ($type) {
+            'credit_note' => 'CN',
+            'debit_note' => 'DN',
+            'bill_of_supply' => 'BOS',
+            'quotation' => 'QUO',
+            'amendment' => 'AMD',
+            'proforma' => 'PI',
+            'delivery_challan' => 'DC',
+            default => 'INV',
+        };
+
+        $legacyPrefix = match ($type) {
+            'credit_note' => $profile->credit_note_prefix,
+            'debit_note' => $profile->debit_note_prefix,
+            'bill_of_supply' => $profile->bill_of_supply_prefix,
+            'quotation' => $profile->quotation_prefix,
+            'amendment' => $profile->amendment_prefix,
+            'delivery_challan' => $profile->delivery_challan_prefix,
+            default => $profile->invoice_prefix,
+        };
+
+        $prefix = ! empty($cfg['prefix']) ? (string) $cfg['prefix'] : ($legacyPrefix ?: $defaultPrefix);
+
+        $defaultSep = match ($type) {
+            'bill_of_supply', 'debit_note', 'delivery_challan' => '/',
+            default => '-',
+        };
+        $separator = isset($cfg['separator']) && $cfg['separator'] !== '' ? (string) $cfg['separator'] : $defaultSep;
+
+        $position = ($cfg['prefix_position'] ?? 'first') === 'last' ? 'last' : 'first';
+
+        $rawNext = isset($cfg['next_number']) ? (string) $cfg['next_number'] : '01';
+        $padLen = max(2, strlen($rawNext));
+
+        return [$prefix, $separator, $position, $padLen];
+    }
+
+    public function formatDocNumber(string $prefix, int $seq, string $separator = '-', string $position = 'first', int $padLen = 2): string
+    {
+        $prefix = trim($prefix);
+        if ($prefix === '') {
+            $prefix = 'DOC';
+        }
+        $padded = str_pad((string) $seq, max(2, $padLen), '0', STR_PAD_LEFT);
+
+        if ($position === 'last') {
+            if (str_starts_with($prefix, '/') || str_starts_with($prefix, '-')) {
+                return $padded . $prefix;
+            }
+
+            return $padded . $separator . $prefix;
+        }
+
+        if (str_ends_with($prefix, '/') || str_ends_with($prefix, '-')) {
+            return $prefix . $padded;
+        }
+
+        return $prefix . $separator . $padded;
+    }
+
+    public static function typeToSettingsKey(string $type): string
+    {
+        return match ($type) {
+            'tax_invoice' => 'invoice',
+            default => $type,
+        };
+    }
+
+    public static function settingsKeyToType(string $key): string
+    {
+        return match ($key) {
+            'invoice' => 'tax_invoice',
+            default => $key,
+        };
     }
 
     /** Fixed short code per document type for draft numbers — distinct from the
@@ -445,18 +578,11 @@ class InvoiceService
         abort(422, "Draft {$prefix} numbers for this financial year are exhausted (DRAFT-{$prefix}-01 through DRAFT-{$prefix}-99 are all in use). Issue or delete an existing draft before creating another.");
     }
 
-    private function prefixFor(ClientProfile $profile, string $type): string
+    public function prefixFor(ClientProfile $profile, string $type): string
     {
-        return match ($type) {
-            'credit_note' => $profile->credit_note_prefix ?: 'CN',
-            'debit_note' => $profile->debit_note_prefix ?: 'DN',
-            'bill_of_supply' => $profile->bill_of_supply_prefix ?: 'BOS',
-            'quotation' => $profile->quotation_prefix ?: 'QT',
-            'amendment' => $profile->amendment_prefix ?: 'AMD',
-            'proforma' => 'PI',
-            'delivery_challan' => 'DC',
-            default => $profile->invoice_prefix ?: 'INV',
-        };
+        [$prefix] = $this->resolveNumberingConfig($profile, $type);
+
+        return $prefix;
     }
 
     /** Column that holds the next sequence for a document type (admin-settable). */
@@ -476,22 +602,15 @@ class InvoiceService
     private function bumpNextNumber(ClientProfile $profile, string $type): void
     {
         $field = $this->nextNumberField($type);
-        $profile->refresh();
-        $profile->increment($field);
+        $locked = ClientProfile::whereKey($profile->id)->lockForUpdate()->first() ?? $profile;
+        $nextSeq = max(1, (int) ($locked->{$field} ?? 1)) + 1;
+        $locked->update([$field => $nextSeq]);
+        $profile->setRawAttributes($locked->getAttributes());
     }
 
     private function formatNumber(string $prefix, int $seq): string
     {
-        $prefix = rtrim((string) $prefix);
-        if ($prefix === '') {
-            $prefix = 'DOC';
-        }
-        // Support FY-style prefixes ending with / e.g. INV/2026-27/01
-        if (str_ends_with($prefix, '/') || str_ends_with($prefix, '-')) {
-            return sprintf('%s%02d', $prefix, $seq);
-        }
-
-        return sprintf('%s-%02d', $prefix, $seq);
+        return $this->formatDocNumber($prefix, $seq);
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Models\ClientProfile;
 use App\Models\CommercialDocument;
 use App\Models\User;
 use App\Services\Billing\BillingPolicy;
+use App\Services\Billing\InvoiceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -281,6 +282,19 @@ class ClientProfileController extends Controller
         $this->assertClientsUnlocked($request);
         $profile = ClientProfile::with('user')->findOrFail($id);
         $data = $this->validatePayload($request, false, $profile);
+
+        if ($request->has('document_numbering_settings')) {
+            $settings = $request->input('document_numbering_settings');
+            if (is_string($settings)) {
+                $settings = json_decode($settings, true) ?: [];
+            }
+            if (is_array($settings)) {
+                $guardResponse = $this->validateDocumentNumberingGuard($request, $profile, $settings);
+                if ($guardResponse) {
+                    return $guardResponse;
+                }
+            }
+        }
 
         return DB::transaction(function () use ($request, $data, $profile) {
             if (isset($data['client_name']) || isset($data['mobile']) || isset($data['login_email']) || isset($data['password']) || isset($data['is_active'])) {
@@ -1018,6 +1032,28 @@ class ClientProfileController extends Controller
             } elseif (is_array($settings)) {
                 $out['document_numbering_settings'] = $settings;
             }
+
+            if (! empty($out['document_numbering_settings']) && is_array($out['document_numbering_settings'])) {
+                $map = [
+                    'invoice' => ['invoice_prefix', 'invoice_next_number'],
+                    'bill_of_supply' => ['bill_of_supply_prefix', 'bill_of_supply_next_number'],
+                    'credit_note' => ['credit_note_prefix', 'credit_note_next_number'],
+                    'debit_note' => ['debit_note_prefix', 'debit_note_next_number'],
+                    'quotation' => ['quotation_prefix', 'quotation_next_number'],
+                    'delivery_challan' => ['delivery_challan_prefix', 'delivery_challan_next_number'],
+                ];
+                foreach ($map as $key => [$prefixCol, $seqCol]) {
+                    if (isset($out['document_numbering_settings'][$key]) && is_array($out['document_numbering_settings'][$key])) {
+                        $c = $out['document_numbering_settings'][$key];
+                        if (! empty($c['prefix'])) {
+                            $out[$prefixCol] = $c['prefix'];
+                        }
+                        if (isset($c['next_number']) && $c['next_number'] !== '') {
+                            $out[$seqCol] = max(1, (int) $c['next_number']);
+                        }
+                    }
+                }
+            }
         }
 
         foreach (self::ENCRYPTED as $f) {
@@ -1185,6 +1221,118 @@ class ClientProfileController extends Controller
             }
             fclose($out);
         }, "{$type}.csv", ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * Guard C: Check proposed document numbering settings for collisions and gaps.
+     *
+     * Exact duplicate: hard block 422 with key document_numbering_settings.<doc_key>.next_number
+     * Gap (proposed < highest issued): warning 409 with requires_confirmation: true
+     */
+    private function validateDocumentNumberingGuard(Request $request, ClientProfile $profile, array $settings): ?\Illuminate\Http\JsonResponse
+    {
+        $invoices = app(InvoiceService::class);
+        $docKeys = [
+            'invoice' => ['type' => 'tax_invoice', 'label' => 'Tax Invoice'],
+            'bill_of_supply' => ['type' => 'bill_of_supply', 'label' => 'Bill of Supply'],
+            'credit_note' => ['type' => 'credit_note', 'label' => 'Credit Note'],
+            'debit_note' => ['type' => 'debit_note', 'label' => 'Debit Note'],
+            'quotation' => ['type' => 'quotation', 'label' => 'Quotation'],
+            'delivery_challan' => ['type' => 'delivery_challan', 'label' => 'Delivery Challan'],
+        ];
+
+        $exactErrors = [];
+
+        // Step 1: Exact-duplicate check per client, across all types, drafts included (assertUniqueNumber jaisa)
+        foreach ($docKeys as $docKey => $info) {
+            if (! isset($settings[$docKey]) || ! is_array($settings[$docKey])) {
+                continue;
+            }
+            $cfg = $settings[$docKey];
+            $type = $info['type'];
+
+            $tempProfile = clone $profile;
+            $currentSettings = $profile->document_numbering_settings;
+            $tempProfile->document_numbering_settings = array_merge(is_array($currentSettings) ? $currentSettings : [], [$docKey => $cfg]);
+            [$prefix, $separator, $position, $padLen] = $invoices->resolveNumberingConfig($tempProfile, $type);
+
+            $rawNext = isset($cfg['next_number']) ? (string) $cfg['next_number'] : '01';
+            $nextNum = max(1, (int) $rawNext);
+            $candidate = $invoices->formatDocNumber($prefix, $nextNum, $separator, $position, max($padLen, strlen($rawNext)));
+
+            $exactExists = CommercialDocument::where('client_profile_id', $profile->id)
+                ->where('number', $candidate)
+                ->exists();
+
+            if ($exactExists) {
+                $exactErrors["document_numbering_settings.{$docKey}.next_number"] = [
+                    "Document number '{$candidate}' is already in use for this client.",
+                ];
+            }
+        }
+
+        if (! empty($exactErrors)) {
+            throw \Illuminate\Validation\ValidationException::withMessages($exactErrors);
+        }
+
+        // Step 2: Gap check (sirf issued/non-draft par, sirf matching pattern wale documents)
+        if (! $request->boolean('confirm_gap')) {
+            foreach ($docKeys as $docKey => $info) {
+                if (! isset($settings[$docKey]) || ! is_array($settings[$docKey])) {
+                    continue;
+                }
+                $cfg = $settings[$docKey];
+                $type = $info['type'];
+                $label = $info['label'];
+
+                $tempProfile = clone $profile;
+                $currentSettings = $profile->document_numbering_settings;
+                $tempProfile->document_numbering_settings = array_merge(is_array($currentSettings) ? $currentSettings : [], [$docKey => $cfg]);
+                [$prefix, $separator, $position, $padLen] = $invoices->resolveNumberingConfig($tempProfile, $type);
+
+                $rawNext = isset($cfg['next_number']) ? (string) $cfg['next_number'] : '01';
+                $nextNum = max(1, (int) $rawNext);
+
+                $quotedPrefix = preg_quote($prefix, '/');
+                $quotedSep = preg_quote($separator, '/');
+                if ($position === 'last') {
+                    $pattern = (str_starts_with($prefix, '-') || str_starts_with($prefix, '/'))
+                        ? '/^(\d+)' . $quotedPrefix . '$/'
+                        : '/^(\d+)' . $quotedSep . $quotedPrefix . '$/';
+                } else {
+                    $pattern = (str_ends_with($prefix, '-') || str_ends_with($prefix, '/'))
+                        ? '/^' . $quotedPrefix . '(\d+)$/'
+                        : '/^' . $quotedPrefix . $quotedSep . '(\d+)$/';
+                }
+
+                $issuedNumbers = CommercialDocument::where('client_profile_id', $profile->id)
+                    ->where('type', $type)
+                    ->where('status', '!=', 'draft')
+                    ->pluck('number');
+
+                $highestIssued = 0;
+                foreach ($issuedNumbers as $num) {
+                    if (preg_match($pattern, (string) $num, $m)) {
+                        $val = (int) $m[1];
+                        if ($val > $highestIssued) {
+                            $highestIssued = $val;
+                        }
+                    }
+                }
+
+                if ($highestIssued > 0 && $nextNum < $highestIssued) {
+                    return response()->json([
+                        'requires_confirmation' => true,
+                        'doc_key' => $docKey,
+                        'proposed_number' => $nextNum,
+                        'highest_issued' => $highestIssued,
+                        'message' => "Proposed Next Number ({$nextNum}) for {$label} is lower than the highest issued number ({$highestIssued}). This will create or fill a gap in document numbering. Are you sure you want to proceed?",
+                    ], 409);
+                }
+            }
+        }
+
+        return null;
     }
 
     private function xlsxDownload(string $type, array $rows)

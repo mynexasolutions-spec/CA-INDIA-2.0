@@ -602,6 +602,54 @@ When deploying Module 2B migrations to production:
 3. **Service Access**:
    - Requires **no database backfill**, as service access is derived in real-time by the API based on subscription status (`active` vs `inactive`) and the existing `client_profiles.gst_compliance_enabled` flag.
 
+---
+
+## Stage D1: Document Numbering Alignment (Backend & Race Fix)
+
+### 1. Atomic Allocation & Race Fix (`InvoiceService.php`)
+- `allocateNextNumber(ClientProfile $profile, string $type)`:
+  - Executes inside a pessimistic row lock (`lockForUpdate()`) within the active database transaction.
+  - Reads sequence number, prefix, separator, prefix position, and padding from `document_numbering_settings` JSON with legacy column fallback.
+  - Increments the sequence directly on the locked row in the same transaction.
+  - Synchronizes `document_numbering_settings` JSON (`next_number` padded string) and legacy sequence column (`<type>_next_number` integer).
+  - Replaces separate `bumpNextNumber` calls in `create()` and `issue()`, eliminating race conditions between concurrent issues.
+- `nextNumber(ClientProfile $profile, string $type)`:
+  - Formats the next document number preview without incrementing the counter.
+- `resolveNumberingConfig(ClientProfile $profile, string $type)`:
+  - Resolution precedence: `document_numbering_settings` JSON > legacy columns > default constants.
+  - Fallback defaults: Quotation defaults to `'QUO'` (matching frontend Tab 5); Delivery Challan reads from profile column `delivery_challan_prefix` with fallback to `'DC'`.
+- `formatDocNumber(string $prefix, int $seq, string $separator = '-', string $position = 'first', int $padLen = 2)`:
+  - Formats document numbers according to `prefix_position` (`first` vs `last`), user-configured separator, and zero-padded sequence length.
+
+### 2. Guard C Implementation (`ClientProfileController.php`)
+- `validateDocumentNumberingGuard(Request $request, ClientProfile $profile, array $settings)`:
+  - **Check 1 (Exact Collision - Hard Block 422)**:
+    - Checks proposed formatted number for each document type against all existing `CommercialDocument` records for that client (including drafts, issued, cancelled, paid).
+    - If exact collision exists, returns HTTP 422 Unprocessable Entity with validation error field key: `document_numbering_settings.<doc_key>.next_number`.
+  - **Check 2 (Sequence Gap Warning - HTTP 409)**:
+    - Scoped strictly to non-draft (`status != 'draft'`) documents matching the current prefix pattern.
+    - If proposed `next_number` is lower than the highest issued document sequence:
+      - If `confirm_gap: true` is NOT passed, returns HTTP 409 with:
+        `requires_confirmation: true`, `doc_key`, `proposed_number`, `highest_issued`, `message`.
+      - If `confirm_gap: true` IS passed, bypasses the warning and saves the sequence.
+- **Legacy Columns Sync**:
+  - Saving `document_numbering_settings` automatically synchronizes flat legacy columns (`invoice_prefix`, `invoice_next_number`, `quotation_prefix`, etc.).
+  - Status toggle (`status`) preserved in JSON as Option 1 configuration state without disrupting billing.
+
+### 3. Automated Feature Tests (`backend/tests/Feature/DocumentNumberingTest.php`)
+- `test_default_prefixes_and_custom_columns`: tests default prefix `'QUO'` for quotation, custom column for delivery challan, and standard invoice formatting.
+- `test_custom_separator_and_prefix_last_formatting`: tests custom separator (`/`) and `prefix_position = 'last'` (`01-EST`).
+- `test_atomic_allocation_prevents_race_duplicates`: verifies atomic increment on sequential allocation without duplicates.
+- `test_exact_duplicate_hard_block_422`: verifies hard 422 error on exact collision with issued document.
+- `test_exact_duplicate_checks_drafts_too`: verifies hard 422 error on exact collision with draft document.
+- `test_gap_check_returns_409_warning_and_confirms`: verifies 409 response on gap and successful save with `confirm_gap: true`.
+- `test_gap_check_ignores_drafts`: verifies drafts are excluded when computing highest issued sequence.
+- `test_legacy_columns_sync_on_save`: verifies flat columns sync on Tab 5 JSON save.
+- `test_create_issued_and_draft_issue_workflows`: tests direct create issued and draft-to-issue workflows.
+- `test_fallback_prefixes_when_profile_columns_empty`: tests fallback defaults when profile columns are null.
+- Result: **10 passed, 38 assertions, 0 errors**.
+
+
 
 
 
