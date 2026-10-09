@@ -194,6 +194,7 @@ export default function ClientConfigurationTab({
 }) {
   // Saved server state
   const [savedConfig, setSavedConfig] = useState({
+    invoice_tagline: '',
     watermark_enabled: false,
     watermark_text: '',
     gst_reminder_enabled: false,
@@ -206,6 +207,7 @@ export default function ClientConfigurationTab({
   });
 
   // Current working state in form
+  const [invoiceTagline, setInvoiceTagline] = useState('');
   const [watermarkEnabled, setWatermarkEnabled] = useState(false);
   const [watermarkText, setWatermarkText] = useState('');
   const [gstReminderEnabled, setGstReminderEnabled] = useState(false);
@@ -238,6 +240,7 @@ export default function ClientConfigurationTab({
     try {
       const res = await api(`/admin/clients/${clientId}/configuration`);
       if (res) {
+        const tagline = res.invoice_tagline || '';
         const wmEnabled = Boolean(res.watermark_enabled);
         const wmText = res.watermark_text || '';
         const gstReminder = Boolean(res.gst_reminder_enabled);
@@ -267,6 +270,7 @@ export default function ClientConfigurationTab({
         });
 
         const stateObj = {
+          invoice_tagline: tagline,
           watermark_enabled: wmEnabled,
           watermark_text: wmText,
           gst_reminder_enabled: gstReminder,
@@ -274,6 +278,7 @@ export default function ClientConfigurationTab({
         };
 
         setSavedConfig(stateObj);
+        setInvoiceTagline(tagline);
         setWatermarkEnabled(wmEnabled);
         setWatermarkText(wmText);
         setGstReminderEnabled(gstReminder);
@@ -292,6 +297,7 @@ export default function ClientConfigurationTab({
 
   // Dirty state detection
   const isDirty = useMemo(() => {
+    if (invoiceTagline !== (savedConfig.invoice_tagline || '')) return true;
     if (watermarkEnabled !== savedConfig.watermark_enabled) return true;
     if (watermarkText !== (savedConfig.watermark_text || '')) return true;
     if (gstReminderEnabled !== savedConfig.gst_reminder_enabled) return true;
@@ -306,7 +312,7 @@ export default function ClientConfigurationTab({
       if (cur.watermark_applies !== saved.watermark_applies) return true;
     }
     return false;
-  }, [watermarkEnabled, watermarkText, gstReminderEnabled, docRows, savedConfig]);
+  }, [invoiceTagline, watermarkEnabled, watermarkText, gstReminderEnabled, docRows, savedConfig]);
 
   // Notify parent of dirty status for tab switching guard
   useEffect(() => {
@@ -319,6 +325,7 @@ export default function ClientConfigurationTab({
   useEffect(() => {
     if (discardRef) {
       discardRef.current = () => {
+        setInvoiceTagline(savedConfig.invoice_tagline || '');
         setWatermarkEnabled(savedConfig.watermark_enabled);
         setWatermarkText(savedConfig.watermark_text || '');
         setGstReminderEnabled(savedConfig.gst_reminder_enabled);
@@ -351,6 +358,7 @@ export default function ClientConfigurationTab({
 
   // Confirm discard unsaved changes
   const handleConfirmDiscard = () => {
+    setInvoiceTagline(savedConfig.invoice_tagline || '');
     setWatermarkEnabled(savedConfig.watermark_enabled);
     setWatermarkText(savedConfig.watermark_text || '');
     setGstReminderEnabled(savedConfig.gst_reminder_enabled);
@@ -382,6 +390,7 @@ export default function ClientConfigurationTab({
     setSaving(true);
     try {
       const payload = {
+        invoice_tagline: invoiceTagline.trim(),
         watermark_enabled: watermarkEnabled,
         watermark_text: watermarkEnabled ? watermarkText.trim() : (watermarkText.trim() || null),
         gst_reminder_enabled: gstReminderEnabled,
@@ -400,6 +409,7 @@ export default function ClientConfigurationTab({
 
       // Update saved configuration state
       const updatedConfig = {
+        invoice_tagline: res.invoice_tagline || '',
         watermark_enabled: Boolean(res.watermark_enabled),
         watermark_text: res.watermark_text || '',
         gst_reminder_enabled: Boolean(res.gst_reminder_enabled),
@@ -414,6 +424,7 @@ export default function ClientConfigurationTab({
       };
 
       setSavedConfig(updatedConfig);
+      setInvoiceTagline(res.invoice_tagline || '');
       setIsEditing(false);
       setShowSaveSuccess(true);
     } catch (err) {
@@ -755,13 +766,15 @@ export default function ClientConfigurationTab({
           </div>
         </div>
 
-        {/* Right Column: Watermark Settings */}
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: 8,
-            padding: '16px 18px',
+        {/* Right Column: Watermark Settings + Invoice Tagline */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Watermark Settings Card */}
+          <div
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: 8,
+              padding: '16px 18px',
             boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
           }}
         >
@@ -979,6 +992,44 @@ export default function ClientConfigurationTab({
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+
+          {/* Invoice Tagline Card (used in Layout 3) */}
+          <div
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: 8,
+              padding: '16px 18px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <label
+                htmlFor="config-invoice-tagline"
+                style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}
+              >
+                Invoice Tagline (used in Layout 3)
+              </label>
+              <span style={{ fontSize: 11, color: '#64748b' }}>
+                {invoiceTagline.length}/120
+              </span>
+            </div>
+            <input
+              id="config-invoice-tagline"
+              type="text"
+              className="bp-input"
+              value={invoiceTagline}
+              onChange={(e) => setInvoiceTagline(e.target.value.slice(0, 120))}
+              placeholder="Cooler Tomorrow Together"
+              maxLength={120}
+              disabled={!isEditing || isNewClient}
+              style={{ width: '100%', fontSize: 13 }}
+            />
+            <p style={{ margin: '6px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.4 }}>
+              Shown in the footer strip of Layout 3 only. Leave empty to hide the strip.
+            </p>
           </div>
         </div>
       </div>

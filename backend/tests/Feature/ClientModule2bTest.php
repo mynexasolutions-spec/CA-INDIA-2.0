@@ -548,4 +548,130 @@ class ClientModule2bTest extends TestCase
             ->assertJsonPath('amount_receivable', 500)
             ->assertJsonPath('outstanding', 500);
     }
+
+    /**
+     * Test: Invoice Tagline configuration behaviour:
+     * (a) tagline saves and returns in GET /configuration
+     * (b) 121 characters fails with 422 validation error
+     * (c) empty string or whitespace-only saves as null in DB (to hide Layout 3 strip)
+     * (d) omitting the key preserves existing value untouched
+     */
+    public function test_invoice_tagline_save_and_get(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $validDocuments = array_map(fn ($type) => [
+            'document_type' => $type,
+            'layout_id' => 3,
+            'colour_scheme' => 'dusty_plum',
+            'watermark_applies' => false,
+        ], array_keys(ClientDocumentSetting::DOCUMENT_TYPES));
+
+        // (a) Save tagline and retrieve in GET
+        $putResp = $this->putJson("/api/admin/clients/{$this->profile->id}/configuration", [
+            'invoice_tagline' => 'Cooler Tomorrow Together',
+            'watermark_enabled' => false,
+            'gst_reminder_enabled' => false,
+            'documents' => $validDocuments,
+        ]);
+        $putResp->assertOk()
+            ->assertJsonPath('invoice_tagline', 'Cooler Tomorrow Together');
+
+        $this->profile->refresh();
+        $this->assertEquals('Cooler Tomorrow Together', $this->profile->invoice_tagline);
+
+        $getResp = $this->getJson("/api/admin/clients/{$this->profile->id}/configuration");
+        $getResp->assertOk()
+            ->assertJsonPath('invoice_tagline', 'Cooler Tomorrow Together');
+    }
+
+    public function test_invoice_tagline_rejects_more_than_120_characters(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $validDocuments = array_map(fn ($type) => [
+            'document_type' => $type,
+            'layout_id' => 3,
+            'colour_scheme' => 'dusty_plum',
+            'watermark_applies' => false,
+        ], array_keys(ClientDocumentSetting::DOCUMENT_TYPES));
+
+        // (b) 121 characters => 422
+        $resp = $this->putJson("/api/admin/clients/{$this->profile->id}/configuration", [
+            'invoice_tagline' => str_repeat('A', 121),
+            'watermark_enabled' => false,
+            'gst_reminder_enabled' => false,
+            'documents' => $validDocuments,
+        ]);
+        $resp->assertStatus(422)
+            ->assertJsonValidationErrors(['invoice_tagline']);
+    }
+
+    public function test_invoice_tagline_empty_or_whitespace_saves_as_null(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $validDocuments = array_map(fn ($type) => [
+            'document_type' => $type,
+            'layout_id' => 3,
+            'colour_scheme' => 'dusty_plum',
+            'watermark_applies' => false,
+        ], array_keys(ClientDocumentSetting::DOCUMENT_TYPES));
+
+        // First set a tagline
+        $this->profile->update(['invoice_tagline' => 'Existing Tagline']);
+
+        // (c) Empty string => saves as null
+        $respEmpty = $this->putJson("/api/admin/clients/{$this->profile->id}/configuration", [
+            'invoice_tagline' => '',
+            'watermark_enabled' => false,
+            'gst_reminder_enabled' => false,
+            'documents' => $validDocuments,
+        ]);
+        $respEmpty->assertOk()
+            ->assertJsonPath('invoice_tagline', null);
+
+        $this->profile->refresh();
+        $this->assertNull($this->profile->invoice_tagline);
+
+        // Whitespace only => saves as null
+        $this->profile->update(['invoice_tagline' => 'Existing Tagline']);
+        $respWhitespace = $this->putJson("/api/admin/clients/{$this->profile->id}/configuration", [
+            'invoice_tagline' => '     ',
+            'watermark_enabled' => false,
+            'gst_reminder_enabled' => false,
+            'documents' => $validDocuments,
+        ]);
+        $respWhitespace->assertOk()
+            ->assertJsonPath('invoice_tagline', null);
+
+        $this->profile->refresh();
+        $this->assertNull($this->profile->invoice_tagline);
+    }
+
+    public function test_invoice_tagline_omitted_key_preserves_existing_value_untouched(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $validDocuments = array_map(fn ($type) => [
+            'document_type' => $type,
+            'layout_id' => 3,
+            'colour_scheme' => 'dusty_plum',
+            'watermark_applies' => false,
+        ], array_keys(ClientDocumentSetting::DOCUMENT_TYPES));
+
+        // (d) When key is absent from payload, existing tagline remains untouched
+        $this->profile->update(['invoice_tagline' => 'Untouched Tagline']);
+
+        $resp = $this->putJson("/api/admin/clients/{$this->profile->id}/configuration", [
+            'watermark_enabled' => false,
+            'gst_reminder_enabled' => false,
+            'documents' => $validDocuments,
+        ]);
+        $resp->assertOk()
+            ->assertJsonPath('invoice_tagline', 'Untouched Tagline');
+
+        $this->profile->refresh();
+        $this->assertEquals('Untouched Tagline', $this->profile->invoice_tagline);
+    }
 }

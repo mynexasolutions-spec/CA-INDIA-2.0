@@ -52,6 +52,7 @@ class ClientConfigurationController extends Controller
 
         return response()->json([
             'client_id' => $profile->id,
+            'invoice_tagline' => $profile->invoice_tagline,
             'watermark_enabled' => (bool) $profile->watermark_enabled,
             'watermark_text' => $profile->watermark_text,
             'gst_reminder_enabled' => (bool) $profile->gst_reminder_enabled,
@@ -67,6 +68,7 @@ class ClientConfigurationController extends Controller
         $profile = ClientProfile::findOrFail($clientId);
 
         $data = $request->validate([
+            'invoice_tagline' => 'nullable|string|max:120',
             'watermark_enabled' => 'nullable|boolean',
             'watermark_text' => [
                 'nullable',
@@ -107,6 +109,11 @@ class ClientConfigurationController extends Controller
         }
 
         DB::transaction(function () use ($profile, $data, $request) {
+            if ($request->has('invoice_tagline')) {
+                $rawTagline = $request->input('invoice_tagline');
+                $trimmed = is_string($rawTagline) ? trim($rawTagline) : null;
+                $profile->invoice_tagline = ($trimmed === '' || $trimmed === null) ? null : $trimmed;
+            }
             if ($request->has('watermark_enabled')) {
                 $profile->watermark_enabled = (bool) $data['watermark_enabled'];
             }
@@ -154,6 +161,7 @@ class ClientConfigurationController extends Controller
         return response()->json([
             'message' => 'Configuration settings updated successfully.',
             'client_id' => $profile->id,
+            'invoice_tagline' => $profile->invoice_tagline,
             'watermark_enabled' => (bool) $profile->watermark_enabled,
             'watermark_text' => $profile->watermark_text,
             'gst_reminder_enabled' => (bool) $profile->gst_reminder_enabled,
