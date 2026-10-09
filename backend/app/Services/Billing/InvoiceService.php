@@ -796,8 +796,8 @@ class InvoiceService
         $watermarkApplies = $profile?->watermark_enabled && ($docSetting?->watermark_applies ?? false);
         $watermarkText = $profile?->watermark_text;
 
-        // Render using Layout 1, Layout 2, or Layout 3 if flag is on and layout_id is 1, 2, or 3
-        if ($isNewRendererEnabled && in_array($layoutId, [1, 2, 3], true)) {
+        // Render using Layout 1, Layout 2, Layout 3, or Layout 4 if flag is on and layout_id is 1, 2, 3, or 4
+        if ($isNewRendererEnabled && in_array($layoutId, [1, 2, 3, 4], true)) {
             try {
                 $theme = \App\Services\DocumentTemplate\DocumentThemeTokens::get($colourScheme);
                 $data = \App\Services\DocumentTemplate\DocumentPayloadBuilder::build($doc);
@@ -805,6 +805,7 @@ class InvoiceService
                 $viewName = match ($layoutId) {
                     2 => 'pdf.layouts.layout2',
                     3 => 'pdf.layouts.layout3',
+                    4 => 'pdf.layouts.layout4',
                     default => 'pdf.layouts.layout1',
                 };
                 $viewData = [
@@ -826,8 +827,9 @@ class InvoiceService
                 $pdf->render();
                 $dompdf = $pdf->getDomPDF();
 
-                // Layout 1 uses rounded frame (radius = 11), Layout 2 and 3 use crisp square frame (radius = 0)
+                // Layout 1 uses rounded frame (radius = 11), Layout 2 and 3 use crisp square frame (radius = 0), Layout 4 has frame off
                 $borderRadius = in_array($layoutId, [2, 3], true) ? 0 : 11;
+                $drawFrame = $layoutId !== 4;
 
                 \App\Services\DocumentTemplate\DocumentCanvasHelper::attachFrameAndFooter(
                     $dompdf->getCanvas(),
@@ -835,7 +837,8 @@ class InvoiceService
                     $theme,
                     $watermarkApplies,
                     $watermarkText,
-                    $borderRadius
+                    $borderRadius,
+                    $drawFrame
                 );
 
                 $dir = 'invoices/' . $doc->client_profile_id;
@@ -852,7 +855,7 @@ class InvoiceService
             }
         }
 
-        // Legacy invoice.blade.php renderer (Fallback for Layout 2, 3, 4, flag off, or render error)
+        // Legacy invoice.blade.php renderer (Fallback for flag off, unsupported layout, or render error)
         $pdf = Pdf::loadView('pdf.invoice', ['doc' => $doc])
             ->setPaper('a4', 'portrait')
             ->setOption(['isRemoteEnabled' => true, 'dpi' => 96, 'defaultFont' => 'DejaVu Sans']);

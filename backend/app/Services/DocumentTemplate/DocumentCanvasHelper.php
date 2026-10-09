@@ -23,7 +23,8 @@ class DocumentCanvasHelper
         array $theme,
         bool $showWatermark = false,
         ?string $watermarkText = null,
-        int $borderRadius = 11
+        int $borderRadius = 11,
+        bool $drawFrame = true
     ): void {
         $font = $fontMetrics->getFont('DejaVu Sans');
         $frameRgb = $theme['rgb'] ?? [0.247, 0.275, 0.314];
@@ -34,30 +35,33 @@ class DocumentCanvasHelper
             $frameRgb,
             $showWatermark,
             $watermarkText,
-            $borderRadius
+            $borderRadius,
+            $drawFrame
         ) {
-            // 1. Draw outer frame on canvas (rounded or square)
-            $fw = 1.3;
-            $x0 = 18;
-            $y0 = 14;
-            $x1 = $canvas->get_width() - 18;
-            $y1 = $canvas->get_height() - 28;
+            // 1. Draw outer frame on canvas (rounded or square) if enabled
+            if ($drawFrame) {
+                $fw = 1.3;
+                $x0 = 18;
+                $y0 = 14;
+                $x1 = $canvas->get_width() - 18;
+                $y1 = $canvas->get_height() - 28;
 
-            if ($borderRadius > 0) {
-                $r = $borderRadius;
-                $canvas->line($x0 + $r, $y0, $x1 - $r, $y0, $frameRgb, $fw);
-                $canvas->line($x0 + $r, $y1, $x1 - $r, $y1, $frameRgb, $fw);
-                $canvas->line($x0, $y0 + $r, $x0, $y1 - $r, $frameRgb, $fw);
-                $canvas->line($x1, $y0 + $r, $x1, $y1 - $r, $frameRgb, $fw);
-                $canvas->arc($x0 + $r, $y0 + $r, $r, $r, 90, 180, $frameRgb, $fw);
-                $canvas->arc($x1 - $r, $y0 + $r, $r, $r, 0, 90, $frameRgb, $fw);
-                $canvas->arc($x1 - $r, $y1 - $r, $r, $r, 270, 360, $frameRgb, $fw);
-                $canvas->arc($x0 + $r, $y1 - $r, $r, $r, 180, 270, $frameRgb, $fw);
-            } else {
-                $canvas->line($x0, $y0, $x1, $y0, $frameRgb, $fw);
-                $canvas->line($x0, $y1, $x1, $y1, $frameRgb, $fw);
-                $canvas->line($x0, $y0, $x0, $y1, $frameRgb, $fw);
-                $canvas->line($x1, $y0, $x1, $y1, $frameRgb, $fw);
+                if ($borderRadius > 0) {
+                    $r = $borderRadius;
+                    $canvas->line($x0 + $r, $y0, $x1 - $r, $y0, $frameRgb, $fw);
+                    $canvas->line($x0 + $r, $y1, $x1 - $r, $y1, $frameRgb, $fw);
+                    $canvas->line($x0, $y0 + $r, $x0, $y1 - $r, $frameRgb, $fw);
+                    $canvas->line($x1, $y0 + $r, $x1, $y1 - $r, $frameRgb, $fw);
+                    $canvas->arc($x0 + $r, $y0 + $r, $r, $r, 90, 180, $frameRgb, $fw);
+                    $canvas->arc($x1 - $r, $y0 + $r, $r, $r, 0, 90, $frameRgb, $fw);
+                    $canvas->arc($x1 - $r, $y1 - $r, $r, $r, 270, 360, $frameRgb, $fw);
+                    $canvas->arc($x0 + $r, $y1 - $r, $r, $r, 180, 270, $frameRgb, $fw);
+                } else {
+                    $canvas->line($x0, $y0, $x1, $y0, $frameRgb, $fw);
+                    $canvas->line($x0, $y1, $x1, $y1, $frameRgb, $fw);
+                    $canvas->line($x0, $y0, $x0, $y1, $frameRgb, $fw);
+                    $canvas->line($x1, $y0, $x1, $y1, $frameRgb, $fw);
+                }
             }
 
             // 2. Footer outside frame: darker and slightly larger (tuned)
