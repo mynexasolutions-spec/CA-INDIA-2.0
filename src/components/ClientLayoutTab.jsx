@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/client';
 import LayoutPreview from './LayoutPreview';
+import { layoutPreviewUrl } from '../api/layoutPreview';
 import ClientSaveSuccessModal from './ClientSaveSuccessModal';
 import DiscardChangesModal from './DiscardChangesModal';
 
@@ -152,7 +153,7 @@ function ConfirmResetModal({ onCancel, onConfirm, isSaving }) {
 /**
  * Full-size preview modal.
  */
-function FullSizePreviewModal({ layoutId, onClose }) {
+function FullSizePreviewModal({ clientId, layoutId, colourScheme, onClose }) {
   const imgSrc = LAYOUT_IMAGES[layoutId] || LAYOUT_IMAGES[1];
   const layout = LAYOUT_TEMPLATES.find((l) => l.id === layoutId);
 
@@ -221,7 +222,11 @@ function FullSizePreviewModal({ layoutId, onClose }) {
               width: '100%',
             }}
           >
-            <LayoutPreview src={imgSrc} alt="Full Size Layout Preview" />
+            <LayoutPreview
+              previewUrl={layoutPreviewUrl(clientId, { layoutId, colourScheme })}
+              src={imgSrc}
+              alt="Full Size Layout Preview"
+            />
           </div>
         </div>
 
@@ -975,7 +980,6 @@ export default function ClientLayoutTab({
               style={{
                 width: '100%',
                 maxWidth: 380,
-                maxHeight: 460,
                 background: '#ffffff',
                 border: '1px solid #e2e8f0',
                 borderRadius: 6,
@@ -986,10 +990,14 @@ export default function ClientLayoutTab({
               }}
             >
               <LayoutPreview
+                previewUrl={layoutPreviewUrl(isNewClient ? null : clientId, {
+                  layoutId: selectedLayoutId,
+                  colourScheme: selectedColourScheme,
+                })}
                 src={LAYOUT_IMAGES[selectedLayoutId] || LAYOUT_IMAGES[1]}
                 alt={`Layout ${selectedLayoutId} Preview`}
-                style={{ maxHeight: 460, width: 'auto', maxWidth: '100%', objectFit: 'contain' }}
               />
+
             </div>
           </div>
         </div>
@@ -1129,7 +1137,9 @@ export default function ClientLayoutTab({
       {/* Full Size Preview Modal */}
       {showFullPreview && (
         <FullSizePreviewModal
+          clientId={isNewClient ? null : clientId}
           layoutId={selectedLayoutId}
+          colourScheme={selectedColourScheme}
           onClose={() => setShowFullPreview(false)}
         />
       )}

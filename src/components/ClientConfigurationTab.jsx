@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/client';
 import LayoutPreview from './LayoutPreview';
+import { layoutPreviewUrl } from '../api/layoutPreview';
 import ClientSaveSuccessModal from './ClientSaveSuccessModal';
 import DiscardChangesModal from './DiscardChangesModal';
 
@@ -47,7 +48,7 @@ const LAYOUT_IMAGES = {
 /**
  * Full-size preview modal for a document layout.
  */
-function ConfigFullPreviewModal({ layoutId, documentTitle, onClose }) {
+function ConfigFullPreviewModal({ clientId, layoutId, colourScheme, documentType, watermark, documentTitle, onClose }) {
   const imgSrc = LAYOUT_IMAGES[layoutId] || LAYOUT_IMAGES[1];
   const layout = LAYOUT_OPTIONS.find((l) => l.id === layoutId);
 
@@ -116,7 +117,11 @@ function ConfigFullPreviewModal({ layoutId, documentTitle, onClose }) {
               width: '100%',
             }}
           >
-            <LayoutPreview src={imgSrc} alt="Full Size Layout Preview" />
+            <LayoutPreview
+              previewUrl={layoutPreviewUrl(clientId, { layoutId, colourScheme, documentType, watermark })}
+              src={imgSrc}
+              alt="Full Size Layout Preview"
+            />
           </div>
         </div>
 
@@ -737,6 +742,9 @@ export default function ClientConfigurationTab({
                             onClick={() =>
                               setPreviewModalDoc({
                                 layoutId: row.layout_id,
+                                colourScheme: row.colour_scheme,
+                                documentType: dt.key,
+                                watermark: false,
                                 title: dt.label,
                               })
                             }
@@ -966,6 +974,9 @@ export default function ClientConfigurationTab({
                             onClick={() =>
                               setPreviewModalDoc({
                                 layoutId: row.layout_id,
+                                colourScheme: row.colour_scheme,
+                                documentType: dt.key,
+                                watermark: Boolean(watermarkEnabled && row.watermark_applies),
                                 title: dt.label,
                               })
                             }
@@ -1024,7 +1035,7 @@ export default function ClientConfigurationTab({
               onChange={(e) => setInvoiceTagline(e.target.value.slice(0, 120))}
               placeholder="Cooler Tomorrow Together"
               maxLength={120}
-              disabled={!isEditing || isNewClient}
+              disabled={!isEditing || isNewClient || !docRows.some((r) => Number(r.layout_id) === 3)}
               style={{ width: '100%', fontSize: 13 }}
             />
             <p style={{ margin: '6px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.4 }}>
@@ -1216,7 +1227,11 @@ export default function ClientConfigurationTab({
       {/* Full Size Preview Modal */}
       {previewModalDoc && (
         <ConfigFullPreviewModal
+          clientId={isNewClient ? null : clientId}
           layoutId={previewModalDoc.layoutId}
+          colourScheme={previewModalDoc.colourScheme}
+          documentType={previewModalDoc.documentType}
+          watermark={previewModalDoc.watermark}
           documentTitle={previewModalDoc.title}
           onClose={() => setPreviewModalDoc(null)}
         />

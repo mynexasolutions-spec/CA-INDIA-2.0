@@ -506,9 +506,6 @@
       <td class="hdr-gap"></td>
       <td class="hdr-title-box">
         <h1 class="hdr-company-name">{{ $data['company_name'] }}</h1>
-        @if(!empty($data['tagline']))
-          <div class="hdr-tagline">{{ $data['tagline'] }}</div>
-        @endif
       </td>
     </tr>
   </table>

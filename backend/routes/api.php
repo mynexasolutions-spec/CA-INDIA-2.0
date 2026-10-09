@@ -167,6 +167,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/clients/{id}/notes/{noteId}', [\App\Http\Controllers\Api\Admin\ClientNoteController::class, 'destroy']);
 
         Route::get('/clients/{id}/layout', [\App\Http\Controllers\Api\Admin\ClientLayoutController::class, 'show']);
+        Route::get('/clients/{id}/layout-preview', [\App\Http\Controllers\Api\Admin\ClientLayoutController::class, 'preview'])->middleware('throttle:30,1');
         Route::match(['put', 'post'], '/clients/{id}/layout', [\App\Http\Controllers\Api\Admin\ClientLayoutController::class, 'update']);
         Route::get('/clients/{id}/configuration', [\App\Http\Controllers\Api\Admin\ClientConfigurationController::class, 'show']);
         Route::match(['put', 'post'], '/clients/{id}/configuration', [\App\Http\Controllers\Api\Admin\ClientConfigurationController::class, 'update']);

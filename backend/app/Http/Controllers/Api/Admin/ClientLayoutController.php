@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\ClientDocumentSetting;
 use App\Models\ClientProfile;
 use App\Models\ClientSubscription;
+use App\Services\DocumentTemplate\LayoutPreviewRenderer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class ClientLayoutController extends Controller
@@ -80,6 +82,45 @@ class ClientLayoutController extends Controller
             'colour_name' => ClientDocumentSetting::COLOUR_SCHEMES[$colourScheme] ?? null,
             'allowed_layouts' => ClientDocumentSetting::LAYOUTS,
             'allowed_colour_schemes' => ClientDocumentSetting::COLOUR_SCHEMES,
+        ]);
+    }
+
+    /**
+     * Render a real-renderer preview PDF with demo data. Nothing is stored.
+     */
+    public function preview(Request $request, int $clientId, LayoutPreviewRenderer $renderer)
+    {
+        $this->assertClientsUnlocked($request);
+        $profile = ClientProfile::findOrFail($clientId);
+
+        $data = $request->validate([
+            'layout_id' => 'required|integer|in:1,2,3,4',
+            'colour_scheme' => ['required', 'string', Rule::in(array_keys(ClientDocumentSetting::COLOUR_SCHEMES))],
+            'document_type' => ['nullable', 'string', Rule::in(array_keys(ClientDocumentSetting::DOCUMENT_TYPES))],
+            'watermark' => ['nullable', Rule::in(['0', '1', 'true', 'false', 0, 1, true, false])],
+        ]);
+
+        $documentType = $data['document_type'] ?? 'tax_invoice';
+        $watermark = filter_var($data['watermark'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        try {
+            $pdf = $renderer->render(
+                $profile,
+                (int) $data['layout_id'],
+                (string) $data['colour_scheme'],
+                $documentType,
+                $watermark
+            );
+        } catch (\Throwable $e) {
+            Log::warning("Layout preview failed for client {$clientId}: " . $e->getMessage());
+
+            return response()->json(['message' => 'Preview unavailable. Please try again.'], 503);
+        }
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="layout-preview.pdf"',
+            'Cache-Control' => 'no-store, private',
         ]);
     }
 

@@ -79,9 +79,6 @@
           @if(!empty($data['seller_email']))
             <b>Email:</b> {{ $data['seller_email'] }}
           @endif
-          @if(!empty($data['tagline']))
-            @if(!empty($data['seller_email'])) &nbsp;|&nbsp; @endif<b>Website:</b> {{ $data['tagline'] }}
-          @endif
         </div>
       </td>
     </tr>
