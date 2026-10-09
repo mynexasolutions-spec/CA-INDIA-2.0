@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class ClientProfile extends Model
 {
     protected $fillable = [
-        'user_id', 'client_code', 'client_name', 'business_name', 'constitution_type', 'business_type',
+        'user_id', 'client_code', 'client_name', 'business_name', 'invoice_tagline', 'constitution_type', 'business_type',
         'contact_person_name', 'designation', 'gender', 'applicable_from',
         'date_of_incorporation', 'date_of_birth', 'mobile', 'alt_mobile', 'alt_email',
         'gstin', 'registration_type', 'has_gst', 'gst_compliance_enabled', 'dealer_type', 'composition_rate', 'gst_filing_frequency', 'gstr1_filing_frequency', 'gstr2b_filing_frequency', 'pan', 'email', 'state_code', 'state', 'country', 'place_of_supply_default',

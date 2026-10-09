@@ -649,7 +649,11 @@ When deploying Module 2B migrations to production:
 - `test_fallback_prefixes_when_profile_columns_empty`: tests fallback defaults when profile columns are null.
 - Result: **10 passed, 38 assertions, 0 errors**.
 
+---
 
+## Stage F1: Foundation + Layout 1 Production Template
 
-
-
+### 1. Database Migrations
+- **Migration `2026_10_08_120904_add_invoice_tagline_to_client_profiles_table.php`**:
+  - Added nullable string column `invoice_tagline` (length 120) to `client_profiles` table.
+  - UI is deferred for future stages per spec; field is available for client profile models and document headers.

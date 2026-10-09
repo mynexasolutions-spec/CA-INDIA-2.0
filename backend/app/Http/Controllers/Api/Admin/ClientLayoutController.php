@@ -68,9 +68,13 @@ class ClientLayoutController extends Controller
 
         return response()->json([
             'client_id' => $profile->id,
+            'layout_id' => $layoutId,
             'default_layout_id' => $layoutId,
+            'colour_scheme' => $colourScheme,
             'default_colour_scheme' => $colourScheme,
+            'applied_from' => $profile->layout_applied_from?->toDateString(),
             'layout_applied_from' => $profile->layout_applied_from?->toDateString(),
+            'updated_at' => $profile->layout_updated_at?->toIso8601String(),
             'layout_updated_at' => $profile->layout_updated_at?->toIso8601String(),
             'layout_name' => ClientDocumentSetting::LAYOUTS[$layoutId] ?? null,
             'colour_name' => ClientDocumentSetting::COLOUR_SCHEMES[$colourScheme] ?? null,
@@ -126,9 +130,13 @@ class ClientLayoutController extends Controller
         return response()->json([
             'message' => 'Layout settings updated successfully and applied to all document types.',
             'client_id' => $profile->id,
+            'layout_id' => (int) $profile->default_layout_id,
             'default_layout_id' => (int) $profile->default_layout_id,
+            'colour_scheme' => (string) $profile->default_colour_scheme,
             'default_colour_scheme' => (string) $profile->default_colour_scheme,
+            'applied_from' => $profile->layout_applied_from?->toDateString(),
             'layout_applied_from' => $profile->layout_applied_from?->toDateString(),
+            'updated_at' => $profile->layout_updated_at?->toIso8601String(),
             'layout_updated_at' => $profile->layout_updated_at?->toIso8601String(),
             'layout_name' => ClientDocumentSetting::LAYOUTS[(int) $profile->default_layout_id] ?? null,
             'colour_name' => ClientDocumentSetting::COLOUR_SCHEMES[(string) $profile->default_colour_scheme] ?? null,

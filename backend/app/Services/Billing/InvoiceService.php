@@ -777,7 +777,70 @@ class InvoiceService
 
     public function generatePdf(CommercialDocument $doc): string
     {
-        $doc->loadMissing(['lineItems', 'customer', 'clientProfile.user', 'referenceDocument', 'tdsTcsSection']);
+        $doc->loadMissing([
+            'lineItems',
+            'customer',
+            'clientProfile.user',
+            'clientProfile.documentSettings',
+            'referenceDocument',
+            'tdsTcsSection',
+        ]);
+
+        $profile = $doc->clientProfile;
+        $isNewRendererEnabled = (bool) config('invoice.new_renderer', false);
+
+        // Resolve layout and colour settings from client_document_settings
+        $docSetting = $profile?->documentSettings?->firstWhere('document_type', $doc->type);
+        $layoutId = $docSetting?->layout_id ?? $profile?->default_layout_id ?? 1;
+        $colourScheme = $docSetting?->colour_scheme ?? $profile?->default_colour_scheme ?? 'slate_blue';
+        $watermarkApplies = $profile?->watermark_enabled && ($docSetting?->watermark_applies ?? false);
+        $watermarkText = $profile?->watermark_text;
+
+        // Render using Layout 1 if flag is on and layout_id is 1
+        if ($isNewRendererEnabled && $layoutId === 1) {
+            try {
+                $theme = \App\Services\DocumentTemplate\DocumentThemeTokens::get($colourScheme);
+                $icons = \App\Services\DocumentTemplate\DocumentCanvasHelper::resolveIcons($theme['key']);
+                $data = \App\Services\DocumentTemplate\DocumentPayloadBuilder::build($doc);
+
+                $pdf = Pdf::loadView('pdf.layouts.layout1', [
+                    'data' => $data,
+                    'theme' => $theme,
+                    'icons' => $icons,
+                ])
+                ->setPaper('a4', 'portrait')
+                ->setOption([
+                    'isRemoteEnabled' => true,
+                    'dpi' => 96,
+                    'defaultFont' => 'DejaVu Sans',
+                ]);
+
+                $pdf->render();
+                $dompdf = $pdf->getDomPDF();
+
+                \App\Services\DocumentTemplate\DocumentCanvasHelper::attachFrameAndFooter(
+                    $dompdf->getCanvas(),
+                    $dompdf->getFontMetrics(),
+                    $theme,
+                    $watermarkApplies,
+                    $watermarkText
+                );
+
+                $dir = 'invoices/' . $doc->client_profile_id;
+                $safeNumber = preg_replace('/[^A-Za-z0-9\-]/', '_', $doc->number);
+                $path = $dir . '/' . $doc->type . '-' . $safeNumber . '.pdf';
+                Storage::disk('public')->makeDirectory($dir);
+                Storage::disk('public')->put($path, $pdf->output());
+                $doc->update(['pdf_path' => $path]);
+
+                return $path;
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning("Layout 1 PDF rendering failed for doc {$doc->id}: " . $e->getMessage() . ". Falling back to legacy invoice template.");
+                // Fall back to legacy renderer below
+            }
+        }
+
+        // Legacy invoice.blade.php renderer (Fallback for Layout 2, 3, 4, flag off, or render error)
         $pdf = Pdf::loadView('pdf.invoice', ['doc' => $doc])
             ->setPaper('a4', 'portrait')
             ->setOption(['isRemoteEnabled' => true, 'dpi' => 96, 'defaultFont' => 'DejaVu Sans']);
