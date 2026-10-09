@@ -796,13 +796,17 @@ class InvoiceService
         $watermarkApplies = $profile?->watermark_enabled && ($docSetting?->watermark_applies ?? false);
         $watermarkText = $profile?->watermark_text;
 
-        // Render using Layout 1 or Layout 2 if flag is on and layout_id is 1 or 2
-        if ($isNewRendererEnabled && in_array($layoutId, [1, 2], true)) {
+        // Render using Layout 1, Layout 2, or Layout 3 if flag is on and layout_id is 1, 2, or 3
+        if ($isNewRendererEnabled && in_array($layoutId, [1, 2, 3], true)) {
             try {
                 $theme = \App\Services\DocumentTemplate\DocumentThemeTokens::get($colourScheme);
                 $data = \App\Services\DocumentTemplate\DocumentPayloadBuilder::build($doc);
 
-                $viewName = $layoutId === 2 ? 'pdf.layouts.layout2' : 'pdf.layouts.layout1';
+                $viewName = match ($layoutId) {
+                    2 => 'pdf.layouts.layout2',
+                    3 => 'pdf.layouts.layout3',
+                    default => 'pdf.layouts.layout1',
+                };
                 $viewData = [
                     'data' => $data,
                     'theme' => $theme,
@@ -822,8 +826,8 @@ class InvoiceService
                 $pdf->render();
                 $dompdf = $pdf->getDomPDF();
 
-                // Layout 1 uses rounded frame (radius = 11), Layout 2 uses crisp square frame (radius = 0)
-                $borderRadius = $layoutId === 2 ? 0 : 11;
+                // Layout 1 uses rounded frame (radius = 11), Layout 2 and 3 use crisp square frame (radius = 0)
+                $borderRadius = in_array($layoutId, [2, 3], true) ? 0 : 11;
 
                 \App\Services\DocumentTemplate\DocumentCanvasHelper::attachFrameAndFooter(
                     $dompdf->getCanvas(),
