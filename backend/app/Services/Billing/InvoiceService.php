@@ -796,34 +796,42 @@ class InvoiceService
         $watermarkApplies = $profile?->watermark_enabled && ($docSetting?->watermark_applies ?? false);
         $watermarkText = $profile?->watermark_text;
 
-        // Render using Layout 1 if flag is on and layout_id is 1
-        if ($isNewRendererEnabled && $layoutId === 1) {
+        // Render using Layout 1 or Layout 2 if flag is on and layout_id is 1 or 2
+        if ($isNewRendererEnabled && in_array($layoutId, [1, 2], true)) {
             try {
                 $theme = \App\Services\DocumentTemplate\DocumentThemeTokens::get($colourScheme);
-                $icons = \App\Services\DocumentTemplate\DocumentCanvasHelper::resolveIcons($theme['key']);
                 $data = \App\Services\DocumentTemplate\DocumentPayloadBuilder::build($doc);
 
-                $pdf = Pdf::loadView('pdf.layouts.layout1', [
+                $viewName = $layoutId === 2 ? 'pdf.layouts.layout2' : 'pdf.layouts.layout1';
+                $viewData = [
                     'data' => $data,
                     'theme' => $theme,
-                    'icons' => $icons,
-                ])
-                ->setPaper('a4', 'portrait')
-                ->setOption([
-                    'isRemoteEnabled' => true,
-                    'dpi' => 96,
-                    'defaultFont' => 'DejaVu Sans',
-                ]);
+                ];
+                if ($layoutId === 1) {
+                    $viewData['icons'] = \App\Services\DocumentTemplate\DocumentCanvasHelper::resolveIcons($theme['key']);
+                }
+
+                $pdf = Pdf::loadView($viewName, $viewData)
+                    ->setPaper('a4', 'portrait')
+                    ->setOption([
+                        'isRemoteEnabled' => true,
+                        'dpi' => 96,
+                        'defaultFont' => 'DejaVu Sans',
+                    ]);
 
                 $pdf->render();
                 $dompdf = $pdf->getDomPDF();
+
+                // Layout 1 uses rounded frame (radius = 11), Layout 2 uses crisp square frame (radius = 0)
+                $borderRadius = $layoutId === 2 ? 0 : 11;
 
                 \App\Services\DocumentTemplate\DocumentCanvasHelper::attachFrameAndFooter(
                     $dompdf->getCanvas(),
                     $dompdf->getFontMetrics(),
                     $theme,
                     $watermarkApplies,
-                    $watermarkText
+                    $watermarkText,
+                    $borderRadius
                 );
 
                 $dir = 'invoices/' . $doc->client_profile_id;
@@ -835,7 +843,7 @@ class InvoiceService
 
                 return $path;
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning("Layout 1 PDF rendering failed for doc {$doc->id}: " . $e->getMessage() . ". Falling back to legacy invoice template.");
+                \Illuminate\Support\Facades\Log::warning("Layout {$layoutId} PDF rendering failed for doc {$doc->id}: " . $e->getMessage() . ". Falling back to legacy invoice template.");
                 // Fall back to legacy renderer below
             }
         }
