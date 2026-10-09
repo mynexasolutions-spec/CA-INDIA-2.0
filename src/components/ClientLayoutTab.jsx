@@ -314,13 +314,15 @@ export default function ClientLayoutTab({
       try {
         const res = await api(`/admin/clients/${clientId}/layout`);
         if (mounted && res) {
-          const lId = Number(res.layout_id) || 1;
-          const cScheme = res.colour_scheme || 'slate_blue';
+          const lId = Number(res.layout_id ?? res.default_layout_id) || 1;
+          const cScheme = res.colour_scheme || res.default_colour_scheme || 'slate_blue';
+          const appliedFrom = res.applied_from || res.layout_applied_from || null;
+          const updatedAt = res.updated_at || res.layout_updated_at || null;
           setSavedData({
             layout_id: lId,
             colour_scheme: cScheme,
-            applied_from: res.applied_from || null,
-            updated_at: res.updated_at || null,
+            applied_from: appliedFrom,
+            updated_at: updatedAt,
           });
           setSelectedLayoutId(lId);
           setSelectedColourScheme(cScheme);
@@ -393,14 +395,16 @@ export default function ClientLayoutTab({
         body: payload,
       });
 
-      const updatedLayoutId = Number(res.layout_id) || selectedLayoutId;
-      const updatedColour = res.colour_scheme || selectedColourScheme;
+      const updatedLayoutId = Number(res.layout_id ?? res.default_layout_id) || selectedLayoutId;
+      const updatedColour = res.colour_scheme || res.default_colour_scheme || selectedColourScheme;
+      const updatedAppliedFrom = res.applied_from || res.layout_applied_from || null;
+      const updatedUpdatedAt = res.updated_at || res.layout_updated_at || null;
 
       setSavedData({
         layout_id: updatedLayoutId,
         colour_scheme: updatedColour,
-        applied_from: res.applied_from || null,
-        updated_at: res.updated_at || null,
+        applied_from: updatedAppliedFrom,
+        updated_at: updatedUpdatedAt,
       });
       setSelectedLayoutId(updatedLayoutId);
       setSelectedColourScheme(updatedColour);
