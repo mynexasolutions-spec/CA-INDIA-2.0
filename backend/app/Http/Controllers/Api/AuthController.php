@@ -19,15 +19,65 @@ class AuthController extends Controller
     private const OTP_MAX_ATTEMPTS = 5;
     private const OTP_RESET_TOKEN_TTL_MINUTES = 10;
 
+    /**
+     * Resolve a user by their system email, client profile contact email,
+     * user ID prefix, or client code (e.g. CL-005).
+     */
+    private function findUserByIdentifier(?string $identifier): ?User
+    {
+        if (!$identifier) {
+            return null;
+        }
+
+        $idClean = trim($identifier);
+        if ($idClean === '') {
+            return null;
+        }
+
+        // 1. Direct match on users.email
+        $user = User::where('email', $idClean)->first();
+        if ($user) {
+            return $user;
+        }
+
+        // 2. Match on client_profiles.email (client's registered contact email)
+        $profile = \App\Models\ClientProfile::where('email', $idClean)->first();
+        if ($profile && $profile->user) {
+            return $profile->user;
+        }
+
+        // 3. Match on users.email with domain appended if user typed user-id without domain
+        if (! str_contains($idClean, '@')) {
+            $user = User::where('email', strtolower($idClean) . '@abkhanassociates.com')->first();
+            if ($user) {
+                return $user;
+            }
+        }
+
+        // 4. Match on client_profiles.client_code (e.g. CL-005)
+        $profile = \App\Models\ClientProfile::where('client_code', strtoupper($idClean))->first();
+        if ($profile && $profile->user) {
+            return $profile->user;
+        }
+
+        // 5. Match on client_profiles.alt_email
+        $profile = \App\Models\ClientProfile::where('alt_email', $idClean)->first();
+        if ($profile && $profile->user) {
+            return $profile->user;
+        }
+
+        return null;
+    }
+
     public function login(Request $request)
     {
         $data = $request->validate([
-            'email' => 'required|email',
+            'email' => 'required|string',
             'password' => 'required',
             'portal' => 'nullable|in:admin,client',
         ]);
 
-        $user = User::where('email', $data['email'])->first();
+        $user = $this->findUserByIdentifier($data['email']);
         if (!$user || !Hash::check($data['password'], $user->password) || !$user->is_active) {
             throw ValidationException::withMessages(['email' => ['Invalid credentials.']]);
         }
@@ -74,8 +124,8 @@ class AuthController extends Controller
 
     public function forgotPassword(Request $request)
     {
-        $data = $request->validate(['email' => 'required|email']);
-        $user = User::where('email', $data['email'])->first();
+        $data = $request->validate(['email' => 'required|string']);
+        $user = $this->findUserByIdentifier($data['email']);
         if ($user) {
             $token = Str::random(64);
             DB::table('password_reset_tokens')->updateOrInsert(
@@ -94,21 +144,24 @@ class AuthController extends Controller
     public function resetPassword(Request $request)
     {
         $data = $request->validate([
-            'email' => 'required|email',
+            'email' => 'required|string',
             'token' => 'required|string',
             'password' => 'required|string|min:8|confirmed',
         ]);
-        $row = DB::table('password_reset_tokens')->where('email', $data['email'])->first();
+        $user = $this->findUserByIdentifier($data['email']);
+        if (! $user) {
+            throw ValidationException::withMessages(['email' => ['Invalid or expired reset token.']]);
+        }
+        $row = DB::table('password_reset_tokens')->where('email', $user->email)->first();
         if (!$row || !Hash::check($data['token'], $row->token)) {
             throw ValidationException::withMessages(['email' => ['Invalid or expired reset token.']]);
         }
-        $user = User::where('email', $data['email'])->firstOrFail();
         $user->update([
             'password' => Hash::make($data['password']),
             'password_updated_at' => now(),
             'password_updated_by' => 'client',
         ]);
-        DB::table('password_reset_tokens')->where('email', $data['email'])->delete();
+        DB::table('password_reset_tokens')->where('email', $user->email)->delete();
         return response()->json(['message' => 'Password updated. You can sign in now.']);
     }
 

@@ -715,6 +715,32 @@ class ClientProfileController extends Controller
         $isPtrcOn = filter_var($request->input('ptrc_enabled', $profile?->ptrc_enabled ?? false), FILTER_VALIDATE_BOOLEAN);
         $isPtecOn = filter_var($request->input('ptec_enabled', $profile?->ptec_enabled ?? false), FILTER_VALIDATE_BOOLEAN);
 
+        // Graceful fallbacks for missing required fields so creating a client never fails
+        if (empty($request->input('client_name'))) {
+            $fallbackName = $request->input('business_name') ?: $request->input('contact_person_name') ?: 'Client ' . date('Ymd');
+            $request->merge(['client_name' => $fallbackName]);
+        }
+        if (empty($request->input('business_name')) && $request->filled('client_name')) {
+            $request->merge(['business_name' => $request->input('client_name')]);
+        }
+        if ($creating && empty($request->input('email'))) {
+            $safeName = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($request->input('client_name') ?: 'client'));
+            $request->merge(['email' => ($safeName ?: 'client') . '_' . time() . '@' . self::LOGIN_EMAIL_DOMAIN]);
+        }
+        if ($creating && empty($request->input('login_prefix'))) {
+            $base = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($request->input('client_name') ?: $request->input('business_name') ?: 'client'));
+            $cleanPrefix = substr($base ?: 'client', 0, 30);
+            $testPrefix = $cleanPrefix;
+            $counter = 1;
+            while (User::where('email', $testPrefix . '@' . self::LOGIN_EMAIL_DOMAIN)->exists()) {
+                $testPrefix = $cleanPrefix . $counter++;
+            }
+            $request->merge(['login_prefix' => $testPrefix]);
+        }
+        if ($creating && empty($request->input('password'))) {
+            $request->merge(['password' => 'Client@123456']);
+        }
+
         // Fallbacks for Name as per PAN and CIN Date if primary is empty but alternate was supplied
         if ($isPanOn && empty($request->input('name_as_per_pan')) && $request->filled('client_name')) {
             $request->merge(['name_as_per_pan' => $request->input('client_name')]);
@@ -723,28 +749,22 @@ class ClientProfileController extends Controller
             $request->merge(['cin_incorporation_date' => $request->input('date_of_incorporation')]);
         }
 
-        // On create or full form save, require card fields if the card is ON.
-        // For partial API updates, only require if the card toggle or related fields are touched.
-        $reqGst = $creating ? $isGstOn : (($request->has('gst_enabled') || $request->has('has_gst') || $request->has('gstin')) && $isGstOn);
-        $reqPan = $creating ? $isPanOn : (($request->has('pan_enabled') || $request->has('pan')) && $isPanOn);
-        $reqTan = $creating ? $isTanOn : (($request->has('tan_enabled') || $request->has('tan')) && $isTanOn);
-        $reqCin = $creating ? $isCinOn : (($request->has('cin_enabled') || $request->has('cin')) && $isCinOn);
-        $reqUdyam = $creating ? $isUdyamOn : (($request->has('udyam_enabled') || $request->has('udyam')) && $isUdyamOn);
-        $reqFssai = $creating ? $isFssaiOn : (($request->has('fssai_enabled') || $request->has('fssai_no')) && $isFssaiOn);
-        $reqPtrc = $creating ? $isPtrcOn : (($request->has('ptrc_enabled') || $request->has('pt_reg') || $request->has('ptrc_state')) && $isPtrcOn);
-        $reqPtec = $creating ? $isPtecOn : (($request->has('ptec_enabled') || $request->has('ptec_no')) && $isPtecOn);
+        // Never block client creation or form save on empty compliance cards
+        $reqGst = false;
+        $reqPan = false;
+        $reqTan = false;
+        $reqCin = false;
+        $reqUdyam = false;
+        $reqFssai = false;
+        $reqPtrc = false;
+        $reqPtec = false;
 
         $rules = [
-            'client_name' => ($creating ? 'required' : 'sometimes').'|string',
+            'client_name' => 'required|string',
             'business_name' => 'nullable|string',
-            // Business/personal contact email — stored on the client profile only, never
-            // used for login, so it carries no uniqueness constraint against `users`.
-            'email' => ($creating ? 'required' : 'sometimes').'|email',
-            // Login email is admin-chosen prefix + a fixed firm domain (see below) — kept
-            // deliberately separate from the contact email above so a client's login
-            // never has to match (or be blocked by) whatever personal email they gave.
-            'login_prefix' => ($creating ? 'required' : 'sometimes').'|string|max:64|regex:/^[a-zA-Z0-9._-]+$/',
-            'password' => ($creating ? 'required' : 'nullable').'|string|min:8',
+            'email' => 'required|email',
+            'login_prefix' => 'required|string|max:64|regex:/^[a-zA-Z0-9._-]+$/',
+            'password' => 'nullable|string|min:8',
             'mobile' => 'nullable|string',
             'phone' => 'nullable|string',
             'is_active' => 'nullable|boolean',
@@ -754,7 +774,7 @@ class ClientProfileController extends Controller
             'contact_person_name' => 'nullable|string',
             'designation' => 'nullable|string',
             'gender' => 'nullable|string',
-            'applicable_from' => ($creating && $isGstOn ? 'required' : 'nullable').'|date',
+            'applicable_from' => 'nullable|date',
             'date_of_incorporation' => 'nullable|date',
             'date_of_birth' => 'nullable|date',
             'alt_mobile' => 'nullable|string',
@@ -870,6 +890,9 @@ class ClientProfileController extends Controller
             'amendment_next_number' => 'nullable|integer|min:1',
             'delivery_challan_prefix' => 'nullable|string|max:40',
             'delivery_challan_next_number' => 'nullable|integer|min:1',
+            'default_layout_id' => 'nullable|integer|in:1,2,3',
+            'default_colour_scheme' => 'nullable|string',
+            'invoice_tagline' => 'nullable|string',
             'document_numbering_settings' => 'nullable',
         ];
 
@@ -1015,6 +1038,7 @@ class ClientProfileController extends Controller
             'invoice_next_number', 'bill_of_supply_next_number', 'credit_note_next_number',
             'debit_note_next_number', 'quotation_next_number', 'amendment_next_number',
             'delivery_challan_next_number',
+            'default_layout_id', 'default_colour_scheme', 'invoice_tagline',
         ];
 
         $out = [];
