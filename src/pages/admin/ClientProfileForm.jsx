@@ -914,7 +914,22 @@ export default function ClientProfileForm() {
   };
 
   const handleDeleteBankAccount = async (bankId) => {
-    if (!window.confirm('Are serious you want to delete this bank account?')) return;
+    if (!window.confirm('Are you sure you want to delete this bank account?')) return;
+    if (!id) {
+      setBankAccounts((prev) => prev.filter((a) => a.id !== bankId));
+      setForm((prev) => ({
+        ...prev,
+        bank_name: '',
+        bank_branch: '',
+        bank_account: '',
+        account_holder_name: '',
+        bank_ifsc: '',
+        account_type: '',
+      }));
+      setBankSuccessMsg('Bank account removed from draft.');
+      setTimeout(() => setBankSuccessMsg(''), 4000);
+      return;
+    }
     try {
       await api(`/admin/clients/${id}/bank-accounts/${bankId}`, { method: 'DELETE' });
       const refreshed = await api(`/admin/clients/${id}/bank-accounts`);
@@ -991,6 +1006,49 @@ export default function ClientProfileForm() {
         remarks: bankForm.remarks ? bankForm.remarks.trim() : '',
       };
 
+      // If client is not created yet, store bank account in local state so it saves with the profile
+      if (!id) {
+        setForm((prev) => ({
+          ...prev,
+          bank_name: payload.bank_name,
+          bank_branch: payload.branch,
+          bank_account: payload.account_number,
+          account_holder_name: payload.account_holder_name,
+          bank_ifsc: payload.ifsc_code,
+          account_type: payload.account_type,
+          swift_code: bankForm.swift_code || prev.swift_code,
+          upi_id: bankForm.upi_id || prev.upi_id,
+        }));
+        setOriginalForm((prev) => ({
+          ...prev,
+          bank_name: payload.bank_name,
+          bank_branch: payload.branch,
+          bank_account: payload.account_number,
+          account_holder_name: payload.account_holder_name,
+          bank_ifsc: payload.ifsc_code,
+          account_type: payload.account_type,
+          swift_code: bankForm.swift_code || prev.swift_code,
+          upi_id: bankForm.upi_id || prev.upi_id,
+        }));
+
+        const draftId = bankForm.id || 'draft-1';
+        setBankAccounts([
+          {
+            id: draftId,
+            ...payload,
+            is_primary: true,
+            status: 'Active',
+            created_at: new Date().toISOString(),
+          },
+        ]);
+        resetBankForm();
+        setShowBankForm(false);
+        setBankSuccessMsg('Bank account details saved! They will be linked to the profile on save.');
+        setTimeout(() => setBankSuccessMsg(''), 4000);
+        setSavingBank(false);
+        return;
+      }
+
       const wasEditing = Boolean(bankForm.id);
       if (bankForm.id) {
         await api(`/admin/clients/${id}/bank-accounts/${bankForm.id}`, {
@@ -1031,6 +1089,7 @@ export default function ClientProfileForm() {
       }
 
       resetBankForm();
+      setShowBankForm(false);
       setBankSuccessMsg(wasEditing ? 'Bank account updated successfully!' : 'Bank account saved successfully!');
       setTimeout(() => setBankSuccessMsg(''), 4000);
       const tbl = document.getElementById('bank-accounts-table-card');
@@ -1097,7 +1156,7 @@ export default function ClientProfileForm() {
     setNumberingErrors({});
 
     // Tab 3 & Tab 9 Validation: For every card whose toggle is ON, validate required (*) fields
-    if (form.gst_enabled) {
+    if (isEdit && form.gst_enabled) {
       if (!form.gstin?.trim()) {
         const msg = 'GSTIN is required when GST is enabled.';
         setErr(msg);
@@ -1142,7 +1201,7 @@ export default function ClientProfileForm() {
       }
     }
 
-    if (form.pan_enabled) {
+    if (isEdit && form.pan_enabled) {
       if (!form.pan?.trim()) {
         const msg = 'PAN is required when PAN card is enabled.';
         setErr(msg);
@@ -1166,7 +1225,7 @@ export default function ClientProfileForm() {
       }
     }
 
-    if (form.tan_enabled) {
+    if (isEdit && form.tan_enabled) {
       if (!form.tan?.trim()) {
         const msg = 'TAN is required when TAN card is enabled.';
         setErr(msg);
@@ -1183,7 +1242,7 @@ export default function ClientProfileForm() {
       }
     }
 
-    if (form.cin_enabled) {
+    if (isEdit && form.cin_enabled) {
       if (!form.cin?.trim()) {
         const msg = 'CIN is required when CIN card is enabled.';
         setErr(msg);
@@ -1200,7 +1259,7 @@ export default function ClientProfileForm() {
       }
     }
 
-    if (form.udyam_enabled) {
+    if (isEdit && form.udyam_enabled) {
       if (!form.udyam?.trim()) {
         const msg = 'UDYAM Number is required when UDYAM card is enabled.';
         setErr(msg);
@@ -1231,7 +1290,7 @@ export default function ClientProfileForm() {
       }
     }
 
-    if (form.fssai_enabled) {
+    if (isEdit && form.fssai_enabled) {
       if (!form.fssai_no?.trim()) {
         const msg = 'FSSAI Number is required when FSSAI card is enabled.';
         setErr(msg);
@@ -1248,7 +1307,7 @@ export default function ClientProfileForm() {
       }
     }
 
-    if (form.ptrc_enabled) {
+    if (isEdit && form.ptrc_enabled) {
       if (!form.ptrc_state?.trim()) {
         const msg = 'State is required when PTRC card is enabled.';
         setErr(msg);
@@ -1258,7 +1317,7 @@ export default function ClientProfileForm() {
       }
     }
 
-    if (form.ptec_enabled) {
+    if (isEdit && form.ptec_enabled) {
       if (!form.ptec_no?.trim()) {
         const msg = 'PTEC Number is required when PTEC card is enabled.';
         setErr(msg);
@@ -1380,6 +1439,25 @@ export default function ClientProfileForm() {
 
       if (shouldConfirm) {
         fd.append('confirm_gap', '1');
+      }
+
+      // Ensure primary name and credentials fields are always populated on create
+      const primaryName = (form.client_name || form.business_name || form.contact_person_name || 'Client').trim();
+      fd.set('client_name', primaryName);
+      if (!fd.get('business_name')) {
+        fd.set('business_name', primaryName);
+      }
+      if (!isEdit) {
+        if (!fd.get('password')) {
+          fd.set('password', form.password || 'Client@123456');
+        }
+        if (!fd.get('login_prefix')) {
+          const autoPrefix = (primaryName || 'client').toLowerCase().replace(/[^a-z0-9]/g, '');
+          fd.set('login_prefix', autoPrefix || ('client' + Math.floor(Math.random() * 900 + 100)));
+        }
+        if (!fd.get('email') && form.email) {
+          fd.set('email', form.email);
+        }
       }
 
       const token = getAuthToken();
@@ -1653,6 +1731,49 @@ export default function ClientProfileForm() {
                 <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
                   Manage contact person details, address, mobile, email and other personal information.
                 </p>
+              </div>
+            </div>
+
+            {/* Section 0: Company & Client Name */}
+            <div style={{ marginBottom: 22 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 21h18" />
+                  <path d="M9 8h1" />
+                  <path d="M9 12h1" />
+                  <path d="M9 16h1" />
+                  <path d="M14 8h1" />
+                  <path d="M14 12h1" />
+                  <path d="M14 16h1" />
+                  <path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16" />
+                </svg>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#2563eb' }}>
+                  Company & Client Information
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px 16px' }}>
+                <Field label="Client / Company Name" required>
+                  <input
+                    className="bp-input"
+                    disabled={!isEditing}
+                    value={form.client_name || form.business_name || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      set('client_name', val);
+                      set('business_name', val);
+                    }}
+                    placeholder="e.g. BOARDWALA.IN or UNICO AIRCON"
+                  />
+                </Field>
+                <Field label="Website (Optional)">
+                  <input
+                    className="bp-input"
+                    disabled={!isEditing}
+                    value={form.website || ''}
+                    onChange={(e) => set('website', e.target.value)}
+                    placeholder="https://www.example.com"
+                  />
+                </Field>
               </div>
             </div>
 
@@ -1989,7 +2110,10 @@ export default function ClientProfileForm() {
                   className="bp-input"
                   disabled={!isEditing}
                   value={form.business_name}
-                  onChange={(e) => set('business_name', e.target.value)}
+                  onChange={(e) => {
+                    set('business_name', e.target.value);
+                    set('client_name', e.target.value);
+                  }}
                 />
               </Field>
               <Field label="Constitution Type">
@@ -4316,7 +4440,7 @@ export default function ClientProfileForm() {
                       </button>
                     </div>
                     <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 4 }}>
-                      User ID is based on the business name. Spaces are removed automatically.
+                      Client can sign in to the portal using either this User ID or their registered email (<strong>{form.email || 'N/A'}</strong>).
                     </div>
                   </div>
 

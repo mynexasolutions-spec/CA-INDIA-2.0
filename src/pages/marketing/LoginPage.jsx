@@ -196,14 +196,14 @@ export default function LoginPage() {
             </p>
             <form onSubmit={onSubmit} className="login-page__form">
               <label className="login-page__field">
-                <span>Email Address</span>
+                <span>Email Address / User ID</span>
                 <div className="login-page__input-wrap">
                   <span className="login-page__input-icon" aria-hidden="true"><IconMail /></span>
                   <input
                     className="form-control"
-                    type="email"
+                    type="text"
                     required
-                    placeholder="Enter your registered email"
+                    placeholder="Enter your email or User ID"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     autoComplete="username"
