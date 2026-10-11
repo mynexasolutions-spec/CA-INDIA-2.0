@@ -617,7 +617,7 @@ td, th { vertical-align: top; }
         @if($colHsn)
         <td class="center"><strong>{{ $item->hsn_sac ?: '—' }}</strong></td>
         @endif
-        <td class="center qty-num">{{ number_format((float) $item->qty, 0) }}</td>
+        <td class="center qty-num">{{ $item->qty !== null ? (fmod((float) $item->qty, 1) == 0.0 ? (int) $item->qty : (float) $item->qty) : '—' }}</td>
         <td class="center qty-num">{{ strtoupper($item->unit ?: 'NOS') }}</td>
         <td class="amt">{{ number_format((float) $item->rate, 0) }}</td>
         @if($showTax)

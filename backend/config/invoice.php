@@ -11,5 +11,5 @@ return [
     | When false, the legacy pdf.invoice template is used as a fallback.
     |
     */
-    'new_renderer' => env('INVOICE_NEW_RENDERER', false),
+    'new_renderer' => env('INVOICE_NEW_RENDERER', true),
 ];
