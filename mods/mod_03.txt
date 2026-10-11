@@ -1,0 +1,936 @@
+
+===== PDF PAGE 31 =====
+3) Billing 
+Billing Module – Developer Implementation Guide 
+ 
+1. Overall Billing Flow 
+Billing module ka complete flow: 
+Billing → Client List → Client Dashboard → Document Type → Document List → View Document 
+Supported document types: 
+1. Tax Invoice 
+2. Bill of Supply 
+3. Debit Note 
+4. Credit Note 
+5. Quotation 
+6. Delivery Challan 
+Client-wise billing data maintain hoga aur selected Financial Year ke according data display hoga. 
+2. Billing → Client List 
+Header 
+Page title: 
+Client List 
+Subtitle: 
+View and manage all clients for billing and document generation. 
+ 
+ 
+ 
+
+===== PDF PAGE 32 =====
+Summary Cards 
+Top par 6 cards: 
+Card 
+Purpose 
+Tax Invoice 
+Total Tax Invoices created by clients 
+Bill of Supply 
+Total Bills of Supply 
+Debit Note 
+Total Debit Notes 
+Credit Note 
+Total Credit Notes 
+Quotation 
+Total Quotations 
+Delivery Challan Total Delivery Challans 
+Numbers dynamic hone chahiye. 
+Example: 
+• 
+Tax Invoice: 120 
+• 
+Bill of Supply: 35 
+• 
+Debit Note: 8 
+• 
+Credit Note: 6 
+• 
+Quotation: 28 
+• 
+Delivery Challan: 18 
+Search & Filters 
+Search: 
+Search by Client Name / GSTIN / PAN / Client ID... 
+Filters: 
+• 
+Status → All / Active / Inactive 
+• 
+Constitution Type → All / Private Limited / LLP / Partnership / Proprietorship etc. 
+• 
+Registration Type → All / Regular / Composition 
+Buttons: 
+• 
+Search 
+• 
+Reset 
+Client Table 
+Columns: 
+1. Client ID 
+2. Client Name 
+3. GSTIN 
+4. Constitution Type 
+
+===== PDF PAGE 33 =====
+5. Registration Type 
+6. Status 
+7. Action 
+Action: 
+View 
+View button → Client Dashboard. 
+Pagination 
+Bottom: 
+Showing 1 to 10 of 25 clients 
+Pagination: 
+Previous | 1 | 2 | 3 | Next 
+ 
+3. Client Dashboard 
+Client select karne ke baad: 
+Billing → Client Dashboard 
+Client Information Card 
+Display: 
+• 
+Business Name 
+• 
+Active/Inactive status 
+• 
+Client ID 
+• 
+GSTIN 
+• 
+Constitution Type 
+• 
+Registration Type 
+
+===== PDF PAGE 34 =====
+• 
+Mobile 
+• 
+Email 
+• 
+Address 
+Example: 
+ABC Pvt. Ltd. 
+Active 
+Client ID: CL-001 
+GSTIN: 27AACCB1234A1Z5 
+Document Summary Cards 
+7 cards: 
+1. Total Documents 
+2. Tax Invoices 
+3. Bill of Supply 
+4. Debit Notes 
+5. Credit Notes 
+6. Quotations 
+7. Delivery Challans 
+Each card should contain: 
+Count + "View [Document]" 
+Example: 
+Tax Invoices 
+70 
+View Tax Invoices → 
+Clicking card opens corresponding document list. 
+4. Client Dashboard Charts 
+Two charts required. 
+Document Distribution 
+Donut chart showing: 
+• 
+Tax Invoices 
+• 
+Bill of Supply 
+• 
+Debit Notes 
+• 
+Credit Notes 
+• 
+Quotations 
+• 
+Delivery Challans 
+ 
+
+===== PDF PAGE 35 =====
+Center: 
+Total Documents 
+Monthly Document Trend 
+Bar chart. 
+Months: 
+• 
+Apr 2026 
+• 
+May 2026 
+• 
+Jun 2026 
+• 
+Jul 2026 
+• 
+Aug 2026 
+• 
+Sep 2026 
+• 
+...continue till Mar 2027 
+Document-wise monthly count. 
+Important: 
+Charts must automatically update according to selected Financial Year and client. 
+ 
+5. Quotation View 
+Path: 
+Billing → Quotations → View Quotation 
+
+===== PDF PAGE 36 =====
+Header: 
+Quotation • QT-01 
+Below: 
+Quotation date/time. 
+Action Buttons 
+• 
+Back 
+• 
+Edit 
+• 
+Edit Creation Date 
+• 
+Download PDF 
+• 
+Email 
+• 
+WhatsApp 
+• 
+Cancel 
+• 
+Delete 
+Sender Section 
+Display: 
+• 
+Business Name 
+• 
+GSTIN 
+• 
+PAN 
+• 
+Address 
+• 
+Email 
+• 
+Mobile 
+Recipient Section 
+Display: 
+• 
+Customer Name 
+• 
+GSTIN 
+• 
+State 
+• 
+Email 
+• 
+Mobile 
+• 
+Address 
+Document Information 
+Right-side box: 
+• 
+Quotation No. 
+• 
+Quotation Date 
+• 
+Creation Date 
+
+===== PDF PAGE 37 =====
+Item Table 
+Columns: 
+1. Sr. No. 
+2. Particulars 
+3. HSN/SAC 
+4. QTY 
+5. UQC 
+6. Rate 
+7. GST % 
+8. Taxable Value 
+Summary 
+Display: 
+• 
+Total Taxable Value 
+• 
+CGST 
+• 
+SGST / IGST 
+• 
+Grand Total 
+• 
+Amount in Words 
+Terms & Conditions 
+Editable/configurable terms should be displayed below the item table. 
+
+===== PDF PAGE 38 =====
+ 
+6. Delivery Challan View 
+Path: 
+Billing → Delivery Challans → View Delivery Challan 
+Same overall design as Quotation. 
+Header 
+Delivery Challan • DC-001 
+Actions 
+• 
+Back 
+• 
+Edit 
+• 
+Edit Creation Date 
+• 
+Download PDF 
+• 
+Email 
+• 
+WhatsApp 
+• 
+Cancel 
+• 
+Delete 
+Document Information 
+Display: 
+• 
+Delivery Challan No. 
+
+===== PDF PAGE 39 =====
+• 
+Delivery Challan Date 
+• 
+Creation Date 
+• 
+E-Way Bill No. 
+E-Way Bill No. should be optional. 
+Item Table 
+Same structure: 
+• 
+Sr. No. 
+• 
+Particulars 
+• 
+HSN/SAC 
+• 
+QTY 
+• 
+UQC 
+• 
+Rate 
+• 
+GST % 
+• 
+Taxable Value 
+Additional Section 
+Remarks 
+Example: 
+Documents handed over to the client for record keeping. 
+Then: 
+Terms & Conditions 
+ 
+ 
+ 
+
+===== PDF PAGE 40 =====
+7. Tax Invoice List – MOST IMPORTANT 
+Path: 
+Billing → Client Dashboard → Tax Invoices 
+This is the main invoice management screen. 
+Client Header 
+Show: 
+• 
+Client Name 
+• 
+Status 
+• 
+Client ID 
+• 
+GSTIN 
+• 
+Constitution Type 
+• 
+Registration Type 
+• 
+Financial Year 
+8. Tax Invoice Summary Cards 
+Five cards: 
+1. Total Tax Invoices 
+Example: 
+70 
+2. B2B Invoices 
+Example: 
+45 
+3. B2C Invoices 
+Example: 
+25 
+4. Cancelled Invoices 
+Example: 
+3 
+5. Deleted Invoices 
+Example: 
+2 
+These cards should be clickable. 
+9. Invoice Tabs 
+Below cards: 
+All | B2B | B2C | Cancelled | Deleted 
+
+===== PDF PAGE 41 =====
+Important: 
+There should be NO "+ Create Tax Invoice" button on this screen. 
+Tabs work as filters. 
+All 
+Shows all invoices. 
+B2B 
+Shows only B2B invoices. 
+B2C 
+Shows only B2C invoices. 
+Cancelled 
+Shows only cancelled invoices. 
+Deleted 
+Shows only deleted invoices. 
+Active tab should have blue background. 
+10. Search & Date Filters 
+Search box: 
+Search by Invoice No. / Customer Name / GSTIN... 
+Date filters: 
+Invoice Date 
+• 
+Invoice Date (From) 
+• 
+Invoice Date (To) 
+Creation Date 
+• 
+Creation Date (From) 
+• 
+Creation Date (To) 
+This is important because Invoice Date and Creation Date are separate fields. 
+Example: 
+Invoice Date: 
+05/04/2026 
+Creation Date: 
+08/04/2026 
+Both should independently filter the data. 
+Status Filter 
+Dropdown: 
+• 
+All 
+
+===== PDF PAGE 42 =====
+• 
+Active 
+• 
+Cancelled 
+• 
+Deleted 
+When Cancelled tab is selected: 
+Status should automatically become: 
+Cancelled 
+When Deleted tab selected: 
+Status should automatically become: 
+Deleted 
+Buttons: 
+Search | Reset 
+11. Invoice Table – All 
+Columns: 
+1.  
+2. Invoice No. 
+3. Invoice Date 
+4. Creation Date 
+5. Customer Name 
+6. GSTIN 
+7. Type 
+8. Taxable Value 
+9. IGST 
+10. CGST 
+11. SGST 
+12. Total Amount 
+13. Status 
+14. Action 
+Action: 
+View 
+12. Filtered Totals 
+Bottom summary must dynamically calculate based on currently filtered records, not total database records. 
+Display: 
+Total (Filtered) 
+Then: 
+
+===== PDF PAGE 43 =====
+• 
+Taxable Value 
+• 
+IGST 
+• 
+CGST 
+• 
+SGST 
+• 
+Total Amount 
+Example B2B: 
+Taxable Value: ₹7,60,000 
+IGST: ₹1,36,800 
+CGST: ₹0 
+SGST: ₹0 
+Total Amount: ₹8,96,800 
+If date filter is applied, totals must recalculate automatically. 
+ 
+13. B2B Tab Logic 
+B2B tab selected: 
+Only invoices where: 
+Invoice Type = B2B 
+should appear. 
+Example: 
+Invoice Customer 
+Type 
+INV-001 XYZ Traders 
+B2B 
+INV-003 Global Solutions B2B 
+INV-005 Metro Enterprises B2B 
+Bottom should say: 
+
+===== PDF PAGE 44 =====
+Showing 1 to 10 of 45 invoices (B2B) 
+Filtered totals should include only B2B records. 
+ 
+14. B2C Tab Logic 
+B2C tab: 
+Only: 
+Invoice Type = B2C 
+Display B2C invoices. 
+GSTIN can display: 
+- 
+for customers without GSTIN. 
+Tax calculation should generally show: 
+• 
+IGST for interstate B2C where applicable 
+• 
+CGST 
+• 
+SGST 
+depending upon invoice supply type. 
+Bottom: 
+Showing 1 to 10 of 25 invoices (B2C) 
+And dynamic totals. 
+
+===== PDF PAGE 45 =====
+ 
+15. Cancelled Tab 
+Cancelled tab should show only: 
+Status = Cancelled 
+Example: 
+• 
+INV-006 
+• 
+INV-021 
+• 
+INV-038 
+Status badge: 
+  Cancelled 
+The tab automatically applies: 
+Invoice Status = Cancelled 
+No active invoices should appear. 
+Filtered totals must calculate only cancelled invoices. 
+
+===== PDF PAGE 46 =====
+ 
+16. Deleted Tab 
+Deleted tab should show only: 
+Status = Deleted 
+Example: 
+• 
+INV-014 
+• 
+INV-029 
+Status badge: 
+  Deleted 
+Invoice Status filter automatically becomes: 
+Deleted 
+Again, filtered totals should be based only on deleted invoices. 
+17. Important Status Logic 
+Invoice status should be separate from GST filing status. 
+Invoice Status 
+Possible: 
+• 
+Active 
+• 
+Cancelled 
+• 
+Deleted 
+GST Status 
+Possible: 
+• 
+Not Filed 
+• 
+Filed 
+
+===== PDF PAGE 47 =====
+These are two different fields. 
+Do not combine them. 
+ 
+18. View Tax Invoice – GST Not Filed 
+When invoice is opened and: 
+GST Status = Not Filed 
+Top-right should show: 
+  Active 
+and: 
+  GST Status: Not Filed 
+Buttons enabled: 
+• 
+Edit 
+• 
+Edit Creation Date 
+• 
+Download PDF 
+• 
+Email 
+• 
+WhatsApp 
+• 
+Cancel 
+• 
+Delete 
+Invoice Information 
+
+===== PDF PAGE 48 =====
+Show: 
+• 
+Invoice No. 
+• 
+Invoice Date 
+• 
+Creation Date 
+• 
+GST Filed On → Not Filed 
+ 
+19. View Tax Invoice – GST Filed 
+When: 
+GST Status = Filed 
+Top-right: 
+  Active 
+GST Status: Filed 
+Display: 
+• 
+Filed on date 
+• 
+ARN No. 
+Example: 
+Filed on: 20 May 2026 
+ARN No.: AA2704261234567 
+IMPORTANT BUSINESS RULE 
+
+===== PDF PAGE 49 =====
+Once GST Status becomes Filed, the following buttons must be disabled: 
+  Edit 
+  Edit Creation Date 
+  Cancel 
+  Delete 
+Only these remain active: 
+  Back 
+  Download PDF 
+  Email 
+  WhatsApp 
+Disabled buttons should appear greyed out. 
+20. GST Filed Information Message 
+Bottom of invoice: 
+Green information box: 
+Since the GST Status is Filed, the buttons Edit, Edit Creation Date, Cancel and Delete are disabled. 
+This message should appear only when GST Status = Filed. 
+21. Tax Invoice Calculation Logic 
+For every invoice: 
+Taxable Value 
+Qty × Rate 
+For each line: 
+Taxable Value = Quantity × Rate 
+GST 
+If intra-state: 
+CGST + SGST 
+Example: 
+Taxable Value = ₹40,000 
+CGST @ 9% = ₹3,600 
+SGST @ 9% = ₹3,600 
+Grand Total: 
+₹47,200 
+If interstate: 
+IGST 
+Example: 
+Taxable Value = ₹1,10,000 
+IGST @ 18% = ₹19,800 
+
+===== PDF PAGE 50 =====
+Grand Total: 
+₹1,29,800 
+22. Document Numbering 
+Document numbers should be unique per document type. 
+Examples: 
+• 
+INV-001 
+• 
+INV-002 
+• 
+QT-001 
+• 
+DC-001 
+• 
+DN-001 
+• 
+CN-001 
+Cancelled document numbers must not be reused. 
+23. Creation Date vs Document Date 
+Developer must maintain two separate datetime fields: 
+Document Date 
+Example: 
+10 Sep 2026 
+Creation Date 
+Example: 
+08 Sep 2026, 04:15 PM 
+Creation Date can be edited only when permitted. 
+Once GST is Filed: 
+Creation Date editing must be disabled. 
+24. PDF Generation 
+View screen and generated PDF should use the same invoice data. 
+PDF should include: 
+• 
+Seller details 
+• 
+Buyer details 
+• 
+Document number 
+• 
+Document date 
+• 
+Creation date 
+• 
+GST details 
+• 
+Item table 
+• 
+HSN/SAC 
+
+===== PDF PAGE 51 =====
+• 
+Qty 
+• 
+UQC 
+• 
+Rate 
+• 
+GST % 
+• 
+Taxable Value 
+• 
+Tax summary 
+• 
+Grand Total 
+• 
+Amount in Words 
+• 
+Terms & Conditions 
+• 
+Notes where applicable 
+25. Email & WhatsApp 
+Buttons: 
+Email 
+Should open configured email workflow with generated PDF. 
+WhatsApp 
+Should prepare/send document through configured WhatsApp workflow. 
+These actions must use the current document's PDF/data. 
+26. Cancel Invoice Logic 
+Cancel button should not delete the invoice. 
+On Cancel: 
+1. Confirmation popup. 
+2. Ask cancellation confirmation/reason if required. 
+3. Change status: 
+Active → Cancelled 
+4. Preserve invoice number. 
+5. Preserve original invoice data. 
+6. Move/show invoice under Cancelled tab. 
+7. Cancelled invoice should no longer appear as Active. 
+If GST Status = Filed: 
+Cancel button disabled. 
+27. Deleted Invoice Rule 
+Deleted Invoice Cannot Be Undone: 
+Once an invoice is deleted, the deletion is permanent and cannot be undone or restored. The deleted invoice will 
+remain visible under the Deleted tab temporarily for record/reference purposes. 
+
+===== PDF PAGE 52 =====
+Automatic Permanent Removal: 
+Deleted invoices should be automatically and permanently removed from the Deleted tab after the next calendar 
+month ends. Once permanently removed, the deleted invoice record will no longer be available in the portal. 
+Invoice Number Reuse: 
+The invoice number of a deleted invoice can be reused for creating a new invoice, if required. 
+If GST Status = Filed: 
+Delete button disabled. 
+28. Search Behaviour 
+Search should support: 
+• 
+Invoice Number 
+• 
+Customer Name 
+• 
+GSTIN 
+Example: 
+Searching: 
+INV-003 
+returns only INV-003. 
+Searching: 
+Global Solutions 
+returns matching customer invoices. 
+Searching: 
+27AACCG5678H1Z2 
+returns matching GSTIN. 
+Search should work together with: 
+• 
+Active tab 
+• 
+B2B/B2C 
+• 
+Cancelled/Deleted 
+• 
+Invoice Date 
+• 
+Creation Date 
+• 
+Status 
+29. Financial Year Logic 
+Top header has: 
+Financial Year: 2026-27 
+Period: 
+01 Apr 2026 – 31 Mar 2027 
+All billing screens should respect the selected financial year. 
+
+===== PDF PAGE 53 =====
+If user changes FY: 
+2026-27 → 2027-28 
+then: 
+• 
+Client document counts 
+• 
+Invoice lists 
+• 
+Charts 
+• 
+B2B/B2C counts 
+• 
+Cancelled count 
+• 
+Deleted count 
+• 
+Filtered totals 
+should refresh for the selected FY. 
+30. Pagination 
+Invoice list: 
+Default: 
+10 records per page 
+Pagination: 
+Previous | 1 | 2 | 3 | ... | Next 
+Pagination must work after filters/search. 
+Example: 
+If B2B has 45 invoices: 
+Showing 1 to 10 of 45 invoices (B2B) 
+30. Common Behaviour for All Billing Documents 
+The same overall Behaviour, layout, filtering, status management, action buttons, search, date filters, pagination, 
+view screen and deletion rules should be implemented consistently for all billing document types. 
+The existing Tax Invoice Behaviour should be treated as the standard/base Behaviour, and the same functionality 
+should be applied to the respective document type: 
+Current Document Applicable Document Behaviour 
+Tax Invoice 
+Tax Invoice 
+Bill of Supply 
+Bill of Supply 
+Debit Note 
+Debit Note 
+Credit Note 
+Credit Note 
+Quotation 
+Quotation 
+Delivery Challan 
+Delivery Challan 
+ 
+
+===== PDF PAGE 54 =====
+Document-Specific Replacement 
+Wherever the system currently displays Tax Invoice, it should automatically display the relevant document name 
+based on the selected module. 
+For example: 
+• 
+Tax Invoice → Tax Invoice 
+• 
+Bill of Supply → Bill of Supply 
+• 
+Debit Note → Debit Note 
+• 
+Credit Note → Credit Note 
+• 
+Quotation → Quotation 
+• 
+Delivery Challan → Delivery Challan 
+This applies to: 
+• 
+Page Title 
+• 
+Breadcrumb 
+• 
+Summary Cards 
+• 
+Tabs 
+• 
+Search Placeholder 
+• 
+Table headings 
+• 
+Document Number label 
+• 
+Document Date label 
+• 
+View Document heading 
+• 
+PDF 
+• 
+Email 
+• 
+WhatsApp 
+• 
+Status messages 
+• 
+Delete/Cancel messages 
+• 
+Confirmation popups 
+• 
+Empty-state messages 
+• 
+Filtered record count 
+• 
+Action buttons 
+Example 
+If the user opens Bill of Supply, the system should not continue showing "Tax Invoice" anywhere. It should show: 
+Bill of Supply • BOS-001 
+Similarly: 
+ 
+
+===== PDF PAGE 55 =====
+Debit Note • DN-001 
+Credit Note • CN-001 
+Quotation • QT-001 
+Delivery Challan • DC-001 
+Common Status Behaviour 
+The same status logic should apply to all applicable billing documents: 
+• 
+Active 
+• 
+Cancelled 
+• 
+Deleted 
+And the same Deleted Document Rule applies: 
+Once a document is deleted, it cannot be undone or restored. It will temporarily remain under the Deleted tab and 
+will be automatically and permanently removed after the end of the next calendar month. The deleted document 
+number can be reused for creating a new document. 
+Important Developer Instruction 
+Do not hard-code "Tax Invoice" into the common Billing components. 
+The document type should be dynamic, for example: 
+Document Type = Tax Invoice / Bill of Supply / Debit Note / Credit Note / Quotation / Delivery Challan 
+The UI, labels, actions and messages should automatically change according to the selected documentType, while 
+maintaining the same standard design and Behaviour across all modules. 
+31. GST Filing Status Exception: 
+Filed / Not Filed status will apply only to Tax Invoice, Bill of Supply, Debit Note and Credit Note. It will not apply to 
+Quotation or Delivery Challan. Quotation and Delivery Challan will have their own independent status/behaviour 
+and will remain completely separate from GST Filing Status. 

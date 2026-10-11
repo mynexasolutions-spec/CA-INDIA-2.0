@@ -29,7 +29,10 @@ export async function api(path, opts = {}) {
       data.message ||
       (data.errors && Object.values(data.errors).flat()[0]) ||
       'Request failed';
-    throw new Error(typeof msg === 'string' ? msg : 'Request failed');
+    const err = new Error(typeof msg === 'string' ? msg : 'Request failed');
+    err.status = res.status;
+    err.data = data;
+    throw err;
   }
 
   return data;

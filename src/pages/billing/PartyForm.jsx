@@ -82,7 +82,19 @@ export default function PartyForm() {
     try {
       const payload = { ...form, gstin: form.gst_status === 'registered' ? form.gstin.trim().toUpperCase() : '' };
       if (editing) await api(`/billing/parties/${id}`, { method: 'PUT', body: payload });
-      else await api('/billing/parties', { method: 'POST', body: payload });
+      else {
+        try {
+          await api('/billing/parties', { method: 'POST', body: payload });
+        } catch (dupErr) {
+          if (dupErr.status === 409 && dupErr.data?.duplicate) {
+            // eslint-disable-next-line no-alert
+            if (!window.confirm(dupErr.message)) { setBusy(false); return; }
+            await api('/billing/parties', { method: 'POST', body: { ...payload, confirm_duplicate: true } });
+          } else {
+            throw dupErr;
+          }
+        }
+      }
       setConfirmModal(editing
         ? { title: 'Company Updated Successfully', message: 'The company details have been updated successfully.' }
         : { title: 'Company Saved Successfully', message: 'The new company has been successfully created and saved.' });

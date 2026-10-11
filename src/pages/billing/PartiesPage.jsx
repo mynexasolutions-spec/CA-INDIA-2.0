@@ -35,18 +35,45 @@ export default function PartiesPage() {
   const [gstFilter, setGstFilter] = useState('');
   const [perPage, setPerPage] = useState(10);
   const [page, setPage] = useState(1);
+  const [status, setStatus] = useState('active');
+  const [notice, setNotice] = useState('');
 
-  const load = (targetPage = page) => {
+  const load = (targetPage = page, targetStatus = status) => {
     const qs = new URLSearchParams();
     if (q) qs.set('q', q);
     if (stateFilter) qs.set('state', stateFilter);
     if (gstFilter) qs.set('gst_status', gstFilter);
+    qs.set('status', targetStatus);
     qs.set('per_page', perPage);
     qs.set('page', targetPage);
     api(`/billing/parties?${qs}`).then((d) => {
       setItems(d.data || []);
       setMeta({ current_page: d.current_page || 1, last_page: d.last_page || 1, total: d.total || 0, per_page: d.per_page || perPage });
     });
+  };
+
+  const changeStatus = (s) => { setStatus(s); setPage(1); setNotice(''); load(1, s); };
+
+  const removeParty = async (p) => {
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`Delete "${p.name}"? If it already has invoices/documents it will be archived instead.`)) return;
+    try {
+      const r = await api(`/billing/parties/${p.id}`, { method: 'DELETE' });
+      setNotice(r.message || '');
+      load(page);
+    } catch (e) {
+      setNotice(e.message || 'Could not delete this party.');
+    }
+  };
+
+  const restoreParty = async (p) => {
+    try {
+      await api(`/billing/parties/${p.id}/restore`, { method: 'POST' });
+      setNotice(`"${p.name}" restored.`);
+      load(page);
+    } catch (e) {
+      setNotice(e.message || 'Could not restore this party.');
+    }
   };
 
   useEffect(() => { load(page); }, [page, perPage]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -105,6 +132,11 @@ export default function PartiesPage() {
       </div>
 
       <div className="bp-card">
+        {notice && <p className="bp-alert">{notice}</p>}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button type="button" className={`bp-btn ${status === 'active' ? 'bp-btn-blue' : 'bp-btn-outline'}`} onClick={() => changeStatus('active')}>Active</button>
+          <button type="button" className={`bp-btn ${status === 'archived' ? 'bp-btn-blue' : 'bp-btn-outline'}`} onClick={() => changeStatus('archived')}>Archived</button>
+        </div>
         <div className="bp-parties-filters">
           <div className="bp-parties-search">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -171,8 +203,11 @@ export default function PartiesPage() {
                       <span className="dot" /> {registered ? 'Registered' : 'Unregistered'}
                     </span>
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
                     <Link to={`/portal/billing/parties/${p.id}/edit`} className="bp-btn bp-btn-outline" style={{ padding: '4px 8px' }}>Edit</Link>
+                    {status === 'archived'
+                      ? <button type="button" className="bp-btn bp-btn-outline" style={{ padding: '4px 8px', marginLeft: 6 }} onClick={() => restoreParty(p)}>Restore</button>
+                      : <button type="button" className="bp-btn bp-btn-outline" style={{ padding: '4px 8px', marginLeft: 6, color: '#b91c1c', borderColor: '#fca5a5' }} onClick={() => removeParty(p)}>Delete</button>}
                   </td>
                 </tr>
               );

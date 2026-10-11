@@ -722,7 +722,10 @@ function formatLastLogin(iso) {
 }
 
 function AdminTopbarControls() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [fy, setFy] = useState(currentFyLabel());
   const [refreshing, setRefreshing] = useState(false);
   const fyOptions = buildFyOptions();
@@ -837,6 +840,48 @@ function AdminTopbarControls() {
         </svg>
         <span style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: '#ef4444' }} />
       </div>
+
+      {/* Logout (power icon) */}
+      <button
+        type="button"
+        title="Logout"
+        aria-label="Logout"
+        onClick={() => setConfirmingLogout(true)}
+        onMouseEnter={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 38,
+          height: 38,
+          borderRadius: '50%',
+          border: '1px solid #e2e8f0',
+          background: '#fff',
+          color: '#ef4444',
+          cursor: 'pointer',
+          flexShrink: 0,
+          padding: 0,
+          transition: 'all 0.15s ease',
+        }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2v10" />
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+        </svg>
+      </button>
+
+      {confirmingLogout && (
+        <LogoutConfirmModal
+          busy={loggingOut}
+          onCancel={() => setConfirmingLogout(false)}
+          onConfirm={async () => {
+            setLoggingOut(true);
+            await logout();
+            navigate('/login');
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Billing;
 
 use App\Http\Controllers\Controller;
+use App\Models\CommercialDocument;
 use App\Models\Customer;
 use App\Models\HsnSacCode;
 use App\Models\Product;
@@ -40,8 +41,82 @@ class MasterController extends Controller
         if ($request->filled('gst_status')) {
             $q->where('gst_status', $request->gst_status);
         }
+        // status=active|archived limits by archive state; omitted = legacy behaviour (all).
+        if ($request->input('status') === 'active') {
+            $q->where('is_active', true);
+        } elseif ($request->input('status') === 'archived') {
+            $q->where('is_active', false);
+        }
 
-        return response()->json($q->paginate((int) $request->input('per_page', 10)));
+        return response()->json($q->paginate(min(100, max(1, (int) $request->input('per_page', 10)))));
+    }
+
+    /** Last few distinct active parties the client actually invoiced (for the invoice dropdown). */
+    public function recentParties(Request $request)
+    {
+        $profileId = $this->profileId($request);
+        $ids = CommercialDocument::where('client_profile_id', $profileId)
+            ->whereNotNull('customer_id')
+            ->orderByDesc('id')
+            ->limit(100)
+            ->pluck('customer_id')
+            ->unique()
+            ->values();
+
+        $parties = Customer::where('client_profile_id', $profileId)
+            ->where('is_active', true)
+            ->whereIn('id', $ids)
+            ->get()
+            ->sortBy(fn ($c) => $ids->search($c->id))
+            ->take(5)
+            ->values();
+
+        return response()->json(['data' => $parties]);
+    }
+
+    /** Archive a party that has documents (history stays intact); hard-delete one that has none. */
+    public function destroyParty(Request $request, int $id)
+    {
+        $profileId = $this->profileId($request);
+        $c = Customer::where('client_profile_id', $profileId)->findOrFail($id);
+
+        $used = CommercialDocument::where('client_profile_id', $profileId)->where('customer_id', $c->id)->exists();
+        if ($used) {
+            $c->update(['is_active' => false]);
+
+            return response()->json(['archived' => true, 'message' => 'This party has invoices/documents, so it was archived instead of deleted. It no longer appears in the invoice dropdown.']);
+        }
+
+        $c->delete();
+
+        return response()->json(['deleted' => true, 'message' => 'Party deleted.']);
+    }
+
+    public function restoreParty(Request $request, int $id)
+    {
+        $c = Customer::where('client_profile_id', $this->profileId($request))->findOrFail($id);
+        $c->update(['is_active' => true]);
+
+        return response()->json($c);
+    }
+
+    private function findDuplicate(int $profileId, array $data, ?int $ignoreId = null): ?Customer
+    {
+        $branch = strtolower(trim((string) ($data['branch_name'] ?? '')));
+        $name = strtolower(trim((string) $data['name']));
+        $gstin = strtoupper(trim((string) ($data['gstin'] ?? '')));
+
+        return Customer::where('client_profile_id', $profileId)
+            ->where('is_active', true)
+            ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+            ->where(function ($q) use ($name, $gstin) {
+                $q->whereRaw('LOWER(TRIM(name)) = ?', [$name]);
+                if ($gstin !== '') {
+                    $q->orWhere('gstin', $gstin);
+                }
+            })
+            ->get()
+            ->first(fn ($c) => strtolower(trim((string) $c->branch_name)) === $branch);
     }
 
     private function partyRules(): array
@@ -75,6 +150,16 @@ class MasterController extends Controller
     {
         $data = $this->normalizeGstFields($request->validate($this->partyRules()));
         $data['client_profile_id'] = $this->profileId($request);
+
+        if (! $request->boolean('confirm_duplicate')) {
+            $dup = $this->findDuplicate($data['client_profile_id'], $data);
+            if ($dup) {
+                return response()->json([
+                    'duplicate' => true,
+                    'message' => "A party \"{$dup->name}\"".($dup->gstin ? " (GSTIN {$dup->gstin})" : '').' already exists. Create another one anyway?',
+                ], 409);
+            }
+        }
 
         return response()->json(Customer::create($data), 201);
     }

@@ -123,7 +123,6 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
   const { id } = useParams();
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const [parties, setParties] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [partyId, setPartyId] = useState('');
   const [party, setParty] = useState(null);
@@ -177,7 +176,6 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
   }, []);
 
   useEffect(() => {
-    api('/billing/parties').then((d) => setParties(d.data || []));
     if (docType === 'credit_note' || docType === 'debit_note') {
       api('/billing/documents?type=tax_invoice&status=issued').then((d) => setInvoices(d.data || []));
     }
@@ -478,7 +476,7 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
           </label>
           <label>
             <span>Party <span className="bp-required">*</span></span>
-            <PartySearchSelect parties={parties} value={partyId} onSelect={onParty} />
+            <PartySearchSelect selected={party} value={partyId} onSelect={onParty} />
           </label>
           <label>
             <span>Place of Supply <span className="bp-required">*</span></span>
