@@ -7,6 +7,7 @@ import BillingSubNav from '../../pages/billing/BillingSubNav';
 import ReportsSubNav from '../../pages/billing/ReportsSubNav';
 import { billingMode } from '../../pages/billing/billingProfile';
 import { buildFyOptions, currentFyLabel, currentFyRange, fyDateRange } from '../../pages/billing/billingUtils';
+import { useAdminFy } from '../../context/AdminFyContext';
 import { CONTACT } from '../../data/nav';
 import '../../pages/billing/billing.css';
 import '../../pages/billing/admin-overview.css';
@@ -726,10 +727,13 @@ function AdminTopbarControls() {
   const navigate = useNavigate();
   const [confirmingLogout, setConfirmingLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [fy, setFy] = useState(currentFyLabel());
-  const [refreshing, setRefreshing] = useState(false);
-  const fyOptions = buildFyOptions();
-  const range = fyDateRange(fy);
+  const adminFy = useAdminFy();
+  const fy = adminFy?.fy ?? currentFyLabel();
+  const setFy = adminFy?.setFy ?? (() => {});
+  const fyOptions = adminFy?.fyOptions ?? buildFyOptions();
+  const range = adminFy?.range ?? fyDateRange(fy);
+  const refreshing = adminFy?.refreshing ?? false;
+  const triggerRefresh = adminFy?.triggerRefresh;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -783,9 +787,11 @@ function AdminTopbarControls() {
       <button
         type="button"
         onClick={() => {
-          setRefreshing(true);
-          setTimeout(() => setRefreshing(false), 600);
+          if (triggerRefresh) {
+            triggerRefresh();
+          }
         }}
+        disabled={refreshing}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -797,9 +803,10 @@ function AdminTopbarControls() {
           color: '#2563eb',
           fontWeight: 600,
           fontSize: 13,
-          cursor: 'pointer',
+          cursor: refreshing ? 'default' : 'pointer',
           whiteSpace: 'nowrap',
           transition: 'all 0.15s ease',
+          opacity: refreshing ? 0.7 : 1,
         }}
       >
         <RefreshIcon size={15} />

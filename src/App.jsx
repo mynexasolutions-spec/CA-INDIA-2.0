@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import HtmlPage from './components/HtmlPage';
 import Spinner from './components/Spinner';
 import { AdminPortalLayout, AdminBillingLayout, ClientPortalLayout, ClientBillingLayout, ClientReportsLayout, RequireAuth } from './components/portal/PortalShell';
+import { AdminFyProvider } from './context/AdminFyContext';
 import GstComplianceGate from './components/GstComplianceGate';
 import { PAGE_SLUGS } from './data/nav';
 
@@ -219,7 +220,7 @@ export default function App() {
       </Route>
 
       <Route element={<RequireAuth roles={['super_admin', 'admin', 'staff']} />}>
-        <Route path="/admin" element={<AdminPortalLayout />}>
+        <Route path="/admin" element={<AdminFyProvider><AdminPortalLayout /></AdminFyProvider>}>
           <Route index element={<AdminOverview />} />
           <Route path="clients" element={<ClientsUnlockGate />}>
             <Route index element={<AdminClients />} />

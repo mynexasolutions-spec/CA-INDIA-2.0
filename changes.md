@@ -715,3 +715,38 @@ When deploying Module 2B migrations to production:
   - Bill of Supply: `bill-of-supply.pdf`
   - Credit Note: `credit-note.pdf`
 
+
+---
+
+## Stage 3A: Admin Billing Client Directory & Shared Count Infrastructure
+
+### 1. Backend Service & Endpoints
+- **Service (`AdminBillingCountService.php`)**:
+  - Financial Year validation and resolution: rejects any start year earlier than `2026-27` with HTTP 422; resolves missing/null FY parameter to current financial year computed in `Asia/Kolkata`.
+  - Global card counts: queries commercial documents using `whereBetween('document_date', [$from, $to])` and whitelisted statuses (`issued`, `paid`, `partial`, `cancelled`). Counts exact six types: `tax_invoice`, `bill_of_supply`, `debit_note`, `credit_note`, `quotation`, `delivery_challan`.
+  - Client dashboard counts: computes 7 card counts (six types + `total` and `total_documents`), donut distribution (sum matches total), and DB-portable 12-month document trend bucketing (Apr–Mar).
+  - Address join logic: formats address lines, city, and state-pincode without trailing delimiters or stray dashes when state or pincode is missing.
+  - GST field masking: masks `gstin` and `registration_type` to null for GST-OFF clients (`has_gst = false`).
+- **Controller (`AdminBillingController.php`)**:
+  - `GET /api/admin/billing/clients`:
+    - Default sort by `client_code` ascending.
+    - Search (`q`): searches `client_code`, `business_name` (Trade Name), `client_name` (Legal Name), `pan`, and `gstin` (only when `has_gst = true`). Escapes SQL wildcards with uniform `ESCAPE '!'` syntax across MySQL and SQLite.
+    - Filters: `status` (`Active` / `Inactive`), `constitution_type` (alias matching for Partnership and Private Limited), `registration_type` (`Regular` including QRMP, `Composition`; enforces `has_gst = true`).
+    - Exposes filter metadata: `filter_options` and `alias_mapping`.
+    - Pagination capped at 100 per page.
+  - `GET /api/admin/billing/clients/{clientId}/dashboard`:
+    - Returns client profile card, 7 cards, donut breakdown, and 12-month trend.
+
+### 2. Frontend State
+- **Context (`src/context/AdminFyContext.jsx`)**:
+  - In-memory shared state for admin financial year.
+  - Generates `fyOptions` iterating strictly downwards from current FY down to `2026-27` (no future FYs).
+  - Hook `useAdminFy()` consumed by admin topbar controls; `AdminFyProvider` wraps only `<AdminPortalLayout />`.
+
+### 3. Parked Notes / Known Baseline Test Issues
+- **`DocumentNumberingTest` (6 failing tests)**:
+  - Tests: `test_exact_duplicate_hard_block_422`, `test_exact_duplicate_checks_drafts_too`, `test_gap_check_returns_409_warning_and_confirms`, `test_gap_check_ignores_drafts`, `test_legacy_columns_sync_on_save`, `test_form_data_multipart_confirm_gap_variations`.
+  - Cause: Updating a client via `PUT /api/admin/clients/{id}` now triggers validation requiring `email` and `login_prefix`, which were omitted in earlier test payloads. Pre-existing on baseline; not touched here.
+- **`GstLiabilityReportTest` (1 failing test)**:
+  - Test: `test_regular_gst_client_receives_monthly_and_quarterly_liability`.
+  - Cause: Hard-coded date expectation (`2026-04-30` vs `2027-03-31`) sensitive to current runtime system date. Pre-existing on baseline; not touched here.

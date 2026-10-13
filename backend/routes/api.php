@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\Admin\AdminBillingController;
 use App\Http\Controllers\Api\Admin\BillingMonitorController;
 use App\Http\Controllers\Api\Admin\ClientProfileController;
 use App\Http\Controllers\Api\Admin\DashboardController as AdminDashboard;
@@ -195,7 +196,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/edit-requests/{id}', [AdminDocumentEditRequestController::class, 'show']);
         Route::post('/edit-requests/{id}/approve', [AdminDocumentEditRequestController::class, 'approve']);
         Route::post('/edit-requests/{id}/reject', [AdminDocumentEditRequestController::class, 'reject']);
-        Route::get('/billing/clients', [ClientProfileController::class, 'billingDirectory']);
+        Route::get('/billing/clients', [AdminBillingController::class, 'clients']);
+        Route::get('/billing/clients/{clientId}/dashboard', [AdminBillingController::class, 'clientDashboard']);
         Route::get('/clients/{id}/billing/dashboard', [ClientProfileController::class, 'billingDashboard']);
         Route::get('/clients/{id}/billing/export', [ClientProfileController::class, 'exportBilling']);
         Route::get('/clients/{id}/billing/zip', [ClientProfileController::class, 'downloadZip']);
