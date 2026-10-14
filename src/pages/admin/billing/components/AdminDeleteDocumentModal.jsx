@@ -28,9 +28,20 @@ export default function AdminDeleteDocumentModal({
   docId,
   docNumber,
   docLabel = 'Document',
+  shortLabel,
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+
+  const shortTypeMap = {
+    tax_invoice: 'Invoice',
+    bill_of_supply: 'Bill',
+    debit_note: 'Debit Note',
+    credit_note: 'Credit Note',
+    quotation: 'Quotation',
+    delivery_challan: 'Challan',
+  };
+  const confirmTarget = shortLabel || shortTypeMap[docTypeKey] || docLabel || 'Document';
 
   useEffect(() => {
     if (isOpen) {
@@ -143,7 +154,7 @@ export default function AdminDeleteDocumentModal({
               opacity: submitting ? 0.7 : 1,
             }}
           >
-            {submitting ? 'Deleting…' : 'Delete Document'}
+            {submitting ? 'Deleting…' : `Delete ${confirmTarget}`}
           </button>
         </div>
       </div>

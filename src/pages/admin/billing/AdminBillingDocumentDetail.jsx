@@ -57,6 +57,48 @@ function formatCurrency(val) {
   return '₹' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/**
+ * Format address joining non-empty parts only (same rule as 3A):
+ * No stray "," or "-" when state/pincode is missing.
+ */
+function formatAddress(input) {
+  if (!input) return '';
+  if (typeof input === 'object') {
+    const parts = [input.address_line_1, input.address_line_2, input.city]
+      .map((s) => (s ? String(s).trim() : ''))
+      .filter(Boolean);
+
+    const state = input.state ? String(input.state).trim() : '';
+    const pincode = input.pincode ? String(input.pincode).trim() : '';
+
+    if (state && pincode) {
+      parts.push(`${state} - ${pincode}`);
+    } else if (state) {
+      parts.push(state);
+    } else if (pincode) {
+      parts.push(pincode);
+    }
+
+    if (parts.length > 0) {
+      return parts.join(', ');
+    }
+    input = input.address || input.billing_address || '';
+  }
+
+  if (typeof input !== 'string') return '';
+
+  return input
+    .split(',')
+    .map((part) => {
+      let p = part.trim();
+      p = p.replace(/^[-–—\s]+/, '');
+      p = p.replace(/[-–—\s]+$/, '');
+      return p.trim();
+    })
+    .filter((part) => part.length > 0 && part !== '-' && part !== '–' && part !== '—')
+    .join(', ');
+}
+
 export default function AdminBillingDocumentDetail() {
   const { clientId, docType: docTypeParam, id } = useParams();
   const navigate = useNavigate();
@@ -329,6 +371,9 @@ export default function AdminBillingDocumentDetail() {
   const customer = docData?.customer;
   const lineItems = docData?.line_items || [];
   const summary = docData?.summary || {};
+
+  const sellerAddress = formatAddress(seller.address || seller);
+  const customerAddress = customer ? formatAddress(customer.address || customer) : '';
 
   const isCancelled = doc.status === 'cancelled';
   const isDeleted = doc.status === 'deleted';
@@ -798,7 +843,7 @@ export default function AdminBillingDocumentDetail() {
               <div>
                 <strong>GSTIN:</strong> {seller.gstin || '—'} | <strong>PAN:</strong> {seller.pan || '—'}
               </div>
-              {seller.address && <div>{seller.address}</div>}
+              {sellerAddress && <div>{sellerAddress}</div>}
               <div>
                 {seller.email && <span>Email: {seller.email}</span>}
                 {seller.email && seller.phone && <span> | </span>}
@@ -827,7 +872,7 @@ export default function AdminBillingDocumentDetail() {
                     {customer.phone && <span>Mob: {customer.phone}</span>}
                   </div>
                 )}
-                {customer.address && <div>Office: {customer.address}</div>}
+                {customerAddress && <div>Office: {customerAddress}</div>}
                 <div>
                   <strong>Place of Supply:</strong> {doc.place_of_supply || customer.place_of_supply || '—'} | {doc.supply_type || '—'}
                 </div>
@@ -1051,7 +1096,7 @@ export default function AdminBillingDocumentDetail() {
             Terms &amp; Conditions:
           </div>
           <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-            {doc.terms || 'Standard terms and conditions apply.'}
+            {doc.terms && doc.terms.trim() ? doc.terms : '-'}
           </div>
         </div>
 
@@ -1196,6 +1241,7 @@ export default function AdminBillingDocumentDetail() {
         docId={id}
         docNumber={doc.number}
         docLabel={docConfig.label}
+        shortLabel={docConfig.shortLabel}
       />
     </div>
   );
