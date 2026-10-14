@@ -4,13 +4,17 @@ namespace App\Services\Billing;
 
 use App\Models\ClientProfile;
 use App\Models\CommercialDocument;
+use App\Models\Customer;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AdminBillingCountService
 {
     public const MIN_START_YEAR = 2026;
+
+    public const B2B_CONDITION_SQL = "customers.id IS NOT NULL AND LOWER(COALESCE(customers.gst_status, '')) = 'registered' AND TRIM(COALESCE(customers.gstin, '')) != ''";
 
     public const DOCUMENT_TYPES = [
         'tax_invoice',
@@ -262,5 +266,221 @@ class AdminBillingCountService
             'gstin' => $profile->gstin,
             'registration_type' => $regType,
         ];
+    }
+
+    /**
+     * Check whether a customer is B2B according to Decision 13 / Rule 2:
+     * Registered GST status AND non-empty GSTIN.
+     */
+    public static function isB2b(?Customer $customer): bool
+    {
+        return $customer !== null
+            && strtolower(trim((string) $customer->gst_status)) === 'registered'
+            && trim((string) $customer->gstin) !== '';
+    }
+
+    /**
+     * Cards and tab counts (Total / B2B / B2C / Cancelled / Deleted) for a specific client, docType, and FY.
+     * Depends only on client + docType + FY (document_date), NOT on search or date filters.
+     * B2B + B2C = Total.
+     */
+    public function getDocumentCards(int $clientProfileId, string $type, string $from, string $to): array
+    {
+        $b2bSql = self::B2B_CONDITION_SQL;
+
+        $activeAndCancelled = CommercialDocument::query()
+            ->leftJoin('customers', 'commercial_documents.customer_id', '=', 'customers.id')
+            ->where('commercial_documents.client_profile_id', $clientProfileId)
+            ->where('commercial_documents.type', $type)
+            ->whereBetween('commercial_documents.document_date', [$from, $to . ' 23:59:59'])
+            ->whereIn('commercial_documents.status', ['issued', 'paid', 'partial', 'cancelled'])
+            ->selectRaw("
+                COUNT(*) as total_count,
+                SUM(CASE WHEN commercial_documents.status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_count,
+                SUM(CASE WHEN {$b2bSql} THEN 1 ELSE 0 END) as b2b_count,
+                SUM(CASE WHEN NOT ({$b2bSql}) THEN 1 ELSE 0 END) as b2c_count
+            ")
+            ->first();
+
+        $deletedCount = CommercialDocument::onlyTrashed()
+            ->where('client_profile_id', $clientProfileId)
+            ->where('type', $type)
+            ->whereBetween('document_date', [$from, $to . ' 23:59:59'])
+            ->where('status', 'deleted')
+            ->count();
+
+        $total = (int) ($activeAndCancelled->total_count ?? 0);
+        $b2b = (int) ($activeAndCancelled->b2b_count ?? 0);
+        $b2c = (int) ($activeAndCancelled->b2c_count ?? 0);
+        $cancelled = (int) ($activeAndCancelled->cancelled_count ?? 0);
+
+        return [
+            'total' => $total,
+            'b2b' => $b2b,
+            'b2c' => $b2c,
+            'cancelled' => $cancelled,
+            'deleted' => $deletedCount,
+        ];
+    }
+
+    /**
+     * Build the filtered query and compute filtered_totals over the full filtered result set.
+     * Returns [$query, $filteredTotals].
+     *
+     * @return array{0: \Illuminate\Database\Eloquent\Builder, 1: array{taxable: float, igst: float, cgst: float, sgst: float, grand_total: float}}
+     */
+    public function getDocumentListQueryAndTotals(
+        ClientProfile $client,
+        string $type,
+        string $from,
+        string $to,
+        Request $request
+    ): array {
+        $b2bSql = self::B2B_CONDITION_SQL;
+        $tab = strtolower(trim((string) $request->query('tab', 'all')));
+        if (! in_array($tab, ['all', 'b2b', 'b2c', 'cancelled', 'deleted'], true)) {
+            $tab = 'all';
+        }
+
+        $statusFilter = $request->filled('status') ? strtolower(trim((string) $request->query('status'))) : null;
+        $isDeleted = ($tab === 'deleted' || $statusFilter === 'deleted');
+
+        $query = $isDeleted
+            ? CommercialDocument::onlyTrashed()->where('commercial_documents.status', 'deleted')
+            : CommercialDocument::query()->whereIn('commercial_documents.status', ['issued', 'paid', 'partial', 'cancelled']);
+
+        $query->leftJoin('customers', 'commercial_documents.customer_id', '=', 'customers.id')
+            ->where('commercial_documents.client_profile_id', $client->id)
+            ->where('commercial_documents.type', $type)
+            ->whereBetween('commercial_documents.document_date', [$from, $to . ' 23:59:59']);
+
+        // Tab filters
+        if (! $isDeleted) {
+            if ($tab === 'cancelled') {
+                $query->where('commercial_documents.status', 'cancelled');
+            } elseif ($tab === 'b2b') {
+                $query->whereRaw($b2bSql);
+            } elseif ($tab === 'b2c') {
+                $query->whereRaw("NOT ({$b2bSql})");
+            }
+
+            // Status filter (when tab is not cancelled)
+            if ($tab !== 'cancelled' && $statusFilter !== null && $statusFilter !== 'all') {
+                if ($statusFilter === 'active') {
+                    $query->whereIn('commercial_documents.status', ['issued', 'paid', 'partial']);
+                } elseif ($statusFilter === 'cancelled') {
+                    $query->where('commercial_documents.status', 'cancelled');
+                }
+            }
+        }
+
+        // Search: number, customer name, GSTIN (wildcards escaped with !)
+        if ($request->filled('q')) {
+            $rawQ = trim((string) $request->query('q'));
+            $escaped = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $rawQ);
+            $pattern = "%{$escaped}%";
+            $query->where(function ($w) use ($pattern) {
+                $w->whereRaw("commercial_documents.number LIKE ? ESCAPE '!'", [$pattern])
+                    ->orWhereRaw("customers.name LIKE ? ESCAPE '!'", [$pattern])
+                    ->orWhereRaw("customers.gstin LIKE ? ESCAPE '!'", [$pattern]);
+            });
+        }
+
+        // Additional date ranges (inside FY)
+        if ($request->filled('invoice_date_from')) {
+            $query->where('commercial_documents.document_date', '>=', $request->query('invoice_date_from'));
+        }
+        if ($request->filled('invoice_date_to')) {
+            $query->where('commercial_documents.document_date', '<=', $request->query('invoice_date_to'));
+        }
+
+        // Creation date range (IST day boundaries)
+        if ($request->filled('creation_date_from')) {
+            $startUtc = Carbon::createFromFormat('Y-m-d', $request->query('creation_date_from'), 'Asia/Kolkata')->startOfDay()->utc();
+            $query->where('commercial_documents.created_at', '>=', $startUtc);
+        }
+        if ($request->filled('creation_date_to')) {
+            $endUtc = Carbon::createFromFormat('Y-m-d', $request->query('creation_date_to'), 'Asia/Kolkata')->endOfDay()->utc();
+            $query->where('commercial_documents.created_at', '<=', $endUtc);
+        }
+
+        // Calculate filtered totals over the entire filtered set across all pages
+        $totalsQuery = (clone $query);
+        if (! $isDeleted && $tab !== 'cancelled') {
+            $totalsQuery->whereIn('commercial_documents.status', ['issued', 'paid', 'partial']);
+        }
+
+        $totalsRow = $totalsQuery->selectRaw("
+            COALESCE(SUM(commercial_documents.taxable_amount), 0) as taxable,
+            COALESCE(SUM(commercial_documents.igst_amount), 0) as igst,
+            COALESCE(SUM(commercial_documents.cgst_amount), 0) as cgst,
+            COALESCE(SUM(commercial_documents.sgst_amount), 0) as sgst,
+            COALESCE(SUM(COALESCE(commercial_documents.grand_total, commercial_documents.total_amount, 0)), 0) as grand_total
+        ")->first();
+
+        $filteredTotals = [
+            'taxable' => round((float) ($totalsRow->taxable ?? 0), 2),
+            'igst' => round((float) ($totalsRow->igst ?? 0), 2),
+            'cgst' => round((float) ($totalsRow->cgst ?? 0), 2),
+            'sgst' => round((float) ($totalsRow->sgst ?? 0), 2),
+            'grand_total' => round((float) ($totalsRow->grand_total ?? 0), 2),
+        ];
+
+        return [$query, $filteredTotals];
+    }
+
+    /**
+     * Compute View screen action flags once on backend.
+     */
+    public static function computeDocumentFlags(CommercialDocument $doc, array $lock): array
+    {
+        $isDeleted = $doc->trashed() || $doc->status === 'deleted';
+        if ($isDeleted) {
+            return [
+                'can_edit_creation_date' => false,
+                'can_cancel' => false,
+                'can_delete' => false,
+            ];
+        }
+
+        $isActive = in_array($doc->status, ['issued', 'paid', 'partial'], true);
+        $isCancelled = $doc->status === 'cancelled';
+        $isGstFiled = (bool) ($lock['is_locked'] ?? false);
+
+        if (in_array($doc->type, ['quotation', 'delivery_challan'], true)) {
+            $canCancel = $isActive && ! $doc->converted_document_id;
+            $canEditCreationDate = $isActive;
+            $isReferenced = CommercialDocument::where('reference_document_id', $doc->id)->exists();
+            $isAttached = DB::table('gst_filing_request_document')->where('commercial_document_id', $doc->id)->exists();
+            $canDelete = ($isActive || $isCancelled) && ! $isReferenced && ! $isAttached;
+
+            return [
+                'can_edit_creation_date' => $canEditCreationDate,
+                'can_cancel' => $canCancel,
+                'can_delete' => $canDelete,
+            ];
+        }
+
+        $canEditCreationDate = $isActive && ! $isGstFiled;
+        $canCancel = $isActive && ! $isGstFiled;
+
+        $isReferenced = CommercialDocument::where('reference_document_id', $doc->id)->exists();
+        $isAttached = DB::table('gst_filing_request_document')->where('commercial_document_id', $doc->id)->exists();
+
+        $canDelete = ($isActive || $isCancelled) && ! $isGstFiled && ! $isReferenced && ! $isAttached;
+
+        return [
+            'can_edit_creation_date' => $canEditCreationDate,
+            'can_cancel' => $canCancel,
+            'can_delete' => $canDelete,
+        ];
+    }
+
+    /**
+     * Format seller block reusing 2B PDF seller data.
+     */
+    public function formatSeller(ClientProfile $profile): array
+    {
+        return \App\Services\DocumentTemplate\DocumentPayloadBuilder::buildSeller($profile);
     }
 }

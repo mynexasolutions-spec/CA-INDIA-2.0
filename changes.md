@@ -750,3 +750,115 @@ When deploying Module 2B migrations to production:
 - **`GstLiabilityReportTest` (1 failing test)**:
   - Test: `test_regular_gst_client_receives_monthly_and_quarterly_liability`.
   - Cause: Hard-coded date expectation (`2026-04-30` vs `2027-03-31`) sensitive to current runtime system date. Pre-existing on baseline; not touched here.
+
+---
+
+## Stage 3B-0: Schema Migrations, SoftDeletes, Admin Lock Infrastructure & Number Reuse
+
+### 1. Database Migration (`2026_10_14_000100_update_commercial_documents_for_stage_3b.php`)
+- **Schema Alterations on `commercial_documents`**:
+  - `deleted_at`: Added nullable indexed timestamp column via `$table->softDeletes()->after('status')->index()`.
+  - `cancelled_by`: Added nullable unsigned big integer column. Handled conditionally: on SQLite added as plain nullable column to avoid table rebuild; on MySQL constrained to `users(id)` with `nullOnDelete`.
+  - Composite Unique Index Dropped: Dropped `commercial_documents_client_profile_id_type_number_unique` on `(client_profile_id, type, number)`.
+  - Plain Composite Index Added: Replaced with `commercial_documents_client_profile_id_type_number_index` on `(client_profile_id, type, number)`.
+  - Idempotent / Safe `down()`: Drops index on `deleted_at` first (preventing SQLite index drop errors), guards re-adding unique index against existing duplicate numbers, drops foreign key and column safely.
+- **SQLite PRAGMA Verification**:
+  - Tested on copy of local database (`database_copy.sqlite`) and migrated on local `database.sqlite`.
+  - `PRAGMA index_list('commercial_documents')`: Unique composite index replaced by non-unique composite index; `deleted_at` index created.
+  - `PRAGMA foreign_key_list('commercial_documents')`: 5 pre-existing foreign keys remain intact.
+  - `PRAGMA foreign_key_check('commercial_documents')`: 0 violations.
+
+### 2. Model & Service Enhancements
+- **Model (`CommercialDocument.php`)**:
+  - Added `Illuminate\Database\Eloquent\SoftDeletes` trait.
+  - Added `'cancelled_by'` to `$fillable`.
+  - Added `cancelledBy()` relationship method returning `$this->belongsTo(User::class, 'cancelled_by')`.
+- **Lock Service (`AdminBillingLockService.php`)**:
+  - Created dedicated admin lock service calculating periods from document `created_at` converted explicitly to `Asia/Kolkata` timezone (independent of app `UTC` timezone setting).
+  - Regular & QRMP clients: Return type `GSTR1`, tax period `YYYY-MM`. Document locked only when a matching `GSTR1` return row has `status = 'filed'` (filing of GSTR-3B does NOT lock).
+  - Composition clients: Return type `CMP08`, tax period Indian FY quarter `YYYY-Qn` using `GstPeriodService::fyQuarterOf()` (Apr-Jun = Q1, Jul-Sep = Q2, Oct-Dec = Q3, Jan-Mar = Q4).
+  - GST-OFF clients: Never locked; GST status returns `'-'`.
+  - Quotations & Delivery Challans: Never locked; GST status returns `'-'` (Decision 10).
+- **Service (`InvoiceService.php`)**:
+  - `adminDelete()`: Preserved legacy hard-delete behavior by switching `$doc->delete()` to `$doc->forceDelete()`, keeping existing checks (Decision 3: legacy untouched).
+  - `adminSoftDelete()`: New method for Module 3. In a transaction, verifies GST is not filed under `AdminBillingLockService`, checks reference documents and filing requests, sets `status = 'deleted'`, performs soft delete (`deleted_at`), preserves line items, and logs `ActivityLog` `'deleted_document'`.
+  - `allocateNextNumber()`: Added collision check inside `lockForUpdate` transaction. If the formatted number already exists in non-deleted documents, aborts with HTTP 422 (`'Invoice number already exists for this client.'`). No auto-increment/skip.
+  - Concurrency Note: In SQLite, `lockForUpdate` is ignored by the engine and the unique index is removed, so concurrent creation collisions under high SQLite concurrency are an accepted engine limitation.
+- **Purge Command & Schedule (`PurgeTrashedCommercialDocumentsCommand.php`)**:
+  - Artisan command: `billing:purge-trashed-documents`.
+  - Purge rule: Records eligible when `deleted_at < first day of the PREVIOUS calendar month relative to now` (e.g. deleted 15 Apr -> purged from 1 Jun when cutoff is 1 May; retained on 31 May when cutoff is 1 Apr).
+  - Removes line items, edit requests, and stored PDF files; permanently force-deletes the document; writes no activity log.
+  - Scheduled daily at `03:00` in `backend/routes/console.php`.
+
+### 3. Automated Tests (`tests/Feature/AdminBilling3BMigrationAndModelTest.php`)
+- 17 comprehensive feature tests (73 assertions) covering:
+  1. Soft deletes hides trashed records from standard Eloquent queries.
+  2. Soft deletes queryable via `onlyTrashed()`.
+  3. Legacy `adminDelete()` performs complete hard delete.
+  4. `adminSoftDelete()` sets `status = 'deleted'`, sets `deleted_at`, retains line items, writes `ActivityLog`.
+  5. `adminSoftDelete()` blocked with 422 when return period is filed.
+  6. `adminSoftDelete()` blocked with 422 when referenced by another document via `reference_document_id`.
+  7. `adminSoftDelete()` blocked with 422 when attached to a `GstFilingRequest` via `gst_filing_request_document`.
+  8. Number reuse allowed for soft-deleted documents without SQLSTATE 23000 error.
+  9. Cancelled document numbers cannot be reused.
+  10. `allocateNextNumber()` re-check aborts 422 if number already exists.
+  11. Purge command boundary testing with `Carbon::setTestNow` (31 May vs 1 Jun for April deletion).
+  12. Admin lock IST timezone conversion test with `created_at` on 31 Oct 23:30 IST.
+  13. Regular client locks on GSTR-1 and does not lock on GSTR-3B only.
+  14. QRMP client locks on GSTR-1 monthly period.
+  15. Composition client FY quarter boundaries (31 Mar, 1 Apr, 30 Jun, 1 Jul, 30 Sep, 1 Oct, 31 Dec, 1 Jan) and CMP-08 filing lock.
+  16. GST-OFF client returns `'-'` and never locks.
+  17. Tab 5 `PUT /api/admin/clients/{id}` document numbering: soft-deleted number allowed as Next Number (gap warning 409 verified and bypassed with `confirm_gap`), cancelled number rejected with 422.
+
+---
+
+## Stage 3B-1: Admin Billing Document Endpoints (Tax Invoice & Shared Types Backend)
+
+### 1. Routes Registered (`routes/api.php`)
+Added under `Route::middleware(['role.staff', 'audit'])->prefix('admin')->group(...)`:
+- `GET    /api/admin/billing/client-directory/{clientId}/documents/{docType}`: Document list with client strip, cards, filtered totals, and pagination.
+- `GET    /api/admin/billing/client-directory/{clientId}/documents/{docType}/{id}`: View document screen header, seller, customer, line items, summary, GST status, and action flags.
+- `GET    /api/admin/billing/client-directory/{clientId}/documents/{docType}/{id}/pdf`: Document PDF view/download stream or JSON descriptor.
+- `POST   /api/admin/billing/client-directory/{clientId}/documents/{docType}/{id}/cancel`: Cancel active document with optional reason (max 200).
+- `DELETE /api/admin/billing/client-directory/{clientId}/documents/{docType}/{id}`: Soft delete active or cancelled document via `InvoiceService::adminSoftDelete`.
+- `PATCH  /api/admin/billing/client-directory/{clientId}/documents/{docType}/{id}/creation-date`: Update creation date preserving time of day in IST.
+
+### 2. Controller & Service Implementation
+- **Controller (`AdminBillingDocumentController.php`)**:
+  - Validates `docType` against allowed types (`tax_invoice`, `bill_of_supply`, `debit_note`, `credit_note`, `quotation`, `delivery_challan`), returning 404 on invalid type.
+  - Client and document ownership validation (returns 404 if client or document does not match).
+  - List endpoint transforms document records with serial numbering, raw status, customer type (`B2B` | `B2C`), amounts, and returns paginator without N+1 queries.
+  - View endpoint computes single-source flags (`can_edit_creation_date`, `can_cancel`, `can_delete`), GST status via `AdminBillingLockService`, line items, and summary.
+  - PDF endpoint generates PDF using the document layout via 2B DomPDF renderer.
+  - Cancel endpoint blocks when GST is filed or document is already cancelled; updates `status = 'cancelled'`, `cancellation_reason`, `cancelled_at`, and `cancelled_by`.
+  - Delete endpoint allows active and cancelled documents; delegates to `InvoiceService::adminSoftDelete`; blocks duplicate deletion with 422.
+  - Creation date PATCH endpoint checks active status, current period GST lock, future date in IST, selected FY bounds, target period GST lock, preserves existing time of day in IST, and stores UTC timestamp in database.
+- **Service Extension (`AdminBillingCountService.php`)**:
+  - `B2B_CONDITION_SQL`: Single COALESCE-safe SQL expression ensuring `B2B + B2C = All` across all queries and counts.
+  - `isB2b(?Customer $customer)`: Pure helper for row-level B2B determination.
+  - `getDocumentCards(int $clientProfileId, string $type, string $from, string $to)`: Computes the 5 document cards (Total, B2B, B2C, Cancelled, Deleted) for the FY independently of search/date/status filters.
+  - `getDocumentListQueryAndTotals(...)`: Unified query builder and filtered totals calculator over the full filtered result set across all pages without second query paths.
+  - `computeDocumentFlags(...)` & `formatSeller(...)`: Centralized View screen helpers.
+
+### 3. Automated Tests (`tests/Feature/AdminBilling3BEndpointsTest.php`)
+- 18 feature tests (125 assertions) covering:
+  1. 404 handling on invalid `docType`, missing client, wrong client document, and mismatched docType.
+  2. Financial year format and boundary validation (422 on invalid, 200 on valid).
+  3. Draft documents exclusion from list and cards.
+  4. Deleted documents isolation (shown only in Deleted tab or `status=deleted`).
+  5. Cancelled documents display and counting in All, B2B, and Cancelled tabs.
+  6. Mathematical equivalence `B2B + B2C = Total` across all customer permutations (registered, unregistered, empty status, no customer).
+  7. Cards persistence independently of search, date range, and status filters.
+  8. Filtered totals accuracy across pages and per tab (excluding Cancelled/Deleted on All/B2B/B2C tabs; totaling own rows on Cancelled and Deleted tabs).
+  9. Search by number, customer name, and GSTIN with wildcard characters (`%`, `_`) safely escaped with `ESCAPE '!'`.
+  10. Invoice date range filtering and FY boundary dates (31 Mar, 1 Apr).
+  11. Creation date range filtering using IST day boundaries.
+  12. View screen response shape, regular client GST status ('Not Filed' -> 'Filed'), and action flags.
+  13. Composition client CMP-08 filing lock on FY quarter boundaries.
+  14. GST-OFF client never locks (`gst.status = '-'`).
+  15. Cancel endpoint validation (reason max 200, auth user attribution, duplicate and filed blocks).
+  16. Delete endpoint validation (active/cancelled allowed, duplicate deleted blocked, reference and filing request blocks).
+  17. Creation date patch endpoint (future date blocked, outside FY blocked, target period filed blocked, existing IST time of day preserved).
+  18. PDF endpoint response (JSON descriptor with URL and inline PDF stream with Content-Type `application/pdf`).
+
+

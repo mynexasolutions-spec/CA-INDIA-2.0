@@ -21,6 +21,27 @@ class GstPeriodService
     }
 
     /**
+     * Indian FY quarter format matching buildPeriods() quarters:
+     * Apr-Jun = YYYY-Q1
+     * Jul-Sep = YYYY-Q2
+     * Oct-Dec = YYYY-Q3
+     * Jan-Mar = YYYY-Q4 (where YYYY is the calendar year of Jan-Mar)
+     */
+    public static function fyQuarterOf(mixed $date): string
+    {
+        $d = $date instanceof Carbon ? $date->copy() : Carbon::parse($date);
+        $month = $d->month;
+        $q = match (true) {
+            $month >= 4 && $month <= 6 => 1,
+            $month >= 7 && $month <= 9 => 2,
+            $month >= 10 && $month <= 12 => 3,
+            default => 4,
+        };
+
+        return "{$d->year}-Q{$q}";
+    }
+
+    /**
      * Period grid (quarterly or monthly) for one return type.
      */
     public static function buildPeriods(bool $quarterly, int $startYear, string $dueField, bool $qrmp = false, mixed $applicableFrom = null): array

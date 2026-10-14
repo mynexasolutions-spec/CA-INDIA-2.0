@@ -156,15 +156,7 @@ class DocumentPayloadBuilder
         }
 
         // Amount in words
-        $wordsRaw = trim((string) ($doc->amount_in_words ?: ''));
-        if ($wordsRaw === '') {
-            $wordsDisplay = '—';
-        } else {
-            $core = preg_replace('/\s*Only\.?$/i', '', $wordsRaw);
-            $core = preg_replace('/\s*Rupees?\s*/i', ' ', $core);
-            $core = trim(preg_replace('/\s+/', ' ', $core));
-            $wordsDisplay = 'Rupees ' . $core . ' Only.';
-        }
+        $wordsDisplay = self::formatAmountInWords($doc->amount_in_words);
 
         // Asset paths
         $logoPath = ($p->logo_path && file_exists(public_path('storage/' . $p->logo_path)))
@@ -281,5 +273,81 @@ class DocumentPayloadBuilder
             'signature_path' => $sigPath,
             'signatory_name' => $p->signatory_name ?: $business,
         ];
+    }
+
+    /**
+     * Shared seller formatting builder reusing 2B PDF seller data.
+     */
+    public static function buildSeller(\App\Models\ClientProfile $p): array
+    {
+        $phone = $p->mobile ?: ($p->user?->phone ?? null);
+        $email = $p->email ?: ($p->user?->email ?? null);
+        $business = $p->business_name ?: ($p->client_name ?: 'Business');
+
+        $addressParts = array_filter([
+            $p->address_line_1 ?: $p->address,
+            $p->address_line_2,
+            $p->city,
+            trim(($p->state ?: '') . ($p->pincode ? ' - ' . $p->pincode : '')),
+        ], fn ($part) => filled($part));
+        $sellerAddress = implode(', ', $addressParts);
+
+        $gstStateNames = [
+            '01' => 'Jammu & Kashmir', '02' => 'Himachal Pradesh', '03' => 'Punjab', '04' => 'Chandigarh',
+            '05' => 'Uttarakhand', '06' => 'Haryana', '07' => 'Delhi', '08' => 'Rajasthan', '09' => 'Uttar Pradesh',
+            '10' => 'Bihar', '11' => 'Sikkim', '12' => 'Arunachal Pradesh', '13' => 'Nagaland', '14' => 'Manipur',
+            '15' => 'Mizoram', '16' => 'Tripura', '17' => 'Meghalaya', '18' => 'Assam', '19' => 'West Bengal',
+            '20' => 'Jharkhand', '21' => 'Odisha', '22' => 'Chhattisgarh', '23' => 'Madhya Pradesh', '24' => 'Gujarat',
+            '25' => 'Daman & Diu', '26' => 'Dadra & Nagar Haveli', '27' => 'Maharashtra', '28' => 'Andhra Pradesh',
+            '29' => 'Karnataka', '30' => 'Goa', '31' => 'Lakshadweep', '32' => 'Kerala', '33' => 'Tamil Nadu',
+            '34' => 'Puducherry', '35' => 'Andaman & Nicobar Islands', '36' => 'Telangana', '37' => 'Andhra Pradesh',
+            '38' => 'Ladakh', '97' => 'Other Territory', '99' => 'Centre Jurisdiction',
+        ];
+        $state = $p->state ?: ($p->state_code ? ($gstStateNames[str_pad((string) $p->state_code, 2, '0', STR_PAD_LEFT)] ?? null) : null);
+        $sellerStateLine = '';
+        if ($state && $p->state_code) {
+            $sellerStateLine = $state . ' (State Code: ' . $p->state_code . ')';
+        } elseif ($state) {
+            $sellerStateLine = $state;
+        } elseif ($p->state_code) {
+            $sellerStateLine = 'State Code: ' . $p->state_code;
+        }
+
+        $logoPath = ($p->logo_path && file_exists(public_path('storage/' . $p->logo_path)))
+            ? public_path('storage/' . $p->logo_path)
+            : (file_exists(public_path('pdf-assets/website-logo.png')) ? public_path('pdf-assets/website-logo.png') : null);
+
+        return [
+            'business_name' => $business,
+            'company_name' => strtoupper($business),
+            'company_name_title_case' => ucwords(strtolower($business)),
+            'tagline' => $p->invoice_tagline,
+            'logo_path' => $logoPath,
+            'logo_url' => $p->logo_path ? ('/storage/' . $p->logo_path) : null,
+            'address' => $sellerAddress,
+            'gstin' => ($p->has_gst && $p->gstin) ? $p->gstin : null,
+            'pan' => $p->pan,
+            'email' => $email,
+            'phone' => $phone,
+            'state' => $p->state,
+            'state_code' => $p->state_code,
+            'state_line' => $sellerStateLine,
+        ];
+    }
+
+    /**
+     * Exact canonical amount in words formatter used by the 2B renderer.
+     */
+    public static function formatAmountInWords(?string $raw): string
+    {
+        $wordsRaw = trim((string) ($raw ?: ''));
+        if ($wordsRaw === '') {
+            return '—';
+        }
+        $core = preg_replace('/\s*Only\.?$/i', '', $wordsRaw);
+        $core = preg_replace('/\s*Rupees?\s*/i', ' ', $core);
+        $core = trim(preg_replace('/\s+/', ' ', $core));
+
+        return 'Rupees ' . $core . ' Only.';
     }
 }

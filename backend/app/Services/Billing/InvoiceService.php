@@ -244,7 +244,58 @@ class InvoiceService
             if ($doc->pdf_path && Storage::disk('public')->exists($doc->pdf_path)) {
                 Storage::disk('public')->delete($doc->pdf_path);
             }
-            $doc->delete();
+            $doc->forceDelete();
+        });
+    }
+
+    /**
+     * Module 3 (Stage 3B): Admin soft delete.
+     * Sets status='deleted' and soft deletes the document row.
+     * Preserves line items for retention.
+     * Writes ActivityLog 'deleted_document'.
+     * Blocks when GST Filed, referenced by active documents, or attached to a filing request.
+     */
+    public function adminSoftDelete(CommercialDocument $doc, ?int $userId = null, ?string $ip = null): void
+    {
+        $lock = AdminBillingLockService::checkDocument($doc);
+        abort_if(
+            $lock['is_locked'],
+            422,
+            'GST Return for this document\'s period has already been filed. This document cannot be deleted.'
+        );
+
+        abort_if(
+            CommercialDocument::where('reference_document_id', $doc->id)->exists(),
+            422,
+            'This document has a Credit Note, Debit Note, or Amendment issued against it — delete those first.'
+        );
+
+        abort_if(
+            DB::table('gst_filing_request_document')->where('commercial_document_id', $doc->id)->exists(),
+            422,
+            'This document is attached to a GST Filing Request and cannot be deleted.'
+        );
+
+        $snapshot = [
+            'number' => $doc->number,
+            'type' => $doc->type,
+            'client_profile_id' => $doc->client_profile_id,
+            'client_business_name' => $doc->clientProfile?->business_name,
+            'grand_total' => $doc->grand_total ?: $doc->total_amount,
+        ];
+
+        DB::transaction(function () use ($doc, $userId, $ip, $snapshot) {
+            $doc->update(['status' => 'deleted']);
+            $doc->delete(); // Soft delete sets deleted_at
+
+            \App\Models\ActivityLog::create([
+                'user_id' => $userId,
+                'action' => 'deleted_document',
+                'subject_type' => CommercialDocument::class,
+                'subject_id' => $doc->id,
+                'properties' => $snapshot,
+                'ip_address' => $ip,
+            ]);
         });
     }
 
@@ -395,6 +446,13 @@ class InvoiceService
         $seq = max(1, (int) ($locked->{$field} ?? 1));
 
         $formatted = $this->formatDocNumber($prefix, $seq, $separator, $position, $padLen);
+
+        // Re-check inside lockForUpdate transaction: if the number is already used by a non-deleted document, abort 422
+        abort_if(
+            CommercialDocument::where('client_profile_id', $locked->id)->where('number', $formatted)->exists(),
+            422,
+            'Invoice number already exists for this client.'
+        );
 
         $nextSeq = $seq + 1;
         $updates = [

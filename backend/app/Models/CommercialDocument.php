@@ -3,16 +3,19 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class CommercialDocument extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'client_profile_id', 'customer_id', 'reference_document_id', 'converted_document_id', 'type', 'number',
         'document_date', 'due_date', 'place_of_supply', 'is_inter_state', 'is_reverse_charge',
         'discount_total', 'taxable_amount', 'cgst_amount', 'sgst_amount', 'igst_amount',
         'total_amount', 'round_off', 'grand_total', 'amount_in_words',
         'tax_deduction_type', 'tds_tcs_section_id', 'tds_tcs_rate', 'tds_tcs_amount',
-        'status', 'cancellation_reason', 'cancelled_at', 'edit_allowed', 'issued_at', 'notes', 'terms',
+        'status', 'cancellation_reason', 'cancelled_at', 'cancelled_by', 'edit_allowed', 'issued_at', 'notes', 'terms',
         'payment_terms', 'currency', 'pdf_path', 'share_token',
         'reason_for_transportation', 'reason_for_transportation_other', 'vehicle_no',
         'transporter_name', 'eway_bill_no', 'receiver_name', 'receiver_signature_datetime',
@@ -45,6 +48,11 @@ class CommercialDocument extends Model
     public function clientProfile()
     {
         return $this->belongsTo(ClientProfile::class);
+    }
+
+    public function cancelledBy()
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     public function tdsTcsSection()

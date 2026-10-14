@@ -96,6 +96,13 @@ export const BILLING_DOC_TYPES = [
     slug: 'tax-invoice',
     label: 'Tax Invoice',
     pluralLabel: 'Tax Invoices',
+    shortLabel: 'Invoice',
+    shortPlural: 'Invoices',
+    numberLabel: 'Invoice No.',
+    dateLabel: 'Invoice Date',
+    statusLabel: 'Invoice Status',
+    searchPlaceholder: 'Search by Invoice No. / Customer Name / GSTIN...',
+    subtitle: 'View and manage all tax invoices for this client.',
     color: '#2563eb',
     bg: '#eff6ff',
     borderColor: '#dbeafe',
@@ -108,6 +115,13 @@ export const BILLING_DOC_TYPES = [
     slug: 'bill-of-supply',
     label: 'Bill of Supply',
     pluralLabel: 'Bills of Supply',
+    shortLabel: 'Bill',
+    shortPlural: 'Bills',
+    numberLabel: 'Bill No.',
+    dateLabel: 'Bill Date',
+    statusLabel: 'Bill Status',
+    searchPlaceholder: 'Search by Bill No. / Customer Name / GSTIN...',
+    subtitle: 'View and manage all bills of supply for this client.',
     color: '#10b981',
     bg: '#ecfdf5',
     borderColor: '#d1fae5',
@@ -120,6 +134,13 @@ export const BILLING_DOC_TYPES = [
     slug: 'debit-note',
     label: 'Debit Note',
     pluralLabel: 'Debit Notes',
+    shortLabel: 'Debit Note',
+    shortPlural: 'Debit Notes',
+    numberLabel: 'Debit Note No.',
+    dateLabel: 'Debit Note Date',
+    statusLabel: 'Debit Note Status',
+    searchPlaceholder: 'Search by Debit Note No. / Customer Name / GSTIN...',
+    subtitle: 'View and manage all debit notes for this client.',
     color: '#f97316',
     bg: '#fff7ed',
     borderColor: '#ffedd5',
@@ -132,6 +153,13 @@ export const BILLING_DOC_TYPES = [
     slug: 'credit-note',
     label: 'Credit Note',
     pluralLabel: 'Credit Notes',
+    shortLabel: 'Credit Note',
+    shortPlural: 'Credit Notes',
+    numberLabel: 'Credit Note No.',
+    dateLabel: 'Credit Note Date',
+    statusLabel: 'Credit Note Status',
+    searchPlaceholder: 'Search by Credit Note No. / Customer Name / GSTIN...',
+    subtitle: 'View and manage all credit notes for this client.',
     color: '#ef4444',
     bg: '#fef2f2',
     borderColor: '#fee2e2',
@@ -144,6 +172,13 @@ export const BILLING_DOC_TYPES = [
     slug: 'quotation',
     label: 'Quotation',
     pluralLabel: 'Quotations',
+    shortLabel: 'Quotation',
+    shortPlural: 'Quotations',
+    numberLabel: 'Quotation No.',
+    dateLabel: 'Quotation Date',
+    statusLabel: 'Quotation Status',
+    searchPlaceholder: 'Search by Quotation No. / Customer Name / GSTIN...',
+    subtitle: 'View and manage all quotations for this client.',
     color: '#8b5cf6',
     bg: '#f5f3ff',
     borderColor: '#ede9fe',
@@ -156,6 +191,13 @@ export const BILLING_DOC_TYPES = [
     slug: 'delivery-challan',
     label: 'Delivery Challan',
     pluralLabel: 'Delivery Challans',
+    shortLabel: 'Challan',
+    shortPlural: 'Challans',
+    numberLabel: 'Challan No.',
+    dateLabel: 'Challan Date',
+    statusLabel: 'Challan Status',
+    searchPlaceholder: 'Search by Challan No. / Customer Name / GSTIN...',
+    subtitle: 'View and manage all delivery challans for this client.',
     color: '#06b6d4',
     bg: '#ecfeff',
     borderColor: '#cffafe',
@@ -179,9 +221,39 @@ export const DOC_TYPE_BY_SLUG = BILLING_DOC_TYPES.reduce((acc, t) => {
 }, {});
 
 /**
- * Resolve document type configuration by key or slug.
+ * Resolve document type configuration by key or slug (supports singular, plural, key, or slug).
  */
 export function getDocTypeConfig(keyOrSlug) {
   if (!keyOrSlug) return null;
-  return DOC_TYPE_BY_KEY[keyOrSlug] || DOC_TYPE_BY_SLUG[keyOrSlug] || null;
+  const raw = String(keyOrSlug).toLowerCase().trim();
+  if (DOC_TYPE_BY_KEY[raw]) return DOC_TYPE_BY_KEY[raw];
+  if (DOC_TYPE_BY_SLUG[raw]) return DOC_TYPE_BY_SLUG[raw];
+
+  const normalizedSlug = raw.replace(/_/g, '-');
+  const normalizedKey = raw.replace(/-/g, '_');
+
+  if (DOC_TYPE_BY_SLUG[normalizedSlug]) return DOC_TYPE_BY_SLUG[normalizedSlug];
+  if (DOC_TYPE_BY_KEY[normalizedKey]) return DOC_TYPE_BY_KEY[normalizedKey];
+
+  // Plural mappings e.g. tax-invoices -> tax-invoice, bills-of-supply -> bill-of-supply
+  const pluralMap = {
+    'tax-invoices': 'tax-invoice',
+    'tax_invoices': 'tax_invoice',
+    'bills-of-supply': 'bill-of-supply',
+    'bills_of_supply': 'bill_of_supply',
+    'debit-notes': 'debit-note',
+    'debit_notes': 'debit_note',
+    'credit-notes': 'credit-note',
+    'credit_notes': 'credit_note',
+    'quotations': 'quotation',
+    'delivery-challans': 'delivery-challan',
+    'delivery_challans': 'delivery_challan',
+  };
+
+  const alias = pluralMap[raw] || pluralMap[normalizedSlug] || pluralMap[normalizedKey];
+  if (alias) {
+    return DOC_TYPE_BY_SLUG[alias] || DOC_TYPE_BY_KEY[alias] || null;
+  }
+
+  return null;
 }
