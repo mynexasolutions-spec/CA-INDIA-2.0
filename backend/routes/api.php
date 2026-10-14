@@ -206,6 +206,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/billing/client-directory/{clientId}/documents/{docType}/{id}/cancel', [AdminBillingDocumentController::class, 'cancel']);
         Route::delete('/billing/client-directory/{clientId}/documents/{docType}/{id}', [AdminBillingDocumentController::class, 'destroy']);
         Route::patch('/billing/client-directory/{clientId}/documents/{docType}/{id}/creation-date', [AdminBillingDocumentController::class, 'updateCreationDate']);
+        Route::put('/billing/client-directory/{clientId}/documents/{docType}/{id}', [AdminBillingDocumentController::class, 'update']);
         Route::get('/clients/{id}/billing/dashboard', [ClientProfileController::class, 'billingDashboard']);
         Route::get('/clients/{id}/billing/export', [ClientProfileController::class, 'exportBilling']);
         Route::get('/clients/{id}/billing/zip', [ClientProfileController::class, 'downloadZip']);

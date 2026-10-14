@@ -300,6 +300,154 @@ class InvoiceService
     }
 
     /**
+     * Module 3 (Stage 3B-4a): Admin full update of an active, GST Not Filed Tax Invoice.
+     * Replaces lines, recalculates GST, preserves number/status/type/issued_at, writes ActivityLog,
+     * and triggers post-transaction PDF generation (non-fatal, sets pdf_path=null on failure).
+     */
+    public function adminFullUpdate(
+        CommercialDocument $doc,
+        ClientProfile $profile,
+        array $data,
+        ?int $userId = null,
+        ?string $ip = null
+    ): CommercialDocument {
+        $lockedDoc = DB::transaction(function () use ($doc, $profile, $data, $userId, $ip) {
+            $locked = CommercialDocument::withTrashed()->whereKey($doc->id)->lockForUpdate()->firstOrFail();
+
+            // G1: Not deleted
+            abort_if($locked->trashed() || $locked->status === 'deleted', 422, 'Deleted documents cannot be edited.');
+
+            // G2: Status in issued, paid, partial
+            abort_unless(
+                in_array($locked->status, ['issued', 'paid', 'partial'], true),
+                422,
+                'Only active documents can be edited.'
+            );
+
+            // G3: GST Period lock
+            $lock = AdminBillingLockService::checkDocument($locked);
+            abort_if($lock['is_locked'], 422, 'GST Return for this document\'s period has already been filed. This document cannot be edited.');
+
+            // G5: Not attached to filing request
+            abort_if(
+                DB::table('gst_filing_request_document')->where('commercial_document_id', $locked->id)->exists(),
+                422,
+                'This document is attached to a GST Filing Request and cannot be edited.'
+            );
+
+            // G6: Not referenced by another document
+            abort_if(
+                CommercialDocument::where('reference_document_id', $locked->id)->exists(),
+                422,
+                'This document has a Credit Note, Debit Note, or Amendment issued against it — delete those first.'
+            );
+
+            // Build merged data: omitted optional keys retain stored values; explicit nulls clear them
+            $optionalDefaults = [
+                'customer_id' => $locked->customer_id,
+                'due_date' => $locked->due_date?->format('Y-m-d'),
+                'payment_terms' => $locked->payment_terms,
+                'notes' => $locked->notes,
+                'terms' => $locked->terms,
+                'place_of_supply' => $locked->place_of_supply,
+                'currency' => $locked->currency,
+                'tax_deduction_type' => $locked->tax_deduction_type,
+                'tds_tcs_section_id' => $locked->tds_tcs_section_id,
+            ];
+
+            $mergedData = $data;
+            foreach ($optionalDefaults as $key => $storedValue) {
+                if (! array_key_exists($key, $data)) {
+                    $mergedData[$key] = $storedValue;
+                }
+            }
+
+            [$taxDeductionType, $tdsSection, $tdsRate] = $this->resolveTdsTcs($mergedData, $locked->type);
+
+            $isInter = (bool) ($data['is_inter_state'] ?? $locked->is_inter_state);
+            $type = $locked->type;
+            $isRcm = BillingPolicy::rcmAllowed($profile) && (bool) ($data['is_reverse_charge'] ?? $locked->is_reverse_charge);
+
+            $roundOff = array_key_exists('round_off', $data) && $data['round_off'] !== null
+                ? (float) $data['round_off']
+                : null;
+
+            $calc = GstCalculator::calculate(
+                $data['lines'] ?? [],
+                $isInter,
+                $roundOff,
+                BillingPolicy::taxesEnabled($profile, $isRcm),
+                $taxDeductionType,
+                $tdsRate
+            );
+
+            $status = $locked->status;
+            $keepIssued = true;
+            $oldGrandTotal = $locked->grand_total ?: $locked->total_amount;
+
+            // Mirror docPayload call from updateDraft (L84-93), positional args
+            $payload = $this->docPayload(
+                $profile,
+                $mergedData,
+                $calc,
+                $type,
+                $locked->number,
+                $isInter,
+                $isRcm,
+                $status,
+                $keepIssued,
+                $taxDeductionType,
+                $tdsSection,
+                $tdsRate
+            );
+            $payload['issued_at'] = $locked->issued_at;
+            $payload['reference_document_id'] = null;
+
+            // If terms or place_of_supply are explicitly null (or stored as null), prevent fallback to profile defaults
+            if (array_key_exists('terms', $mergedData) && $mergedData['terms'] === null) {
+                $payload['terms'] = null;
+            }
+            if (array_key_exists('place_of_supply', $mergedData) && $mergedData['place_of_supply'] === null) {
+                $payload['place_of_supply'] = null;
+            }
+
+            $locked->update($payload);
+            $locked->lineItems()->delete();
+            $this->syncLines($locked, $calc['lines']);
+
+            $newGrandTotal = $locked->grand_total ?: $locked->total_amount;
+
+            \App\Models\ActivityLog::create([
+                'user_id' => $userId,
+                'action' => 'admin_edited_document',
+                'subject_type' => CommercialDocument::class,
+                'subject_id' => $locked->id,
+                'properties' => [
+                    'number' => $locked->number,
+                    'type' => $locked->type,
+                    'client_profile_id' => $locked->client_profile_id,
+                    'old_grand_total' => $oldGrandTotal,
+                    'new_grand_total' => $newGrandTotal,
+                ],
+                'ip_address' => $ip,
+            ]);
+
+            return $locked;
+        });
+
+        // Post-transaction PDF generation (non-fatal)
+        try {
+            $freshForPdf = $lockedDoc->fresh(['lineItems', 'customer', 'clientProfile.user', 'clientProfile.documentSettings', 'tdsTcsSection']);
+            $this->generatePdf($freshForPdf);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Admin edit PDF generation failed for doc {$lockedDoc->id}: " . $e->getMessage());
+            $lockedDoc->update(['pdf_path' => null]);
+        }
+
+        return $lockedDoc->fresh(['lineItems', 'customer', 'clientProfile.user', 'cancelledBy']);
+    }
+
+    /**
      * Admin — Full Billing Access & Control spec: an admin can change any document's
      * Number, Date, or Status whenever required, bypassing the GST-period lock that
      * governs the client's own updateDraft(). Moving status to 'draft' clears the

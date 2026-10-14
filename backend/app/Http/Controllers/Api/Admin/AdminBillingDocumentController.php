@@ -5,13 +5,18 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ClientProfile;
 use App\Models\CommercialDocument;
+use App\Models\Customer;
+use App\Models\Product;
 use App\Services\Billing\AdminBillingCountService;
 use App\Services\Billing\AdminBillingLockService;
+use App\Services\Billing\BillingPolicy;
 use App\Services\Billing\InvoiceService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class AdminBillingDocumentController extends Controller
 {
@@ -119,6 +124,14 @@ class AdminBillingDocumentController extends Controller
             ])
             ->firstOrFail();
 
+        return response()->json($this->formatDocumentResponse($doc));
+    }
+
+    /**
+     * Format document response matching View Document Screen contract.
+     */
+    public function formatDocumentResponse(CommercialDocument $doc): array
+    {
         $lock = AdminBillingLockService::checkDocument($doc);
         $flags = AdminBillingCountService::computeDocumentFlags($doc, $lock);
 
@@ -173,7 +186,7 @@ class AdminBillingDocumentController extends Controller
             'amount_in_words' => \App\Services\DocumentTemplate\DocumentPayloadBuilder::formatAmountInWords($doc->amount_in_words),
         ];
 
-        return response()->json([
+        return [
             'document' => [
                 'id' => $doc->id,
                 'number' => $doc->number,
@@ -200,6 +213,135 @@ class AdminBillingDocumentController extends Controller
             'customer' => $customerData,
             'line_items' => $lineItems,
             'summary' => $summary,
+        ];
+    }
+
+    /**
+     * Module 3 (Stage 3B-4a): Full Edit of an Active, GST Not Filed Tax Invoice.
+     */
+    public function update(Request $request, int $clientId, string $docType, int $id): JsonResponse
+    {
+        $this->assertValidDocType($docType);
+        abort_unless($docType === 'tax_invoice', 422, 'Only Tax Invoices can be edited.');
+
+        $profile = ClientProfile::findOrFail($clientId);
+
+        $doc = CommercialDocument::withTrashed()
+            ->where('client_profile_id', $clientId)
+            ->where('type', $docType)
+            ->where('id', $id)
+            ->with('clientProfile')
+            ->firstOrFail();
+
+        $requireHsn = BillingPolicy::mode($profile) !== 'retail';
+
+        $validated = $request->validate([
+            'fy' => 'required|string',
+            'document_date' => 'required|date_format:Y-m-d',
+            'is_inter_state' => 'required|boolean',
+            'is_reverse_charge' => 'required|boolean',
+            'customer_id' => 'nullable|integer',
+            'due_date' => 'nullable|date',
+            'place_of_supply' => 'nullable|string|max:120',
+            'payment_terms' => 'nullable|string|max:200',
+            'currency' => 'nullable|string|max:3',
+            'notes' => 'nullable|string',
+            'terms' => 'nullable|string',
+            'round_off' => 'nullable|numeric',
+            'tax_deduction_type' => 'nullable|in:tds,tcs',
+            'tds_tcs_section_id' => 'nullable|integer|exists:tds_tcs_sections,id',
+            'lines' => 'required|array|min:1',
+            'lines.*.description' => 'required|string|max:255',
+            'lines.*.qty' => 'required|numeric|gt:0',
+            'lines.*.rate' => 'required|numeric|gte:0',
+            'lines.*.gst_rate' => ['nullable', 'numeric', Rule::in(BillingPolicy::GST_RATES)],
+            'lines.*.hsn_sac' => array_merge(
+                [$requireHsn ? 'required' : 'nullable', 'string'],
+                [Rule::exists('hsn_sac_codes', 'code')]
+            ),
+            'lines.*.unit' => 'nullable|string',
+            'lines.*.product_id' => 'nullable|integer',
+            'lines.*.discount_percent' => 'nullable|numeric|gte:0|lte:100',
+            'lines.*.discount_amount' => 'nullable|numeric|gte:0',
+        ]);
+
+        $fyData = $this->countService->resolveFy($validated['fy']);
+
+        // Normalize document_date with Carbon & run IST-future + FY range checks
+        $todayIst = Carbon::today('Asia/Kolkata');
+        $targetDateIst = Carbon::createFromFormat('Y-m-d', $validated['document_date'], 'Asia/Kolkata')->startOfDay();
+        abort_if($targetDateIst->isAfter($todayIst), 422, 'Document date cannot be in the future.');
+
+        $targetDateStr = $targetDateIst->format('Y-m-d');
+        abort_if(
+            $targetDateStr < $fyData['from'] || $targetDateStr > $fyData['to'],
+            422,
+            "Document date must fall within the selected Financial Year ({$fyData['fy']})."
+        );
+
+        if (! empty($validated['is_reverse_charge'])) {
+            abort_unless(
+                BillingPolicy::rcmAllowed($profile),
+                422,
+                'Reverse charge is only available for regular GST dealers.'
+            );
+        }
+
+        // Fail-fast guards
+        // G1: Not deleted
+        abort_if($doc->trashed() || $doc->status === 'deleted', 422, 'Deleted documents cannot be edited.');
+
+        // G2: Active status
+        abort_unless(in_array($doc->status, ['issued', 'paid', 'partial'], true), 422, 'Only active documents can be edited.');
+
+        // G3: GST Return filed lock check on created_at
+        $currentLock = AdminBillingLockService::checkDocument($doc);
+        abort_if($currentLock['is_locked'], 422, 'GST Return for this document\'s period has already been filed. This document cannot be edited.');
+
+        // G5: Not attached to filing request
+        abort_if(
+            DB::table('gst_filing_request_document')->where('commercial_document_id', $doc->id)->exists(),
+            422,
+            'This document is attached to a GST Filing Request and cannot be edited.'
+        );
+
+        // G6: Not referenced by active document
+        abort_if(
+            CommercialDocument::where('reference_document_id', $doc->id)->exists(),
+            422,
+            'This document has a Credit Note, Debit Note, or Amendment issued against it — delete those first.'
+        );
+
+        // Ownership checks scoped to $clientId
+        if (! empty($validated['customer_id'])) {
+            abort_unless(
+                Customer::where('client_profile_id', $clientId)->where('id', $validated['customer_id'])->exists(),
+                422,
+                'Selected party does not belong to this client.'
+            );
+        }
+
+        foreach ($validated['lines'] as $line) {
+            if (! empty($line['product_id'])) {
+                abort_unless(
+                    Product::where('client_profile_id', $clientId)->where('id', $line['product_id'])->exists(),
+                    422,
+                    'Selected product does not belong to this client.'
+                );
+            }
+        }
+
+        $updatedDoc = $this->invoiceService->adminFullUpdate(
+            $doc,
+            $profile,
+            $validated,
+            $request->user()?->id,
+            $request->ip()
+        );
+
+        return response()->json([
+            'message' => 'Document updated successfully.',
+            ...$this->formatDocumentResponse($updatedDoc),
         ]);
     }
 

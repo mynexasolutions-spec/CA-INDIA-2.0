@@ -437,6 +437,7 @@ class AdminBillingCountService
         $isDeleted = $doc->trashed() || $doc->status === 'deleted';
         if ($isDeleted) {
             return [
+                'can_edit' => false,
                 'can_edit_creation_date' => false,
                 'can_cancel' => false,
                 'can_delete' => false,
@@ -455,6 +456,7 @@ class AdminBillingCountService
             $canDelete = ($isActive || $isCancelled) && ! $isReferenced && ! $isAttached;
 
             return [
+                'can_edit' => false,
                 'can_edit_creation_date' => $canEditCreationDate,
                 'can_cancel' => $canCancel,
                 'can_delete' => $canDelete,
@@ -468,8 +470,10 @@ class AdminBillingCountService
         $isAttached = DB::table('gst_filing_request_document')->where('commercial_document_id', $doc->id)->exists();
 
         $canDelete = ($isActive || $isCancelled) && ! $isGstFiled && ! $isReferenced && ! $isAttached;
+        $canEdit = ($doc->type === 'tax_invoice') && $isActive && ! $isGstFiled && ! $isReferenced && ! $isAttached;
 
         return [
+            'can_edit' => $canEdit,
             'can_edit_creation_date' => $canEditCreationDate,
             'can_cancel' => $canCancel,
             'can_delete' => $canDelete,
