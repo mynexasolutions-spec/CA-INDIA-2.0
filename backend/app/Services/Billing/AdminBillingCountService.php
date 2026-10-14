@@ -141,7 +141,6 @@ class AdminBillingCountService
             $total += $c;
         }
         $cards['total'] = $total;
-        $cards['total_documents'] = $total;
 
         // 2. Donut breakdown
         $donut = [];

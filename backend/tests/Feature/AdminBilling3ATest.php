@@ -75,7 +75,7 @@ class AdminBilling3ATest extends TestCase
             'status' => 'issued',
         ]);
 
-        $response = $this->getJson('/api/admin/billing/clients?fy=2026-27')
+        $response = $this->getJson('/api/admin/billing/client-directory?fy=2026-27')
             ->assertOk();
 
         // Exactly 2 documents in FY 2026-27
@@ -107,7 +107,7 @@ class AdminBilling3ATest extends TestCase
             $i++;
         }
 
-        $response = $this->getJson('/api/admin/billing/clients?fy=2026-27')
+        $response = $this->getJson('/api/admin/billing/client-directory?fy=2026-27')
             ->assertOk();
 
         // 4 included statuses (issued, paid, partial, cancelled)
@@ -126,7 +126,7 @@ class AdminBilling3ATest extends TestCase
             'status' => 'issued',
         ]);
 
-        $response = $this->getJson('/api/admin/billing/clients?fy=2026-27')
+        $response = $this->getJson('/api/admin/billing/client-directory?fy=2026-27')
             ->assertOk();
 
         $this->assertSame(1, $response->json('cards.debit_note'));
@@ -161,7 +161,7 @@ class AdminBilling3ATest extends TestCase
         ]);
 
         // Filter by constitution_type = Proprietorship
-        $response = $this->getJson('/api/admin/billing/clients?fy=2026-27&constitution_type=Proprietorship')
+        $response = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&constitution_type=Proprietorship')
             ->assertOk();
 
         // Table only has 1 client
@@ -198,12 +198,12 @@ class AdminBilling3ATest extends TestCase
         ]);
 
         // Filtering by 'Partnership Firm' should match both 'Partnership Firm' and 'Partnership'
-        $resPartnership = $this->getJson('/api/admin/billing/clients?fy=2026-27&constitution_type=Partnership Firm')
+        $resPartnership = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&constitution_type=Partnership Firm')
             ->assertOk();
         $this->assertCount(2, $resPartnership->json('clients.data'));
 
         // Filtering by 'Private Limited Company' should match both
-        $resPvtLtd = $this->getJson('/api/admin/billing/clients?fy=2026-27&constitution_type=Private Limited Company')
+        $resPvtLtd = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&constitution_type=Private Limited Company')
             ->assertOk();
         $this->assertCount(2, $resPvtLtd->json('clients.data'));
     }
@@ -232,7 +232,7 @@ class AdminBilling3ATest extends TestCase
             'dealer_type' => 'composition',
         ]);
 
-        $res = $this->getJson('/api/admin/billing/clients?fy=2026-27&registration_type=Regular')
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&registration_type=Regular')
             ->assertOk();
 
         $this->assertCount(2, $res->json('clients.data'));
@@ -252,7 +252,7 @@ class AdminBilling3ATest extends TestCase
             'registration_type' => 'Composition',
         ]);
 
-        $res = $this->getJson('/api/admin/billing/clients?fy=2026-27&registration_type=Composition')
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&registration_type=Composition')
             ->assertOk();
 
         $this->assertCount(1, $res->json('clients.data'));
@@ -268,7 +268,7 @@ class AdminBilling3ATest extends TestCase
             'registration_type' => 'Regular',
         ]);
 
-        $res = $this->getJson('/api/admin/billing/clients?fy=2026-27')
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27')
             ->assertOk();
 
         $row = collect($res->json('clients.data'))->firstWhere('id', $client->id);
@@ -278,7 +278,7 @@ class AdminBilling3ATest extends TestCase
         $this->assertFalse($row['has_gst']);
 
         // Search by the stored GSTIN must yield 0 results
-        $searchRes = $this->getJson('/api/admin/billing/clients?fy=2026-27&q=27ABCDE1234F1Z5')
+        $searchRes = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&q=27ABCDE1234F1Z5')
             ->assertOk();
         $this->assertCount(0, $searchRes->json('clients.data'));
     }
@@ -293,7 +293,7 @@ class AdminBilling3ATest extends TestCase
             'dealer_type' => null,
         ]);
 
-        $res = $this->getJson('/api/admin/billing/clients?fy=2026-27')
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27')
             ->assertOk();
 
         $row = collect($res->json('clients.data'))->firstWhere('id', $client->id);
@@ -319,7 +319,7 @@ class AdminBilling3ATest extends TestCase
             'registration_type' => 'Regular',
         ]);
 
-        $res = $this->getJson('/api/admin/billing/clients?fy=2026-27&registration_type=Regular')
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&registration_type=Regular')
             ->assertOk();
 
         $this->assertCount(1, $res->json('clients.data'));
@@ -337,13 +337,13 @@ class AdminBilling3ATest extends TestCase
         ], false);
 
         // Active filter
-        $activeRes = $this->getJson('/api/admin/billing/clients?fy=2026-27&status=Active')
+        $activeRes = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&status=Active')
             ->assertOk();
         $this->assertCount(1, $activeRes->json('clients.data'));
         $this->assertSame('Active Client', $activeRes->json('clients.data.0.business_name'));
 
         // Inactive filter
-        $inactiveRes = $this->getJson('/api/admin/billing/clients?fy=2026-27&status=Inactive')
+        $inactiveRes = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&status=Inactive')
             ->assertOk();
         $this->assertCount(1, $inactiveRes->json('clients.data'));
         $this->assertSame('Inactive Client', $inactiveRes->json('clients.data.0.business_name'));
@@ -364,18 +364,18 @@ class AdminBilling3ATest extends TestCase
         ]);
 
         // Search specifically for 'Test_' - should NOT match 'TestX'
-        $res = $this->getJson('/api/admin/billing/clients?fy=2026-27&q=Test_')
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&q=Test_')
             ->assertOk();
         $this->assertCount(1, $res->json('clients.data'));
         $this->assertSame('Test_Name 100%', $res->json('clients.data.0.business_name'));
 
         // Search for '100%'
-        $res2 = $this->getJson('/api/admin/billing/clients?fy=2026-27&q=100%')
+        $res2 = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&q=100%')
             ->assertOk();
         $this->assertCount(1, $res2->json('clients.data'));
 
         // Search for 'CL%'
-        $res3 = $this->getJson('/api/admin/billing/clients?fy=2026-27&q=CL%')
+        $res3 = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&q=CL%')
             ->assertOk();
         $this->assertCount(1, $res3->json('clients.data'));
     }
@@ -386,33 +386,45 @@ class AdminBilling3ATest extends TestCase
             $this->createClient(['business_name' => "Client {$i}"]);
         }
 
-        $res = $this->getJson('/api/admin/billing/clients?fy=2026-27&per_page=999')
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&per_page=999')
             ->assertOk();
 
         $this->assertSame(100, $res->json('clients.per_page'));
     }
 
+    public function test_default_per_page_is_10(): void
+    {
+        for ($i = 1; $i <= 15; $i++) {
+            $this->createClient(['business_name' => "Client {$i}"]);
+        }
+
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27')
+            ->assertOk();
+
+        $this->assertSame(10, $res->json('clients.per_page'));
+    }
+
     public function test_invalid_fy_returns_422(): void
     {
         // 2025-26 is earlier than min FY (2026-27)
-        $this->getJson('/api/admin/billing/clients?fy=2025-26')
+        $this->getJson('/api/admin/billing/client-directory?fy=2025-26')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['fy']);
 
         // Inconsistent range
-        $this->getJson('/api/admin/billing/clients?fy=2026-28')
+        $this->getJson('/api/admin/billing/client-directory?fy=2026-28')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['fy']);
 
         // Malformed string
-        $this->getJson('/api/admin/billing/clients?fy=abc')
+        $this->getJson('/api/admin/billing/client-directory?fy=abc')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['fy']);
     }
 
     public function test_missing_fy_defaults_to_current_fy_in_asia_kolkata(): void
     {
-        $res = $this->getJson('/api/admin/billing/clients')
+        $res = $this->getJson('/api/admin/billing/client-directory')
             ->assertOk();
 
         $this->assertSame('2026-27', $res->json('fy'));
@@ -422,7 +434,7 @@ class AdminBilling3ATest extends TestCase
 
     public function test_client_dashboard_returns_404_for_missing_client(): void
     {
-        $this->getJson('/api/admin/billing/clients/999999/dashboard?fy=2026-27')
+        $this->getJson('/api/admin/billing/client-directory/999999/dashboard?fy=2026-27')
             ->assertNotFound();
     }
 
@@ -432,7 +444,7 @@ class AdminBilling3ATest extends TestCase
             'business_name' => 'Monthly Trend Client',
         ]);
 
-        $res = $this->getJson("/api/admin/billing/clients/{$client->id}/dashboard?fy=2026-27")
+        $res = $this->getJson("/api/admin/billing/client-directory/{$client->id}/dashboard?fy=2026-27")
             ->assertOk();
 
         $monthly = $res->json('monthly_trend');
@@ -473,7 +485,7 @@ class AdminBilling3ATest extends TestCase
             'status' => 'issued',
         ]);
 
-        $res = $this->getJson("/api/admin/billing/clients/{$client->id}/dashboard?fy=2026-27")
+        $res = $this->getJson("/api/admin/billing/client-directory/{$client->id}/dashboard?fy=2026-27")
             ->assertOk();
 
         $cards = $res->json('cards');
@@ -499,7 +511,7 @@ class AdminBilling3ATest extends TestCase
             'pincode' => null,
         ]);
 
-        $res1 = $this->getJson("/api/admin/billing/clients/{$c1->id}/dashboard?fy=2026-27")
+        $res1 = $this->getJson("/api/admin/billing/client-directory/{$c1->id}/dashboard?fy=2026-27")
             ->assertOk();
         $this->assertSame('Plot 10, Pune, Maharashtra', $res1->json('client.address'));
         $this->assertStringNotContainsString('-', $res1->json('client.address'));
@@ -513,7 +525,7 @@ class AdminBilling3ATest extends TestCase
             'pincode' => '400601',
         ]);
 
-        $res2 = $this->getJson("/api/admin/billing/clients/{$c2->id}/dashboard?fy=2026-27")
+        $res2 = $this->getJson("/api/admin/billing/client-directory/{$c2->id}/dashboard?fy=2026-27")
             ->assertOk();
         $this->assertSame('Plot 20, Thane, 400601', $res2->json('client.address'));
         $this->assertStringNotContainsString('-', $res2->json('client.address'));
@@ -527,7 +539,7 @@ class AdminBilling3ATest extends TestCase
             'pincode' => '400001',
         ]);
 
-        $res3 = $this->getJson("/api/admin/billing/clients/{$c3->id}/dashboard?fy=2026-27")
+        $res3 = $this->getJson("/api/admin/billing/client-directory/{$c3->id}/dashboard?fy=2026-27")
             ->assertOk();
         $this->assertSame('Flat 1, Mumbai, Maharashtra - 400001', $res3->json('client.address'));
     }
@@ -555,7 +567,7 @@ class AdminBilling3ATest extends TestCase
             'converted_document_id' => $invoice->id,
         ]);
 
-        $res = $this->getJson("/api/admin/billing/clients/{$client->id}/dashboard?fy=2026-27")
+        $res = $this->getJson("/api/admin/billing/client-directory/{$client->id}/dashboard?fy=2026-27")
             ->assertOk();
 
         $this->assertSame(1, $res->json('cards.quotation'));
@@ -565,7 +577,7 @@ class AdminBilling3ATest extends TestCase
     {
         $client = $this->createClient(['business_name' => 'Six Keys Client']);
 
-        $res = $this->getJson('/api/admin/billing/clients?fy=2026-27')
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27')
             ->assertOk();
 
         $expectedSixKeys = [
@@ -580,11 +592,11 @@ class AdminBilling3ATest extends TestCase
         $globalCardKeys = array_keys($res->json('cards'));
         $this->assertSame($expectedSixKeys, $globalCardKeys);
 
-        $dashRes = $this->getJson("/api/admin/billing/clients/{$client->id}/dashboard?fy=2026-27")
+        $dashRes = $this->getJson("/api/admin/billing/client-directory/{$client->id}/dashboard?fy=2026-27")
             ->assertOk();
 
         $dashCardKeys = array_keys($dashRes->json('cards'));
-        $expectedDashKeys = array_merge($expectedSixKeys, ['total', 'total_documents']);
+        $expectedDashKeys = array_merge($expectedSixKeys, ['total']);
         sort($dashCardKeys);
         sort($expectedDashKeys);
         $this->assertSame($expectedDashKeys, $dashCardKeys);
@@ -614,22 +626,22 @@ class AdminBilling3ATest extends TestCase
         ]);
 
         // 1. Search by client code
-        $resCode = $this->getJson('/api/admin/billing/clients?fy=2026-27&q=CL-777')->assertOk();
+        $resCode = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&q=CL-777')->assertOk();
         $this->assertCount(1, $resCode->json('clients.data'));
         $this->assertSame($gstOn->id, $resCode->json('clients.data.0.id'));
 
         // 2. Search by PAN
-        $resPan = $this->getJson('/api/admin/billing/clients?fy=2026-27&q=BBBCB5678E')->assertOk();
+        $resPan = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&q=BBBCB5678E')->assertOk();
         $this->assertCount(1, $resPan->json('clients.data'));
         $this->assertSame($gstOff->id, $resPan->json('clients.data.0.id'));
 
         // 3. Search by GSTIN for GST-ON client
-        $resGstin = $this->getJson('/api/admin/billing/clients?fy=2026-27&q=27AAACS1234D1ZP')->assertOk();
+        $resGstin = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&q=27AAACS1234D1ZP')->assertOk();
         $this->assertCount(1, $resGstin->json('clients.data'));
         $this->assertSame($gstOn->id, $resGstin->json('clients.data.0.id'));
 
         // 4. Search by GSTIN for GST-OFF client returns NO match
-        $resGstinOff = $this->getJson('/api/admin/billing/clients?fy=2026-27&q=27BBBCB5678E1ZQ')->assertOk();
+        $resGstinOff = $this->getJson('/api/admin/billing/client-directory?fy=2026-27&q=27BBBCB5678E1ZQ')->assertOk();
         $this->assertCount(0, $resGstinOff->json('clients.data'));
     }
 
@@ -653,7 +665,7 @@ class AdminBilling3ATest extends TestCase
             'status' => 'issued',
         ]);
 
-        $res = $this->getJson('/api/admin/billing/clients?fy=2026-27')->assertOk();
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27')->assertOk();
         $this->assertSame(1, $res->json('cards.delivery_challan'));
     }
 
@@ -663,7 +675,7 @@ class AdminBilling3ATest extends TestCase
         $this->createClient(['client_code' => 'CL-001', 'business_name' => 'Alpha Corp']);
         $this->createClient(['client_code' => 'CL-050', 'business_name' => 'Beta Corp']);
 
-        $res = $this->getJson('/api/admin/billing/clients?fy=2026-27')->assertOk();
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27')->assertOk();
         $codes = collect($res->json('clients.data'))->pluck('client_code')->all();
 
         $this->assertSame(['CL-001', 'CL-050', 'CL-099'], $codes);
@@ -686,36 +698,97 @@ class AdminBilling3ATest extends TestCase
             'pincode' => '411001',
         ]);
 
-        $res = $this->getJson('/api/admin/billing/clients?fy=2026-27')->assertOk();
+        $res = $this->getJson('/api/admin/billing/client-directory?fy=2026-27')->assertOk();
 
-        // 1. Response wrapper keys
-        $res->assertJsonStructure([
-            'fy', 'from', 'to', 'cards', 'filters', 'filter_options', 'alias_mapping', 'clients', 'data',
-        ]);
+        // 1. Response wrapper keys: Keep only fy, from, to, cards, filter_options, clients
+        $wrapperKeys = array_keys($res->json());
+        sort($wrapperKeys);
+        $expectedWrapperKeys = ['cards', 'clients', 'filter_options', 'from', 'fy', 'to'];
+        $this->assertSame($expectedWrapperKeys, $wrapperKeys);
+
+        // Verify removed keys: filters, data, alias_mapping
+        $this->assertArrayNotHasKey('filters', $res->json());
+        $this->assertArrayNotHasKey('data', $res->json());
+        $this->assertArrayNotHasKey('alias_mapping', $res->json());
+
+        // Verify clients paginator structure
+        $this->assertArrayHasKey('current_page', $res->json('clients'));
+        $this->assertArrayHasKey('data', $res->json('clients'));
+        $this->assertArrayHasKey('per_page', $res->json('clients'));
+        $this->assertArrayHasKey('total', $res->json('clients'));
+        $this->assertArrayHasKey('last_page', $res->json('clients'));
+        $this->assertArrayHasKey('from', $res->json('clients'));
+        $this->assertArrayHasKey('to', $res->json('clients'));
 
         // 2. Client list row fields
         $row = $res->json('clients.data.0');
         $expectedFields = [
-            'id', 'client_code', 'business_name', 'client_name', 'name', 'pan',
-            'constitution_type', 'has_gst', 'gstin', 'registration_type', 'dealer_type',
-            'user_id', 'user', 'is_active', 'status', 'mobile', 'email', 'address',
+            'id', 'client_code', 'business_name', 'client_name', 'gstin', 'pan',
+            'constitution_type', 'registration_type', 'is_active', 'mobile', 'email',
+            'address', 'has_gst',
         ];
-        foreach ($expectedFields as $field) {
-            $this->assertArrayHasKey($field, $row, "Missing row field: {$field}");
+        $actualFields = array_keys($row);
+        sort($expectedFields);
+        sort($actualFields);
+        $this->assertSame($expectedFields, $actualFields);
+
+        // Explicitly verify removed row fields
+        foreach (['name', 'user', 'user_id', 'dealer_type', 'status'] as $removed) {
+            $this->assertArrayNotHasKey($removed, $row, "Row should not contain {$removed}");
         }
 
-        // 3. Filter options and alias mapping shapes
+        // 3. Filter options shapes
         $this->assertIsArray($res->json('filter_options.constitution_types'));
         $this->assertIsArray($res->json('filter_options.registration_types'));
         $this->assertIsArray($res->json('filter_options.statuses'));
-        $this->assertIsArray($res->json('alias_mapping'));
-        $this->assertArrayHasKey('Partnership Firm', $res->json('alias_mapping'));
 
-        // 4. Dashboard cards total vs total_documents
-        $dashRes = $this->getJson("/api/admin/billing/clients/{$client->id}/dashboard?fy=2026-27")
+        // 4. Dashboard cards total & dropped total_documents
+        $dashRes = $this->getJson("/api/admin/billing/client-directory/{$client->id}/dashboard?fy=2026-27")
             ->assertOk();
         $this->assertArrayHasKey('total', $dashRes->json('cards'));
-        $this->assertArrayHasKey('total_documents', $dashRes->json('cards'));
-        $this->assertSame($dashRes->json('cards.total'), $dashRes->json('cards.total_documents'));
+        $this->assertArrayNotHasKey('total_documents', $dashRes->json('cards'));
+
+        // Dashboard client object exact fields
+        $dashClient = $dashRes->json('client');
+        $actualDashFields = array_keys($dashClient);
+        sort($actualDashFields);
+        $this->assertSame($expectedFields, $actualDashFields);
+    }
+
+    public function test_legacy_billing_clients_endpoint_remains_untouched(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'client',
+            'is_active' => true,
+            'email' => 'legacy@example.com',
+        ]);
+
+        $client = ClientProfile::create([
+            'user_id' => $user->id,
+            'client_code' => 'CL-LEGACY',
+            'business_name' => 'Legacy Firm',
+            'client_name' => 'Legacy Owner',
+            'gstin' => '27LEGAC1234F1Z1',
+            'has_gst' => true,
+            'dealer_type' => 'regular',
+        ]);
+
+        $res = $this->getJson('/api/admin/billing/clients')->assertOk();
+
+        // 1. Root-level data array from standard Laravel paginator
+        $this->assertArrayHasKey('data', $res->json());
+        $this->assertArrayHasKey('current_page', $res->json());
+        $this->assertArrayHasKey('per_page', $res->json());
+        $this->assertSame(50, $res->json('per_page'));
+
+        // 2. Contains the created client with legacy shape (user.email, user.is_active, dealer_type, user_id)
+        $row = collect($res->json('data'))->firstWhere('id', $client->id);
+        $this->assertNotNull($row, 'Legacy row should be present');
+        $this->assertSame('CL-LEGACY', $row['client_code']);
+        $this->assertSame('Legacy Firm', $row['business_name']);
+        $this->assertSame('legacy@example.com', $row['user']['email']);
+        $this->assertTrue($row['user']['is_active']);
+        $this->assertSame('regular', $row['dealer_type']);
+        $this->assertSame($user->id, $row['user_id']);
     }
 }
