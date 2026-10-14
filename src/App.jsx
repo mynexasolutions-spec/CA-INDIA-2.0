@@ -64,7 +64,7 @@ const AdminChangeRequestDetail = lazy(() => import('./pages/admin/AdminChangeReq
 const AdminBillingClientList = lazy(() => import('./pages/admin/billing/AdminBillingClientList'));
 const AdminBillingClientDashboard = lazy(() => import('./pages/admin/billing/AdminBillingClientDashboard'));
 const AdminBillingDocumentList = lazy(() => import('./pages/admin/billing/AdminBillingDocumentList'));
-const AdminBillingDocPlaceholder = lazy(() => import('./pages/admin/billing/AdminBillingDocPlaceholder'));
+const AdminBillingDocumentDetail = lazy(() => import('./pages/admin/billing/AdminBillingDocumentDetail'));
 const AdminGstr2bClientPicker = lazy(() => import('./pages/admin/AdminGstr2bClientPicker'));
 const AdminClientGstr2b = lazy(() => import('./pages/admin/AdminClientGstr2b'));
 const AdminGstReturns = lazy(() => import('./pages/admin/AdminGstReturns'));
@@ -234,7 +234,7 @@ export default function App() {
           <Route path="billing" element={<AdminBillingClientList />} />
           <Route path="billing/:clientId" element={<AdminBillingClientDashboard />} />
           <Route path="billing/:clientId/:docType" element={<AdminBillingDocumentList />} />
-          <Route path="billing/:clientId/:docType/:id" element={<AdminBillingDocPlaceholder />} />
+          <Route path="billing/:clientId/:docType/:id" element={<AdminBillingDocumentDetail />} />
           <Route path="clients/:id/gstr-2b" element={<AdminClientGstr2b />} />
           <Route path="gstr-2b" element={<AdminGstr2bClientPicker />} />
           <Route path="gst-returns" element={<AdminGstReturns />} />
