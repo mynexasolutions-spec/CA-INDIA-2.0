@@ -61,7 +61,9 @@ const AdminClientBilling = lazy(() => import('./pages/admin/AdminClientBilling')
 const AdminChangeRequests = lazy(() => import('./pages/admin/AdminChangeRequests'));
 const AdminChangeRequestList = lazy(() => import('./pages/admin/AdminChangeRequests').then(m => ({ default: m.AdminChangeRequestList })));
 const AdminChangeRequestDetail = lazy(() => import('./pages/admin/AdminChangeRequests').then(m => ({ default: m.AdminChangeRequestDetail })));
-const AdminBillingClientPicker = lazy(() => import('./pages/admin/AdminBillingClientPicker'));
+const AdminBillingClientList = lazy(() => import('./pages/admin/billing/AdminBillingClientList'));
+const AdminBillingClientDashboard = lazy(() => import('./pages/admin/billing/AdminBillingClientDashboard'));
+const AdminBillingDocPlaceholder = lazy(() => import('./pages/admin/billing/AdminBillingDocPlaceholder'));
 const AdminGstr2bClientPicker = lazy(() => import('./pages/admin/AdminGstr2bClientPicker'));
 const AdminClientGstr2b = lazy(() => import('./pages/admin/AdminClientGstr2b'));
 const AdminGstReturns = lazy(() => import('./pages/admin/AdminGstReturns'));
@@ -228,7 +230,9 @@ export default function App() {
             <Route path=":id/edit" element={<ClientProfileForm />} />
           </Route>
           <Route path="clients/:id/billing" element={<AdminClientBilling />} />
-          <Route path="billing" element={<AdminBillingClientPicker />} />
+          <Route path="billing" element={<AdminBillingClientList />} />
+          <Route path="billing/:clientId" element={<AdminBillingClientDashboard />} />
+          <Route path="billing/:clientId/:docType" element={<AdminBillingDocPlaceholder />} />
           <Route path="clients/:id/gstr-2b" element={<AdminClientGstr2b />} />
           <Route path="gstr-2b" element={<AdminGstr2bClientPicker />} />
           <Route path="gst-returns" element={<AdminGstReturns />} />
