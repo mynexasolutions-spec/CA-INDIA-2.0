@@ -1020,4 +1020,74 @@ class AdminBilling3BEndpointsTest extends TestCase
         $resOther = $this->getJson("/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$otherDoc->id}/pdf");
         $resOther->assertStatus(404);
     }
+
+    public function test_show_response_returns_tooltip_flags(): void
+    {
+        $doc = CommercialDocument::create([
+            'client_profile_id' => $this->client->id,
+            'type' => 'tax_invoice',
+            'number' => 'INV-FLAGS-01',
+            'document_date' => '2026-05-10',
+            'status' => 'issued',
+        ]);
+        $doc->created_at = Carbon::parse('2026-05-10 10:00:00');
+        $doc->saveQuietly();
+
+        // 1. Initial state
+        $res1 = $this->getJson("/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$doc->id}");
+        $res1->assertStatus(200);
+        $res1->assertJsonPath('flags.is_referenced', false);
+        $res1->assertJsonPath('flags.referencing_document', null);
+        $res1->assertJsonPath('flags.is_attached', false);
+        $res1->assertJsonPath('flags.can_edit', true);
+        $res1->assertJsonPath('flags.can_delete', true);
+
+        // 2. Add referencing debit note
+        $dn = CommercialDocument::create([
+            'client_profile_id' => $this->client->id,
+            'type' => 'debit_note',
+            'number' => 'DN-FLAGS-01',
+            'document_date' => '2026-05-12',
+            'status' => 'issued',
+            'reference_document_id' => $doc->id,
+        ]);
+
+        $res2 = $this->getJson("/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$doc->id}");
+        $res2->assertStatus(200);
+        $res2->assertJsonPath('flags.is_referenced', true);
+        $res2->assertJsonPath('flags.referencing_document.id', $dn->id);
+        $res2->assertJsonPath('flags.referencing_document.type', 'debit_note');
+        $res2->assertJsonPath('flags.referencing_document.number', 'DN-FLAGS-01');
+        $res2->assertJsonPath('flags.can_delete', false);
+        $res2->assertJsonPath('flags.can_edit', false);
+
+        // Remove referencing doc
+        $dn->delete(); // hard delete for test or remove reference
+        $dn->update(['reference_document_id' => null]);
+
+        // 3. Attach to filing request document
+        $requestId = DB::table('gst_filing_requests')->insertGetId([
+            'client_profile_id' => $this->client->id,
+            'financial_year' => '2026-27',
+            'filing_period' => 'May 2026',
+            'return_type' => 'GSTR1',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('gst_filing_request_document')->insert([
+            'gst_filing_request_id' => $requestId,
+            'commercial_document_id' => $doc->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $res3 = $this->getJson("/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$doc->id}");
+        $res3->assertStatus(200);
+        $res3->assertJsonPath('flags.is_referenced', false);
+        $res3->assertJsonPath('flags.is_attached', true);
+        $res3->assertJsonPath('flags.can_delete', false);
+        $res3->assertJsonPath('flags.can_edit', false);
+    }
 }
+

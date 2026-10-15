@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../../api/client';
 import { useAdminFy } from '../../../context/AdminFyContext';
 import InvoiceForm from '../../billing/InvoiceForm';
-import { getDocTypeConfig } from './billingConstants';
+import { getDocTypeConfig, getDocumentActionDisabledReason } from './billingConstants';
 
 export default function AdminBillingDocumentEdit() {
   const { clientId, docType: docTypeParam, id } = useParams();
@@ -180,17 +180,7 @@ export default function AdminBillingDocumentEdit() {
 
   // Check flags.can_edit: if false show reason and Back link
   if (docData && !docData?.flags?.can_edit) {
-    const isDeleted = docData?.document?.status === 'deleted';
-    const isFiled = docData?.gst?.status === 'Filed';
-    const status = docData?.document?.status;
-    let reason = 'This document cannot be edited because it is locked or referenced by another record.';
-    if (isDeleted) {
-      reason = 'Deleted documents cannot be edited.';
-    } else if (isFiled) {
-      reason = "GST Return for this document's period has already been filed. This document cannot be edited.";
-    } else if (status !== 'issued' && status !== 'paid' && status !== 'partial') {
-      reason = 'Only active documents can be edited.';
-    }
+    const reason = getDocumentActionDisabledReason('edit', docData, docTypeKey) || 'This document cannot be edited because it is locked or referenced by another record.';
 
     return (
       <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60 }}>

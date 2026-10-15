@@ -257,3 +257,76 @@ export function getDocTypeConfig(keyOrSlug) {
 
   return null;
 }
+
+/**
+ * Shared helper to compute user-facing disabled reasons for document actions:
+ * 'edit', 'delete', 'cancel', 'edit_creation_date'.
+ * Returns empty string '' if the action is enabled.
+ */
+export function getDocumentActionDisabledReason(action, docData, docTypeParam = null) {
+  if (!docData) return '';
+
+  const doc = docData.document || docData;
+  const flags = docData.flags || {};
+  const gst = docData.gst || {};
+  const docTypeKey = docTypeParam || doc.type || 'tax_invoice';
+
+  const isDeleted = doc.status === 'deleted' || Boolean(doc.deleted_at);
+  const isCancelled = doc.status === 'cancelled';
+  const isConverted = Boolean(doc.converted_document_id);
+  const isActive = ['issued', 'paid', 'partial'].includes(doc.status);
+  const isFiled = gst.status === 'Filed' || Boolean(flags.is_locked);
+  const isAttached = Boolean(flags.is_attached);
+  const isReferenced = Boolean(flags.is_referenced);
+  const refDoc = flags.referencing_document;
+
+  const refMsg = refDoc
+    ? `This document has a ${refDoc.type === 'credit_note' ? 'Credit Note' : refDoc.type === 'debit_note' ? 'Debit Note' : refDoc.type === 'amendment' ? 'Amendment' : 'document'} (${refDoc.number}) issued against it — delete those first.`
+    : 'This document has a Credit Note, Debit Note, or Amendment issued against it — delete those first.';
+
+  if (action === 'edit') {
+    if (isDeleted) return 'Deleted documents cannot be edited.';
+    if (docTypeKey !== 'tax_invoice') return 'Only Tax Invoices can be edited.';
+    if (isConverted) return 'Converted quotations cannot be edited.';
+    if (isCancelled) return 'Cancelled documents cannot be edited.';
+    if (!isActive) return 'Only active documents can be edited.';
+    if (isFiled) return "GST Return for this document's period has already been filed. This document cannot be edited.";
+    if (isAttached) return 'This document is attached to a GST Filing Request and cannot be edited.';
+    if (isReferenced) return refMsg;
+    if (flags.can_edit === false) return 'This document cannot be edited.';
+    return '';
+  }
+
+  if (action === 'delete') {
+    if (isDeleted) return 'This document is already deleted.';
+    if (!isActive && !isCancelled) return 'Only active or cancelled documents can be deleted.';
+    if (isFiled) return "GST Return for this document's period has already been filed. This document cannot be deleted.";
+    if (isAttached) return 'This document is attached to a GST Filing Request and cannot be deleted.';
+    if (isReferenced) return refMsg;
+    if (flags.can_delete === false) return 'This document cannot be deleted.';
+    return '';
+  }
+
+  if (action === 'cancel') {
+    if (isDeleted) return 'Deleted documents cannot be cancelled.';
+    if (isConverted) return 'A converted quotation cannot be cancelled.';
+    if (isCancelled) return 'This document is already cancelled.';
+    if (!isActive) return 'Only active documents can be cancelled.';
+    if (isFiled) return "GST Return for this document's period has already been filed. This document cannot be cancelled.";
+    if (flags.can_cancel === false) return 'This document cannot be cancelled.';
+    return '';
+  }
+
+  if (action === 'edit_creation_date' || action === 'editDate') {
+    if (isDeleted) return 'Deleted documents cannot have their creation date edited.';
+    if (isConverted) return 'Converted quotations cannot have their creation date edited.';
+    if (isCancelled) return 'Cancelled documents cannot have their creation date edited.';
+    if (!isActive) return 'Only active documents can have their creation date edited.';
+    if (isFiled) return "GST Return for this document's period has already been filed. Creation date cannot be edited.";
+    if (flags.can_edit_creation_date === false) return 'Creation date cannot be edited.';
+    return '';
+  }
+
+  return '';
+}
+
