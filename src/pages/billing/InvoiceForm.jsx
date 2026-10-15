@@ -37,6 +37,7 @@ function sanitizeDecimal(raw, { maxIntDigits, decimals = 2, min, max }) {
 // an older saved document, so that historical value isn't silently discarded on re-save.
 const emptyLine = () => ({
   description: '', hsn_sac: '', qty: 1, unit: 'NOS', rate: 0, gst_rate: 18,
+  discount_amount: 0, product_id: null,
 });
 
 function mapDocLines(items) {
@@ -47,6 +48,8 @@ function mapDocLines(items) {
     unit: l.unit || 'NOS',
     rate: Number(l.rate),
     discount_percent: Number(l.discount_percent || 0),
+    discount_amount: Number(l.discount_amount || 0),
+    product_id: l.product_id ?? null,
     gst_rate: normalizeGstRate(l.gst_rate),
   }));
 }
@@ -55,7 +58,11 @@ function calcLocal(lines, inter, taxesEnabled = true, tdsTcs = null) {
   let taxable = 0, cgst = 0, sgst = 0, igst = 0, discount = 0;
   lines.forEach((l) => {
     const gross = Number(l.qty || 0) * Number(l.rate || 0);
-    const disc = (gross * Number(l.discount_percent || 0)) / 100;
+    const discPercent = Number(l.discount_percent || 0);
+    let disc = (gross * discPercent) / 100;
+    if (discPercent <= 0 && Number(l.discount_amount || 0) > 0) {
+      disc = Number(l.discount_amount);
+    }
     const t = Math.max(0, gross - disc);
     const g = taxesEnabled ? (t * Number(l.gst_rate || 0)) / 100 : 0;
     discount += disc;
@@ -115,9 +122,21 @@ function SectionHeader({ n, title, subtitle }) {
 
 const DOC_TYPE_TILE_SET = ['tax_invoice', 'bill_of_supply', 'debit_note', 'credit_note'];
 
-export default function InvoiceForm({ docType = 'tax_invoice', title }) {
+export default function InvoiceForm({
+  docType = 'tax_invoice',
+  title,
+  clientProfile,
+  readOnlyNumber,
+  initialDocument,
+  onSave,
+  backPath,
+  partiesEndpointBase = '/billing/parties',
+  tdsTcsEndpoint = '/billing/tds-tcs-sections',
+  hideNewParty = false,
+  staffEditMode = false,
+}) {
   const { user } = useAuth();
-  const profile = user?.client_profile;
+  const profile = clientProfile || user?.client_profile;
   const taxesEnabled = showGstFields(profile);
   const hsnEnabled = showHsnFields(profile);
   const { id } = useParams();
@@ -128,6 +147,7 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
   const [party, setParty] = useState(null);
   const [inter, setInter] = useState(false);
   const [documentDate, setDocumentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [dueDate, setDueDate] = useState('');
   const [placeOfSupply, setPlaceOfSupply] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('');
   const [currency, setCurrency] = useState('INR');
@@ -154,6 +174,8 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
   const [ewayBillNo, setEwayBillNo] = useState('');
   const [receiverName, setReceiverName] = useState('');
   const [receiverSignedAt, setReceiverSignedAt] = useState('');
+  const [notes, setNotes] = useState('');
+  const [terms, setTerms] = useState('');
 
   const tdsTcsApplicable = ['tax_invoice', 'bill_of_supply'].includes(docType);
   const activeSections = taxDeductionType === 'tds' ? tdsSections : taxDeductionType === 'tcs' ? tcsSections : [];
@@ -171,9 +193,9 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
   const unlockedEdit = editAllowed && ['issued', 'partial', 'paid'].includes(docStatus);
 
   useEffect(() => {
-    api('/billing/tds-tcs-sections?type=tds').then((d) => setTdsSections(d.data || []));
-    api('/billing/tds-tcs-sections?type=tcs').then((d) => setTcsSections(d.data || []));
-  }, []);
+    api(`${tdsTcsEndpoint}?type=tds`).then((d) => setTdsSections(d.data || []));
+    api(`${tdsTcsEndpoint}?type=tcs`).then((d) => setTcsSections(d.data || []));
+  }, [tdsTcsEndpoint]);
 
   useEffect(() => {
     if (docType === 'credit_note' || docType === 'debit_note') {
@@ -188,46 +210,59 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
     }
   }, [docType]);
 
+  const applyDoc = (d) => {
+    if (!d) return;
+    const doc = d.document || d;
+    setDocId(doc.id);
+    setDocNumber(doc.number || '');
+    setDocStatus(doc.status || 'draft');
+    setEditAllowed(!!doc.edit_allowed);
+    setPartyId(doc.customer_id ? String(doc.customer_id) : '');
+    setParty(d.customer || doc.customer);
+    setInter(!!doc.is_inter_state);
+    if (doc.document_date) setDocumentDate(String(doc.document_date).slice(0, 10));
+    if (doc.due_date) setDueDate(String(doc.due_date).slice(0, 10));
+    setPlaceOfSupply(doc.place_of_supply || '');
+    setPaymentTerms(doc.payment_terms || '');
+    setCurrency(doc.currency || 'INR');
+    setRefId(doc.reference_document_id ? String(doc.reference_document_id) : '');
+    setRcm(!!doc.is_reverse_charge);
+    setTaxDeductionType(doc.tax_deduction_type || '');
+    setTdsTcsSectionId(doc.tds_tcs_section_id ? String(doc.tds_tcs_section_id) : '');
+    setReasonForTransport(doc.reason_for_transportation || '');
+    setReasonForTransportOther(doc.reason_for_transportation_other || '');
+    setVehicleNo(doc.vehicle_no || '');
+    setTransporterName(doc.transporter_name || '');
+    setEwayBillNo(doc.eway_bill_no || '');
+    setReceiverName(doc.receiver_name || '');
+    setReceiverSignedAt(doc.receiver_signature_datetime ? doc.receiver_signature_datetime.slice(0, 16) : '');
+    setNotes(doc.notes || '');
+    setTerms(doc.terms || '');
+    const mapped = mapDocLines(d.line_items || d.lineItems || doc.line_items || doc.lineItems);
+    setLines(mapped.length ? mapped : [emptyLine()]);
+  };
+
   useEffect(() => {
+    if (initialDocument) {
+      applyDoc(initialDocument);
+      return;
+    }
     if (!id) return;
     api(`/billing/documents/${id}`).then((d) => {
-      setDocId(d.id);
-      setDocNumber(d.number || '');
-      setDocStatus(d.status || 'draft');
-      setEditAllowed(!!d.edit_allowed);
-      setPartyId(d.customer_id ? String(d.customer_id) : '');
-      setParty(d.customer);
-      setInter(!!d.is_inter_state);
-      setDocumentDate(String(d.document_date).slice(0, 10));
-      setPlaceOfSupply(d.place_of_supply || '');
-      setPaymentTerms(d.payment_terms || '');
-      setCurrency(d.currency || 'INR');
-      setRefId(d.reference_document_id ? String(d.reference_document_id) : '');
-      setRcm(!!d.is_reverse_charge);
-      setTaxDeductionType(d.tax_deduction_type || '');
-      setTdsTcsSectionId(d.tds_tcs_section_id ? String(d.tds_tcs_section_id) : '');
-      setReasonForTransport(d.reason_for_transportation || '');
-      setReasonForTransportOther(d.reason_for_transportation_other || '');
-      setVehicleNo(d.vehicle_no || '');
-      setTransporterName(d.transporter_name || '');
-      setEwayBillNo(d.eway_bill_no || '');
-      setReceiverName(d.receiver_name || '');
-      setReceiverSignedAt(d.receiver_signature_datetime ? d.receiver_signature_datetime.slice(0, 16) : '');
-      const mapped = mapDocLines(d.line_items);
-      setLines(mapped.length ? mapped : [emptyLine()]);
+      applyDoc(d);
     });
-  }, [id]);
+  }, [id, initialDocument]);
 
   // Read-only preview of the number Generate/Issue will allocate — never reserved,
   // purely informational (Reference 2 mockup shows Document No. locked from the start).
   useEffect(() => {
-    if (id) return undefined;
+    if (id || initialDocument || readOnlyNumber) return undefined;
     let cancelled = false;
     api(`/billing/documents/next-number?type=${docType}`)
       .then((d) => { if (!cancelled) setPreviewNumber(d.number || ''); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [id, docType]);
+  }, [id, docType, initialDocument, readOnlyNumber]);
 
   // Prefill credit/debit notes and amendments from original document (?ref= or dropdown)
   useEffect(() => {
@@ -245,34 +280,56 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
     }).catch(() => {});
   }, [id, docType, refId]);
 
-  const payload = () => ({
-    type: docType,
-    customer_id: partyId ? +partyId : null,
-    reference_document_id: refId ? +refId : null,
-    document_date: documentDate,
-    place_of_supply: placeOfSupply,
-    payment_terms: paymentTerms,
-    currency,
-    is_inter_state: inter,
-    is_reverse_charge: rcm,
-    tax_deduction_type: tdsTcsApplicable && taxDeductionType ? taxDeductionType : null,
-    tds_tcs_section_id: tdsTcsApplicable && taxDeductionType && tdsTcsSectionId ? +tdsTcsSectionId : null,
-    ...(docType === 'delivery_challan' ? {
-      reason_for_transportation: reasonForTransport || null,
-      reason_for_transportation_other: reasonForTransport === 'other' ? reasonForTransportOther : null,
-      vehicle_no: vehicleNo || null,
-      transporter_name: transporterName || null,
-      eway_bill_no: ewayBillNo || null,
-      receiver_name: receiverName || null,
-      receiver_signature_datetime: receiverSignedAt || null,
-    } : {}),
-    lines,
-  });
+  const payload = () => {
+    const payloadLines = staffEditMode
+      ? lines
+      : lines.map(({ discount_amount: _discountAmount, product_id: _productId, ...rest }) => rest);
+
+    const base = {
+      type: docType,
+      customer_id: partyId ? +partyId : null,
+      reference_document_id: refId ? +refId : null,
+      document_date: documentDate,
+      place_of_supply: placeOfSupply,
+      payment_terms: paymentTerms,
+      currency,
+      is_inter_state: inter,
+      is_reverse_charge: rcm,
+      tax_deduction_type: tdsTcsApplicable && taxDeductionType ? taxDeductionType : null,
+      tds_tcs_section_id: tdsTcsApplicable && taxDeductionType && tdsTcsSectionId ? +tdsTcsSectionId : null,
+      ...(docType === 'delivery_challan' ? {
+        reason_for_transportation: reasonForTransport || null,
+        reason_for_transportation_other: reasonForTransport === 'other' ? reasonForTransportOther : null,
+        vehicle_no: vehicleNo || null,
+        transporter_name: transporterName || null,
+        eway_bill_no: ewayBillNo || null,
+        receiver_name: receiverName || null,
+        receiver_signature_datetime: receiverSignedAt || null,
+      } : {}),
+      lines: payloadLines,
+    };
+
+    if (staffEditMode) {
+      return {
+        ...base,
+        due_date: dueDate || null,
+        tax_deduction_type: tdsTcsApplicable && taxDeductionType ? taxDeductionType : null,
+        tds_tcs_section_id: tdsTcsApplicable && taxDeductionType && tdsTcsSectionId ? +tdsTcsSectionId : null,
+        customer_id: partyId ? +partyId : null,
+        place_of_supply: placeOfSupply || null,
+        notes: notes || null,
+        terms: terms || null,
+        lines: payloadLines,
+      };
+    }
+
+    return base;
+  };
 
   const onParty = async (pid) => {
     setPartyId(pid);
     if (!pid) { setParty(null); return; }
-    const p = await api(`/billing/parties/${pid}`);
+    const p = await api(`${partiesEndpointBase}/${pid}`);
     setParty(p);
     // Billing Module spec §16: default Place of Supply to the party's saved State.
     // It remains editable per document — this never writes back to the Party Master.
@@ -354,6 +411,10 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
     }
     setBusy(true); setMsg('');
     try {
+      if (onSave) {
+        await onSave({ ...payload(), status: 'draft' });
+        return;
+      }
       const body = { ...payload(), status: 'draft' };
       const doc = docId
         ? await api(`/billing/documents/${docId}`, { method: 'PUT', body })
@@ -380,6 +441,10 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
     }
     setBusy(true); setMsg('');
     try {
+      if (onSave) {
+        await onSave(payload());
+        return;
+      }
       const doc = await api(`/billing/documents/${docId}`, { method: 'PUT', body: { ...payload(), status: docStatus } });
       setDocId(doc.id);
       setDocNumber(doc.number || '');
@@ -402,6 +467,10 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
     }
     setBusy(true); setMsg('');
     try {
+      if (onSave) {
+        await onSave({ ...payload(), status: 'issued' });
+        return;
+      }
       let doc;
       if (docId) {
         await api(`/billing/documents/${docId}`, { method: 'PUT', body: { ...payload(), status: 'draft' } });
@@ -422,17 +491,17 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
     finally { setBusy(false); }
   };
 
-  if (isDocTypeDisabled(profile, docType)) {
+  if (!staffEditMode && isDocTypeDisabled(profile, docType)) {
     return (
       <div className="bp-card">
         <h2 style={{ marginTop: 0 }}>{title || 'Create Document'}</h2>
         <p style={{ color: '#c0392b' }}>{docTypeLock(profile, docType)}</p>
-        <Link className="bp-btn bp-btn-outline" to="/portal/billing">Back to Billing</Link>
+        <Link className="bp-btn bp-btn-outline" to={backPath || '/portal/billing'}>Back to Billing</Link>
       </div>
     );
   }
 
-  const backPath = {
+  const defaultBackPath = {
     tax_invoice: '/portal/billing/invoices',
     debit_note: '/portal/billing/debit-notes',
     credit_note: '/portal/billing/credit-notes',
@@ -440,6 +509,7 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
     quotation: '/portal/billing/quotation',
     amendment: '/portal/amendments',
   }[docType] || '/portal/billing';
+  const effectiveBackPath = backPath || defaultBackPath;
   let sectionNum = 0;
 
   // Generate Doc Type Button Labels spec (§7) — "Update Invoice", not "Update Tax Invoice";
@@ -456,7 +526,7 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
         </div>
       </div>
 
-      {!id && DOC_TYPE_TILE_SET.includes(docType) && (
+      {!staffEditMode && !id && !initialDocument && DOC_TYPE_TILE_SET.includes(docType) && (
         <DocTypeTiles docType={docType} profile={profile} />
       )}
 
@@ -466,7 +536,7 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
           <label>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Document No. <InfoDotIcon /></span>
             <div style={{ position: 'relative' }}>
-              <input className="bp-input" style={{ paddingRight: 30, color: 'var(--bp-muted)', background: '#f4f7fa' }} value={docNumber || previewNumber} readOnly disabled />
+              <input className="bp-input" style={{ paddingRight: 30, color: 'var(--bp-muted)', background: '#f4f7fa' }} value={readOnlyNumber || docNumber || previewNumber} readOnly disabled />
               <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--bp-muted)' }}><LockIcon /></span>
             </div>
           </label>
@@ -476,7 +546,13 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
           </label>
           <label>
             <span>Party <span className="bp-required">*</span></span>
-            <PartySearchSelect selected={party} value={partyId} onSelect={onParty} />
+            <PartySearchSelect
+              selected={party}
+              value={partyId}
+              onSelect={onParty}
+              partiesEndpointBase={partiesEndpointBase}
+              hideNewParty={hideNewParty}
+            />
           </label>
           <label>
             <span>Place of Supply <span className="bp-required">*</span></span>
@@ -532,7 +608,7 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
         </form>
         {party && (
           <p style={{ marginTop: 10, fontSize: 13, color: 'var(--bp-muted)' }}>
-            GSTIN: {party.gstin_display || party.gstin || 'Unregistered'} · {party.billing_address} · {party.phone}
+            GSTIN: {party.gstin_display || party.gstin || 'Unregistered'} · {party.billing_address || party.address} · {party.phone}
           </p>
         )}
       </div>
@@ -791,9 +867,13 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
             </thead>
             <tbody>
               {lines.map((l, idx) => {
-                // Disc.% removed from the item row — Taxable Value is simply Qty × Rate.
-                // GST is calculated separately (in the Totals box), never folded in here.
-                const lineTaxable = Number(l.qty || 0) * Number(l.rate || 0);
+                const lineGross = Number(l.qty || 0) * Number(l.rate || 0);
+                const discPercent = Number(l.discount_percent || 0);
+                let lineDisc = (lineGross * discPercent) / 100;
+                if (discPercent <= 0 && Number(l.discount_amount || 0) > 0) {
+                  lineDisc = Number(l.discount_amount);
+                }
+                const lineTaxable = Math.max(0, lineGross - lineDisc);
 
                 return (
                   <tr key={idx}>
@@ -902,7 +982,11 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
           <button type="button" className="bp-btn bp-btn-outline" onClick={() => setShowDiscardModal(true)}>
             Cancel
           </button>
-          {id ? (
+          {staffEditMode ? (
+            <button type="button" className="bp-btn bp-btn-green" disabled={busy} onClick={updateDoc}>
+              Save Changes
+            </button>
+          ) : id ? (
             <button type="button" className="bp-btn bp-btn-green" disabled={busy} onClick={updateDoc}>
               Update {updateLabel}
             </button>
@@ -952,7 +1036,7 @@ export default function InvoiceForm({ docType = 'tax_invoice', title }) {
       {showDiscardModal && (
         <DiscardChangesModal
           onContinueEditing={() => setShowDiscardModal(false)}
-          onConfirmCancel={() => navigate(backPath)}
+          onConfirmCancel={() => navigate(effectiveBackPath)}
         />
       )}
     </div>

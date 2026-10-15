@@ -17,7 +17,13 @@ function SearchIcon() {
  *  empty search it shows the 5 most recently invoiced parties first. Archived parties are
  *  never listed. "+ New" opens Add Company in a new tab so in-progress document details
  *  here are never lost. */
-export default function PartySearchSelect({ selected, value, onSelect }) {
+export default function PartySearchSelect({
+  selected,
+  value,
+  onSelect,
+  partiesEndpointBase = '/billing/parties',
+  hideNewParty = false,
+}) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
@@ -38,15 +44,15 @@ export default function PartySearchSelect({ selected, value, onSelect }) {
   // Recently used parties: refreshed each time the dropdown opens.
   useEffect(() => {
     if (!open) return;
-    api('/billing/parties/recent').then((d) => setRecent(d.data || [])).catch(() => setRecent([]));
-  }, [open]);
+    api(`${partiesEndpointBase}/recent`).then((d) => setRecent(d.data || [])).catch(() => setRecent([]));
+  }, [open, partiesEndpointBase]);
 
   const fetchPage = (targetPage, search) => {
     const id = ++reqId.current;
     setLoading(true);
     const qs = new URLSearchParams({ status: 'active', per_page: PAGE_SIZE, page: targetPage });
     if (search) qs.set('q', search);
-    api(`/billing/parties?${qs}`).then((d) => {
+    api(`${partiesEndpointBase}?${qs}`).then((d) => {
       if (id !== reqId.current) return;
       setItems((prev) => (targetPage === 1 ? (d.data || []) : [...prev, ...(d.data || [])]));
       setPage(d.current_page || targetPage);
@@ -99,26 +105,28 @@ export default function PartySearchSelect({ selected, value, onSelect }) {
             onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           />
         </div>
-        <a
-          className="bp-btn bp-btn-outline"
-          href="/portal/billing/parties/new"
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            height: 40,
-            boxSizing: 'border-box',
-            display: 'inline-flex',
-            alignItems: 'center',
-            whiteSpace: 'nowrap',
-            border: '1.5px solid #2563eb',
-            color: '#2563eb',
-            fontWeight: 700,
-            borderRadius: 8,
-            padding: '0 16px'
-          }}
-        >
-          + New
-        </a>
+        {!hideNewParty && (
+          <a
+            className="bp-btn bp-btn-outline"
+            href="/portal/billing/parties/new"
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              height: 40,
+              boxSizing: 'border-box',
+              display: 'inline-flex',
+              alignItems: 'center',
+              whiteSpace: 'nowrap',
+              border: '1.5px solid #2563eb',
+              color: '#2563eb',
+              fontWeight: 700,
+              borderRadius: 8,
+              padding: '0 16px'
+            }}
+          >
+            + New
+          </a>
+        )}
       </div>
       {open && (
         <div className="bp-party-search-panel" style={{ maxHeight: 320, overflowY: 'auto' }} onScroll={onScroll}>
