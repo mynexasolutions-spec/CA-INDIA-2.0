@@ -50,7 +50,7 @@ const DOCUMENT_NUMBERING_TYPES = [
   { key: 'bill_of_supply', label: 'Bill of Supply', defaultPrefix: 'BOS', defaultSep: '/', defaultNext: '01', prefixField: 'bill_of_supply_prefix', nextField: 'bill_of_supply_next_number' },
   { key: 'credit_note', label: 'Credit Note', defaultPrefix: 'CN', defaultSep: '-', defaultNext: '01', prefixField: 'credit_note_prefix', nextField: 'credit_note_next_number' },
   { key: 'debit_note', label: 'Debit Note', defaultPrefix: 'DN', defaultSep: '/', defaultNext: '01', prefixField: 'debit_note_prefix', nextField: 'debit_note_next_number' },
-  { key: 'quotation', label: 'Quotation', defaultPrefix: 'QUO', defaultSep: '-', defaultNext: '01', prefixField: 'quotation_prefix', nextField: 'quotation_next_number' },
+  { key: 'quotation', label: 'Quotation', defaultPrefix: 'QT', defaultSep: '-', defaultNext: '01', prefixField: 'quotation_prefix', nextField: 'quotation_next_number' },
   { key: 'delivery_challan', label: 'Delivery Challan', defaultPrefix: 'DC', defaultSep: '/', defaultNext: '01', prefixField: 'delivery_challan_prefix', nextField: 'delivery_challan_next_number' },
 ];
 
@@ -100,7 +100,7 @@ const empty = () => ({
   password_updated_at: '', password_updated_by: '',
   terms_conditions: '',
   invoice_prefix: 'INV', bill_of_supply_prefix: 'BOS', credit_note_prefix: 'CN',
-  debit_note_prefix: 'DN', quotation_prefix: 'QUO', amendment_prefix: 'AMD', delivery_challan_prefix: 'DC',
+  debit_note_prefix: 'DN', quotation_prefix: 'QT', amendment_prefix: 'AMD', delivery_challan_prefix: 'DC',
   invoice_next_number: 1, bill_of_supply_next_number: 1, credit_note_next_number: 1,
   debit_note_next_number: 1, quotation_next_number: 1, amendment_next_number: 1, delivery_challan_next_number: 1,
   document_numbering_settings: {
@@ -108,7 +108,7 @@ const empty = () => ({
     bill_of_supply: { prefix: 'BOS', separator: '/', next_number: '01', prefix_position: 'first', numbering_type: 'auto', status: true },
     credit_note: { prefix: 'CN', separator: '-', next_number: '01', prefix_position: 'first', numbering_type: 'auto', status: true },
     debit_note: { prefix: 'DN', separator: '/', next_number: '01', prefix_position: 'first', numbering_type: 'auto', status: true },
-    quotation: { prefix: 'QUO', separator: '-', next_number: '01', prefix_position: 'first', numbering_type: 'auto', status: true },
+    quotation: { prefix: 'QT', separator: '-', next_number: '01', prefix_position: 'first', numbering_type: 'auto', status: true },
     delivery_challan: { prefix: 'DC', separator: '/', next_number: '01', prefix_position: 'first', numbering_type: 'auto', status: true },
   },
   updated_at: '',
@@ -630,7 +630,7 @@ export default function ClientProfileForm() {
             status: savedSettings.debit_note?.status ?? true,
           },
           quotation: {
-            prefix: savedSettings.quotation?.prefix || d.quotation_prefix || 'QUO',
+            prefix: savedSettings.quotation?.prefix || d.quotation_prefix || 'QT',
             separator: savedSettings.quotation?.separator ?? '-',
             next_number: String(savedSettings.quotation?.next_number ?? (d.quotation_next_number ?? '01')).padStart(2, '0'),
             prefix_position: savedSettings.quotation?.prefix_position || 'first',
@@ -1428,7 +1428,7 @@ export default function ClientProfileForm() {
           fd.set('debit_note_next_number', parseInt(numSettings.debit_note.next_number, 10) || 1);
         }
         if (numSettings.quotation) {
-          fd.set('quotation_prefix', numSettings.quotation.prefix || 'QUO');
+          fd.set('quotation_prefix', numSettings.quotation.prefix || 'QT');
           fd.set('quotation_next_number', parseInt(numSettings.quotation.next_number, 10) || 1);
         }
         if (numSettings.delivery_challan) {

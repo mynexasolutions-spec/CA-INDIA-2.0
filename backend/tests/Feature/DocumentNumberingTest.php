@@ -355,7 +355,7 @@ class DocumentNumberingTest extends TestCase
         $dummyProfile->delivery_challan_prefix = null;
 
         $this->assertEquals('INV', $this->invoiceService->prefixFor($dummyProfile, 'tax_invoice'));
-        $this->assertEquals('QUO', $this->invoiceService->prefixFor($dummyProfile, 'quotation'));
+        $this->assertEquals('QT', $this->invoiceService->prefixFor($dummyProfile, 'quotation'));
         $this->assertEquals('DC', $this->invoiceService->prefixFor($dummyProfile, 'delivery_challan'));
     }
 

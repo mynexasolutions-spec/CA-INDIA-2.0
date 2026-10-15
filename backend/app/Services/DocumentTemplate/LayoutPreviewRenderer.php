@@ -33,7 +33,7 @@ class LayoutPreviewRenderer
         'bill_of_supply' => 'BOS-001',
         'credit_note' => 'CN-001',
         'debit_note' => 'DN-001',
-        'quotation' => 'QUO-001',
+        'quotation' => 'QT-001',
         'delivery_challan' => 'DC-001',
     ];
 

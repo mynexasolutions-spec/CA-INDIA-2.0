@@ -890,6 +890,7 @@ export default function AdminBillingDocumentList() {
               <tbody>
                 {paginator.data.map((doc, idx) => {
                   const rowNum = (paginator.from || 1) + idx;
+                  const isConverted = docConfig.key === 'quotation' && Boolean(doc.converted_document_id);
                   const isCancelled = doc.status === 'cancelled';
                   const isDeleted = doc.status === 'deleted';
 
@@ -900,7 +901,14 @@ export default function AdminBillingDocumentList() {
                   };
                   let statusText = 'Active';
 
-                  if (isCancelled) {
+                  if (isConverted) {
+                    statusBadgeStyle = {
+                      background: '#f3e8ff',
+                      color: '#7e22ce',
+                      border: '1px solid #e9d5ff',
+                    };
+                    statusText = 'Converted';
+                  } else if (isCancelled) {
                     statusBadgeStyle = {
                       background: '#fee2e2',
                       color: '#b91c1c',
@@ -987,18 +995,37 @@ export default function AdminBillingDocumentList() {
                         {formatCurrency(doc.grand_total)}
                       </td>
                       <td style={{ padding: '7px 8px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            padding: '2px 7px',
-                            borderRadius: 999,
-                            fontSize: 10.5,
-                            fontWeight: 700,
-                            ...statusBadgeStyle,
-                          }}
-                        >
-                          {statusText}
-                        </span>
+                        {isConverted && doc.converted_document && !doc.converted_document.is_deleted ? (
+                          <Link
+                            to={`/admin/billing/${clientId}/${getDocTypeConfig(doc.converted_document.type)?.slug || 'tax-invoice'}/${doc.converted_document.id}`}
+                            title={`Converted to ${doc.converted_document.number || doc.converted_invoice_number || 'document'}`}
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 7px',
+                              borderRadius: 999,
+                              fontSize: 10.5,
+                              fontWeight: 700,
+                              textDecoration: 'none',
+                              cursor: 'pointer',
+                              ...statusBadgeStyle,
+                            }}
+                          >
+                            {statusText}
+                          </Link>
+                        ) : (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 7px',
+                              borderRadius: 999,
+                              fontSize: 10.5,
+                              fontWeight: 700,
+                              ...statusBadgeStyle,
+                            }}
+                          >
+                            {statusText}
+                          </span>
+                        )}
                       </td>
                       <td style={{ padding: '7px 8px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <Link

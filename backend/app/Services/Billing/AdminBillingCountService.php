@@ -434,6 +434,15 @@ class AdminBillingCountService
      */
     public static function computeDocumentFlags(CommercialDocument $doc, array $lock): array
     {
+        $refDoc = CommercialDocument::where('reference_document_id', $doc->id)->first(['id', 'type', 'number']);
+        $isReferenced = (bool) $refDoc;
+        $referencingDocData = $refDoc ? [
+            'id' => $refDoc->id,
+            'type' => $refDoc->type,
+            'number' => $refDoc->number,
+        ] : null;
+        $isAttached = DB::table('gst_filing_request_document')->where('commercial_document_id', $doc->id)->exists();
+
         $isDeleted = $doc->trashed() || $doc->status === 'deleted';
         if ($isDeleted) {
             return [
@@ -441,6 +450,9 @@ class AdminBillingCountService
                 'can_edit_creation_date' => false,
                 'can_cancel' => false,
                 'can_delete' => false,
+                'is_referenced' => $isReferenced,
+                'referencing_document' => $referencingDocData,
+                'is_attached' => $isAttached,
             ];
         }
 
@@ -450,9 +462,7 @@ class AdminBillingCountService
 
         if (in_array($doc->type, ['quotation', 'delivery_challan'], true)) {
             $canCancel = $isActive && ! $doc->converted_document_id;
-            $canEditCreationDate = $isActive;
-            $isReferenced = CommercialDocument::where('reference_document_id', $doc->id)->exists();
-            $isAttached = DB::table('gst_filing_request_document')->where('commercial_document_id', $doc->id)->exists();
+            $canEditCreationDate = $isActive && ! $doc->converted_document_id;
             $canDelete = ($isActive || $isCancelled) && ! $isReferenced && ! $isAttached;
 
             return [
@@ -460,14 +470,14 @@ class AdminBillingCountService
                 'can_edit_creation_date' => $canEditCreationDate,
                 'can_cancel' => $canCancel,
                 'can_delete' => $canDelete,
+                'is_referenced' => $isReferenced,
+                'referencing_document' => $referencingDocData,
+                'is_attached' => $isAttached,
             ];
         }
 
         $canEditCreationDate = $isActive && ! $isGstFiled;
         $canCancel = $isActive && ! $isGstFiled;
-
-        $isReferenced = CommercialDocument::where('reference_document_id', $doc->id)->exists();
-        $isAttached = DB::table('gst_filing_request_document')->where('commercial_document_id', $doc->id)->exists();
 
         $canDelete = ($isActive || $isCancelled) && ! $isGstFiled && ! $isReferenced && ! $isAttached;
         $canEdit = ($doc->type === 'tax_invoice') && $isActive && ! $isGstFiled && ! $isReferenced && ! $isAttached;
@@ -477,6 +487,9 @@ class AdminBillingCountService
             'can_edit_creation_date' => $canEditCreationDate,
             'can_cancel' => $canCancel,
             'can_delete' => $canDelete,
+            'is_referenced' => $isReferenced,
+            'referencing_document' => $referencingDocData,
+            'is_attached' => $isAttached,
         ];
     }
 

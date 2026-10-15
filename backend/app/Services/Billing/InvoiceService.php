@@ -652,7 +652,7 @@ class InvoiceService
             'credit_note' => 'CN',
             'debit_note' => 'DN',
             'bill_of_supply' => 'BOS',
-            'quotation' => 'QUO',
+            'quotation' => 'QT',
             'amendment' => 'AMD',
             'proforma' => 'PI',
             'delivery_challan' => 'DC',

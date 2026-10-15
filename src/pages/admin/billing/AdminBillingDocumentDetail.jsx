@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { api, getAuthToken } from '../../../api/client';
 import { useAdminFy } from '../../../context/AdminFyContext';
-import { getDocTypeConfig } from './billingConstants';
+import { getDocTypeConfig, getDocumentActionDisabledReason } from './billingConstants';
 import AdminEditCreationDateModal from './components/AdminEditCreationDateModal';
 import AdminCancelDocumentModal from './components/AdminCancelDocumentModal';
 import AdminDeleteDocumentModal from './components/AdminDeleteDocumentModal';
@@ -97,6 +97,17 @@ function formatAddress(input) {
     })
     .filter((part) => part.length > 0 && part !== '-' && part !== '–' && part !== '—')
     .join(', ');
+}
+
+function formatReasonForTransportation(reason, other) {
+  switch (reason) {
+    case 'job_work': return 'Job Work';
+    case 'repair': return 'Repair';
+    case 'returnable_goods': return 'Returnable Goods';
+    case 'branch_transfer': return 'Branch Transfer';
+    case 'other': return other || 'Other';
+    default: return reason || '—';
+  }
 }
 
 export default function AdminBillingDocumentDetail() {
@@ -378,10 +389,11 @@ export default function AdminBillingDocumentDetail() {
   const isCancelled = doc.status === 'cancelled';
   const isDeleted = doc.status === 'deleted';
   const isFiled = gst.status === 'Filed';
+  const isConverted = docConfig.key === 'quotation' && Boolean(doc.converted_document_id);
 
-  // Check if GST box should be hidden: '-' when quotation or delivery_challan
+  // Check if GST box should be hidden: quotation or delivery_challan or status '-'
   const isNonGstType = docConfig.key === 'quotation' || docConfig.key === 'delivery_challan';
-  const hideGstBox = gst.status === '-' && isNonGstType;
+  const hideGstBox = isNonGstType || gst.status === '-';
 
   // Status badge styling
   let statusBadgeBg = '#dcfce7';
@@ -389,7 +401,12 @@ export default function AdminBillingDocumentDetail() {
   let statusBadgeBorder = '#bbf7d0';
   let statusLabel = 'Active';
 
-  if (isCancelled) {
+  if (isConverted) {
+    statusBadgeBg = '#f3e8ff';
+    statusBadgeText = '#7e22ce';
+    statusBadgeBorder = '#e9d5ff';
+    statusLabel = 'Converted';
+  } else if (isCancelled) {
     statusBadgeBg = '#fee2e2';
     statusBadgeText = '#b91c1c';
     statusBadgeBorder = '#fca5a5';
@@ -401,18 +418,10 @@ export default function AdminBillingDocumentDetail() {
     statusLabel = 'Deleted';
   }
 
-  let editDisabledReason = '';
-  if (isDeleted) {
-    editDisabledReason = 'Deleted documents cannot be edited.';
-  } else if (docConfig.key !== 'tax_invoice') {
-    editDisabledReason = 'Only Tax Invoices can be edited.';
-  } else if (doc.status !== 'issued' && doc.status !== 'paid' && doc.status !== 'partial') {
-    editDisabledReason = 'Only active documents can be edited.';
-  } else if (isFiled) {
-    editDisabledReason = "GST Return for this document's period has already been filed.";
-  } else if (!flags.can_edit) {
-    editDisabledReason = 'This document cannot be edited.';
-  }
+  const editDisabledReason = getDocumentActionDisabledReason('edit', docData, docConfig?.key);
+  const deleteDisabledReason = getDocumentActionDisabledReason('delete', docData, docConfig?.key);
+  const cancelDisabledReason = getDocumentActionDisabledReason('cancel', docData, docConfig?.key);
+  const editDateDisabledReason = getDocumentActionDisabledReason('edit_creation_date', docData, docConfig?.key);
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60 }}>
@@ -508,8 +517,8 @@ export default function AdminBillingDocumentDetail() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, color: '#64748b' }}>
             <span>{formatDateTime(doc.created_at)}</span>
 
-            {/* Payment badge ONLY when payment_status is not null */}
-            {doc.payment_status && (
+            {/* Payment badge ONLY when payment_status is not null (hidden for quotation & delivery_challan) */}
+            {doc.payment_status && docConfig.key !== 'quotation' && docConfig.key !== 'delivery_challan' && doc.type !== 'quotation' && doc.type !== 'delivery_challan' && (
               <span
                 style={{
                   display: 'inline-block',
@@ -655,6 +664,7 @@ export default function AdminBillingDocumentDetail() {
         <button
           type="button"
           disabled={!flags.can_edit_creation_date || isDeleted}
+          title={!flags.can_edit_creation_date || isDeleted ? (editDateDisabledReason || undefined) : 'Edit Creation Date'}
           onClick={() => setEditDateOpen(true)}
           style={{
             padding: '7px 14px',
@@ -746,6 +756,7 @@ export default function AdminBillingDocumentDetail() {
         <button
           type="button"
           disabled={!flags.can_cancel || isDeleted}
+          title={!flags.can_cancel || isDeleted ? (cancelDisabledReason || undefined) : 'Cancel Document'}
           onClick={() => setCancelOpen(true)}
           style={{
             padding: '7px 14px',
@@ -769,6 +780,7 @@ export default function AdminBillingDocumentDetail() {
         <button
           type="button"
           disabled={!flags.can_delete || isDeleted}
+          title={!flags.can_delete || isDeleted ? (deleteDisabledReason || undefined) : 'Delete Document'}
           onClick={() => setDeleteOpen(true)}
           style={{
             padding: '7px 14px',
@@ -789,8 +801,47 @@ export default function AdminBillingDocumentDetail() {
         </button>
       </div>
 
-      {/* Cancelled Note (when status is cancelled) */}
-      {isCancelled && (
+      {/* Converted Banner (when quotation is converted) */}
+      {isConverted && (
+        <div
+          style={{
+            padding: '10px 14px',
+            borderRadius: 8,
+            background: '#f5f3ff',
+            border: '1px solid #ddd6fe',
+            color: '#5b21b6',
+            fontSize: 12.5,
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 16 }}>📋</span>
+          <span>
+            <strong>Converted to </strong>
+            {doc.converted_document && !doc.converted_document.is_deleted ? (
+              <Link
+                to={`/admin/billing/${clientId}/${getDocTypeConfig(doc.converted_document.type)?.slug || 'tax-invoice'}/${doc.converted_document.id}`}
+                style={{
+                  color: '#6d28d9',
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                }}
+              >
+                {doc.converted_document.number || `#${doc.converted_document.id}`}
+              </Link>
+            ) : (
+              <strong style={{ color: '#4c1d95' }}>
+                {doc.converted_document?.number || `#${doc.converted_document_id}`}
+              </strong>
+            )}
+          </span>
+        </div>
+      )}
+
+      {/* Cancelled Note (when status is cancelled AND not converted) */}
+      {isCancelled && !isConverted && (
         <div
           style={{
             padding: '10px 14px',
@@ -954,6 +1005,18 @@ export default function AdminBillingDocumentDetail() {
               </div>
             </div>
 
+            {/* Valid Until / Due Date Row */}
+            {doc.due_date && (
+              <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ width: '45%', padding: '9px 12px', background: '#f1f5f9', fontWeight: 650, color: '#475569' }}>
+                  {docConfig.key === 'quotation' ? 'Valid Until' : 'Due Date'}
+                </div>
+                <div style={{ width: '55%', padding: '9px 12px', color: '#1e293b' }}>
+                  {formatDate(doc.due_date)}
+                </div>
+              </div>
+            )}
+
             {/* Creation Date Row */}
             <div style={{ display: 'flex', borderBottom: gst.status !== '-' ? '1px solid #e2e8f0' : 'none' }}>
               <div style={{ width: '45%', padding: '9px 12px', background: '#f1f5f9', fontWeight: 650, color: '#475569' }}>
@@ -1096,23 +1159,87 @@ export default function AdminBillingDocumentDetail() {
           marginBottom: 16,
         }}
       >
-        {/* Left: Terms & Conditions */}
-        <div
-          className="bp-card"
-          style={{
-            background: '#ffffff',
-            borderRadius: 10,
-            border: '1px solid #e2e8f0',
-            padding: '16px 18px',
-          }}
-        >
-          <div style={{ fontSize: 12, fontWeight: 750, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
-            Terms &amp; Conditions:
+        {/* Left: Transportation Details (when DC) or Terms & Conditions */}
+        {docConfig.key === 'delivery_challan' ? (
+          <div
+            className="bp-card"
+            style={{
+              background: '#ffffff',
+              borderRadius: 10,
+              border: '1px solid #e2e8f0',
+              padding: '16px 18px',
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 750, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 12 }}>
+              Transportation Details
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, fontSize: 12.5 }}>
+              <div>
+                <span style={{ color: '#64748b' }}>Reason for Transportation:</span>
+                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                  {formatReasonForTransportation(doc.reason_for_transportation, doc.reason_for_transportation_other)}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: '#64748b' }}>Vehicle No.:</span>
+                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                  {doc.vehicle_no || '—'}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: '#64748b' }}>Transporter Name:</span>
+                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                  {doc.transporter_name || '—'}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: '#64748b' }}>E-Way Bill No.:</span>
+                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                  {doc.eway_bill_no || '—'}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: '#64748b' }}>Receiver Name:</span>
+                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                  {doc.receiver_name || '—'}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: '#64748b' }}>Receiver Signature:</span>
+                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
+                  {doc.receiver_signature_datetime ? formatDateTime(doc.receiver_signature_datetime) : '—'}
+                </div>
+              </div>
+            </div>
+            {doc.terms && doc.terms.trim() && (
+              <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
+                  Terms &amp; Conditions:
+                </div>
+                <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                  {doc.terms}
+                </div>
+              </div>
+            )}
           </div>
-          <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-            {doc.terms && doc.terms.trim() ? doc.terms : '-'}
+        ) : (
+          <div
+            className="bp-card"
+            style={{
+              background: '#ffffff',
+              borderRadius: 10,
+              border: '1px solid #e2e8f0',
+              padding: '16px 18px',
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 750, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+              Terms &amp; Conditions:
+            </div>
+            <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+              {doc.terms && doc.terms.trim() ? doc.terms : '-'}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Right: Summary Box */}
         <div
@@ -1189,8 +1316,8 @@ export default function AdminBillingDocumentDetail() {
         </div>
       </div>
 
-      {/* 7. Bottom Green Info Note ONLY when GST is Filed */}
-      {isFiled && (
+      {/* 7. Bottom Green Info Note ONLY when GST is Filed (tax invoice only) */}
+      {isFiled && !isNonGstType && (
         <div
           style={{
             padding: '12px 16px',

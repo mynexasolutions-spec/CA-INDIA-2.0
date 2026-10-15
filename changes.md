@@ -861,4 +861,11 @@ Added under `Route::middleware(['role.staff', 'audit'])->prefix('admin')->group(
   17. Creation date patch endpoint (future date blocked, outside FY blocked, target period filed blocked, existing IST time of day preserved).
   18. PDF endpoint response (JSON descriptor with URL and inline PDF stream with Content-Type `application/pdf`).
 
+---
 
+## Stage 3C-1: Quotation & Delivery Challan Admin Screens, Converted Quotations, QT Default
+
+### 1. Migrations & Database Changes
+- No migrations in 3C-1.
+- Note: New-client default quotation prefix QUO -> QT (backend fallback + ClientProfileForm new-client defaults + LayoutPreviewRenderer); existing saved settings untouched.
+- Before deploy, count `client_profiles` on the prod copy with no saved quotation prefix (those would move QUO -> QT).

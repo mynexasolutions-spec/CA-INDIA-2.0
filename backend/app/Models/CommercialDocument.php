@@ -72,7 +72,7 @@ class CommercialDocument extends Model
 
     public function convertedDocument()
     {
-        return $this->belongsTo(CommercialDocument::class, 'converted_document_id');
+        return $this->belongsTo(CommercialDocument::class, 'converted_document_id')->withTrashed();
     }
 
     public function amendments()

@@ -46,8 +46,15 @@ class AdminBillingDocumentController extends Controller
         );
 
         $perPage = min(max((int) $request->query('per_page', 10), 1), 100);
+        $withRelations = ['customer:id,name,gstin,gst_status'];
+        if ($docType === 'quotation') {
+            $withRelations['convertedDocument'] = function ($q) {
+                $q->withTrashed()->select('id', 'number', 'type', 'deleted_at');
+            };
+        }
+
         $paginator = $query->select('commercial_documents.*')
-            ->with('customer:id,name,gstin,gst_status')
+            ->with($withRelations)
             ->orderBy('commercial_documents.document_date', 'desc')
             ->orderBy('commercial_documents.id', 'desc')
             ->paginate($perPage);
@@ -55,6 +62,14 @@ class AdminBillingDocumentController extends Controller
         $transformed = $paginator->getCollection()->map(function (CommercialDocument $doc) {
             $customer = $doc->customer;
             $isB2b = AdminBillingCountService::isB2b($customer);
+
+            $convertedDoc = $doc->convertedDocument;
+            $convertedDocData = $convertedDoc ? [
+                'id' => $convertedDoc->id,
+                'number' => $convertedDoc->number,
+                'type' => $convertedDoc->type,
+                'is_deleted' => $convertedDoc->trashed(),
+            ] : null;
 
             return [
                 'id' => $doc->id,
@@ -65,6 +80,9 @@ class AdminBillingDocumentController extends Controller
                 'customer_gstin' => ($customer && $customer->gst_status === 'registered') ? $customer->gstin : null,
                 'customer_type' => $isB2b ? 'B2B' : 'B2C',
                 'status' => $doc->status,
+                'converted_document_id' => $doc->converted_document_id,
+                'converted_invoice_number' => $doc->convertedDocument?->number,
+                'converted_document' => $convertedDocData,
                 'taxable_amount' => (float) ($doc->taxable_amount ?? 0),
                 'igst_amount' => (float) ($doc->igst_amount ?? 0),
                 'cgst_amount' => (float) ($doc->cgst_amount ?? 0),
@@ -121,6 +139,7 @@ class AdminBillingDocumentController extends Controller
                 'customer',
                 'clientProfile.user',
                 'cancelledBy:id,name',
+                'convertedDocument' => fn ($q) => $q->withTrashed()->select('id', 'number', 'type', 'deleted_at'),
             ])
             ->firstOrFail();
 
@@ -197,6 +216,14 @@ class AdminBillingDocumentController extends Controller
             'amount_in_words' => \App\Services\DocumentTemplate\DocumentPayloadBuilder::formatAmountInWords($doc->amount_in_words),
         ];
 
+        $convertedDoc = $doc->convertedDocument;
+        $convertedDocData = $convertedDoc ? [
+            'id' => $convertedDoc->id,
+            'number' => $convertedDoc->number,
+            'type' => $convertedDoc->type,
+            'is_deleted' => $convertedDoc->trashed(),
+        ] : null;
+
         return [
             'document' => [
                 'id' => $doc->id,
@@ -221,6 +248,15 @@ class AdminBillingDocumentController extends Controller
                 'cancellation_reason' => $doc->cancellation_reason,
                 'cancelled_at' => $doc->cancelled_at?->timezone('Asia/Kolkata')->toIso8601String(),
                 'cancelled_by_name' => $doc->cancelledBy?->name,
+                'converted_document_id' => $doc->converted_document_id,
+                'converted_document' => $convertedDocData,
+                'reason_for_transportation' => $doc->reason_for_transportation,
+                'reason_for_transportation_other' => $doc->reason_for_transportation_other,
+                'vehicle_no' => $doc->vehicle_no,
+                'transporter_name' => $doc->transporter_name,
+                'eway_bill_no' => $doc->eway_bill_no,
+                'receiver_name' => $doc->receiver_name,
+                'receiver_signature_datetime' => $doc->receiver_signature_datetime?->timezone('Asia/Kolkata')->toIso8601String(),
             ],
             'gst' => [
                 'status' => $lock['gst_status'],
@@ -402,6 +438,7 @@ class AdminBillingDocumentController extends Controller
             ->where('id', $id)
             ->firstOrFail();
 
+        abort_if($doc->converted_document_id, 422, 'Converted quotations cannot be cancelled.');
         abort_if($doc->status === 'cancelled', 422, 'This document is already cancelled.');
         abort_unless(in_array($doc->status, ['issued', 'paid', 'partial'], true), 422, 'Only active documents can be cancelled.');
 
@@ -467,6 +504,7 @@ class AdminBillingDocumentController extends Controller
         $fyData = $this->countService->resolveFy($validated['fy'] ?? null);
 
         abort_if($doc->trashed() || $doc->status === 'deleted', 422, 'Deleted documents cannot have their creation date edited.');
+        abort_if($doc->converted_document_id, 422, 'Converted quotations cannot have their creation date edited.');
         abort_unless(in_array($doc->status, ['issued', 'paid', 'partial'], true), 422, 'Only active documents can have their creation date edited.');
 
         // Current period lock check

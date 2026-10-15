@@ -23,8 +23,19 @@ class AdminBillingLockService
      *     ack_no: ?string
      * }
      */
-    public static function check(ClientProfile $profile, mixed $createdAt): array
+    public static function check(ClientProfile $profile, mixed $createdAt, ?string $docType = null): array
     {
+        if (in_array($docType, ['quotation', 'delivery_challan'], true)) {
+            return [
+                'is_locked' => false,
+                'gst_status' => '-',
+                'return_type' => null,
+                'tax_period' => null,
+                'filed_on' => null,
+                'ack_no' => null,
+            ];
+        }
+
         if (! $profile->has_gst) {
             return [
                 'is_locked' => false,
