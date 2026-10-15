@@ -366,7 +366,7 @@ export default function AdminBillingDocumentDetail() {
 
   const doc = docData?.document || {};
   const gst = docData?.gst || { status: '-', filed_on: null, ack_no: null };
-  const flags = docData?.flags || { can_edit_creation_date: false, can_cancel: false, can_delete: false };
+  const flags = docData?.flags || { can_edit: false, can_edit_creation_date: false, can_cancel: false, can_delete: false };
   const seller = docData?.seller || {};
   const customer = docData?.customer;
   const lineItems = docData?.line_items || [];
@@ -399,6 +399,19 @@ export default function AdminBillingDocumentDetail() {
     statusBadgeText = '#64748b';
     statusBadgeBorder = '#e2e8f0';
     statusLabel = 'Deleted';
+  }
+
+  let editDisabledReason = '';
+  if (isDeleted) {
+    editDisabledReason = 'Deleted documents cannot be edited.';
+  } else if (docConfig.key !== 'tax_invoice') {
+    editDisabledReason = 'Only Tax Invoices can be edited.';
+  } else if (doc.status !== 'issued' && doc.status !== 'paid' && doc.status !== 'partial') {
+    editDisabledReason = 'Only active documents can be edited.';
+  } else if (isFiled) {
+    editDisabledReason = "GST Return for this document's period has already been filed.";
+  } else if (!flags.can_edit) {
+    editDisabledReason = 'This document cannot be edited.';
   }
 
   return (
@@ -614,21 +627,22 @@ export default function AdminBillingDocumentDetail() {
           <span>←</span> Back
         </button>
 
-        {/* 2. Edit (always disabled, tooltip "Coming soon") */}
+        {/* 2. Edit */}
         <button
           type="button"
-          disabled
-          title="Coming soon"
+          disabled={!flags.can_edit || isDeleted}
+          title={!flags.can_edit || isDeleted ? editDisabledReason : 'Edit Document'}
+          onClick={() => navigate(`/admin/billing/${clientId}/${docConfig.slug}/${id}/edit`)}
           style={{
             padding: '7px 14px',
             borderRadius: 6,
-            border: '1px solid #cbd5e1',
-            background: '#f1f5f9',
-            color: '#94a3b8',
+            border: '1px solid #bfdbfe',
+            background: flags.can_edit && !isDeleted ? '#eff6ff' : '#f1f5f9',
+            color: flags.can_edit && !isDeleted ? '#2563eb' : '#94a3b8',
             fontSize: 12.5,
             fontWeight: 600,
-            cursor: 'not-allowed',
-            opacity: 0.6,
+            cursor: flags.can_edit && !isDeleted ? 'pointer' : 'not-allowed',
+            opacity: flags.can_edit && !isDeleted ? 1 : 0.6,
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
