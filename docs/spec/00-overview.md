@@ -9,7 +9,7 @@ Shared context for every module file. Read this first, then only the one module 
 ## Stack
 - Frontend: Vite + React 19 (repo root, `src/`)
 - Backend: Laravel 13 + Sanctum (`backend/`)
-- Local DB: SQLite. Prod: MySQL (`abkhanassociates`). Never touch prod DB.
+- Local DB: SQLite. Prod: SQLite on EC2. Never touch prod DB; deploy is done by the senior.
 
 ## Global rules (apply to every module)
 - Do NOT redesign existing UI. Preserve fonts, sizes, icons, spacing, alignment, colours, sidebar width, header design unless a module says otherwise.
@@ -34,7 +34,7 @@ Shared context for every module file. Read this first, then only the one module 
 | 1 | Dashboard | 3 | `02-dashboard.md` | done, committed |
 | 2A | Clients: ID, address, registration, GST filing frequency, bank, credentials, Add Information | 20 (shared with 2B) | `03-clients-2a.md` | done, committed (`modul2A`, 01519c4) |
 | 2B | Clients: Document Numbering (align only), Layout, Configuration, Subscription, Service Access, document templates (4 layouts x 6 colours) | (same 20 pages) | `04-clients-2b.md` | done, committed on `feat/clients-module-2b` (Stages A-F5 and G) |
-| 3 | Billing: Client List, Client Dashboard, 6 document types (Tax Invoice, Bill of Supply, Debit Note, Credit Note, Quotation, Delivery Challan) | 25 (pp 31-55) | `05-billing.md` | spec patched after Step 0/0b code map (11 Oct 2026). Email/WhatsApp parked. 3A prompt next |
+| 3 | Billing: Client List, Client Dashboard, 6 document types (Tax Invoice, Bill of Supply, Debit Note, Credit Note, Quotation, Delivery Challan) | 25 (pp 31-55) | `05-billing.md` | 3A, 3B (list, view, cancel/delete/edit creation date, full edit for Tax Invoice) done, committed. 3B-4 = admin edit (a/b). Next: tooltip-flags fix, then 3C-1 (Quotation + Delivery Challan). Email/WhatsApp parked. |
 | 4+ | rest | - | - | not split yet |
 
 ### Carry-forward (from 2A / 2B, not blocking Module 3)
@@ -93,6 +93,7 @@ Sidebar: `src/components/portal/PortalShell.jsx` (`<aside className="bp-sidebar"
 - Mail: `MAIL_MAILER=log`, no Mailable classes, `Mail::raw` in `DocumentController::emailDocument` (client portal only; PDF attachment not confirmed). WhatsApp: `wa.me` links only, client portal. No admin-side email/WhatsApp.
 - Scheduler: `routes/console.php` registers only `backup:run`. No cron documentation.
 - B2B/B2C is derived from the customer: `gst_status='registered'` and a `gstin` = B2B, otherwise B2C (`Customer` model).
+- Update (after 3A/3B): new admin endpoints under /api/admin/billing/client-directory/{clientId}/... (documents, parties) and /api/admin/billing/tds-tcs-sections exist, open for tax_invoice only (other 5 types return 422 until 3C). Admin lock logic is `AdminBillingLockService`; `BillingPolicy::periodOf()/isPeriodFiled()` are untouched. Legacy /api/admin/billing/clients and old pickers are untouched.
 
 ## Notes for Module 3 (Billing)
 - Full spec and decisions: `05-billing.md`. Billing counts and lists follow the selected Financial Year by Invoice/Document Date; Cancelled counts, Deleted does not. GST lock/status uses the creation date (`created_at`), see Decision 2.
