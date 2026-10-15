@@ -89,14 +89,9 @@ class AdminBillingPartyController extends Controller
 
     /**
      * Active TDS/TCS sections for invoice dropdown.
-     * Optionally scoped to client (asserting client exists if provided).
      */
-    public function tdsTcsSections(Request $request, ?int $clientId = null): JsonResponse
+    public function tdsTcsSections(Request $request): JsonResponse
     {
-        if ($clientId !== null) {
-            ClientProfile::findOrFail($clientId);
-        }
-
         $type = $request->input('type');
         $q = TdsTcsSection::where('is_active', true)->orderBy('sort_order')->orderBy('code');
         if (in_array($type, ['tds', 'tcs'], true)) {

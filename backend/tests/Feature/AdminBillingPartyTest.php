@@ -124,7 +124,7 @@ class AdminBillingPartyTest extends TestCase
         $this->getJson("/api/admin/billing/client-directory/{$this->clientA->id}/parties/{$this->partyA1->id}")
             ->assertStatus(401);
 
-        $this->getJson("/api/admin/billing/client-directory/{$this->clientA->id}/tds-tcs-sections")
+        $this->getJson('/api/admin/billing/tds-tcs-sections')
             ->assertStatus(401);
     }
 
@@ -141,7 +141,7 @@ class AdminBillingPartyTest extends TestCase
         $this->getJson("/api/admin/billing/client-directory/{$this->clientA->id}/parties/{$this->partyA1->id}")
             ->assertStatus(403);
 
-        $this->getJson("/api/admin/billing/client-directory/{$this->clientA->id}/tds-tcs-sections")
+        $this->getJson('/api/admin/billing/tds-tcs-sections')
             ->assertStatus(403);
     }
 
@@ -158,7 +158,7 @@ class AdminBillingPartyTest extends TestCase
         $this->getJson("/api/admin/billing/client-directory/{$this->clientA->id}/parties/{$this->partyA1->id}")
             ->assertStatus(200);
 
-        $this->getJson("/api/admin/billing/client-directory/{$this->clientA->id}/tds-tcs-sections")
+        $this->getJson('/api/admin/billing/tds-tcs-sections')
             ->assertStatus(200);
     }
 
@@ -173,9 +173,6 @@ class AdminBillingPartyTest extends TestCase
             ->assertStatus(404);
 
         $this->getJson('/api/admin/billing/client-directory/999999/parties/1')
-            ->assertStatus(404);
-
-        $this->getJson('/api/admin/billing/client-directory/999999/tds-tcs-sections')
             ->assertStatus(404);
     }
 
@@ -364,8 +361,8 @@ class AdminBillingPartyTest extends TestCase
             'is_active' => false,
         ]);
 
-        // Client-scoped endpoint
-        $res = $this->getJson("/api/admin/billing/client-directory/{$this->clientA->id}/tds-tcs-sections");
+        // Global admin endpoint /api/admin/billing/tds-tcs-sections
+        $res = $this->getJson('/api/admin/billing/tds-tcs-sections');
         $res->assertStatus(200);
         $codes = collect($res->json('data'))->pluck('code')->all();
         $this->assertContains('194C', $codes);
@@ -373,22 +370,17 @@ class AdminBillingPartyTest extends TestCase
         $this->assertNotContains('194J-INACTIVE', $codes);
 
         // Filter by type=tds
-        $resTds = $this->getJson("/api/admin/billing/client-directory/{$this->clientA->id}/tds-tcs-sections?type=tds");
+        $resTds = $this->getJson('/api/admin/billing/tds-tcs-sections?type=tds');
         $resTds->assertStatus(200);
         $tdsCodes = collect($resTds->json('data'))->pluck('code')->all();
         $this->assertContains('194C', $tdsCodes);
         $this->assertNotContains('206C(1H)', $tdsCodes);
 
         // Filter by type=tcs
-        $resTcs = $this->getJson("/api/admin/billing/client-directory/{$this->clientA->id}/tds-tcs-sections?type=tcs");
+        $resTcs = $this->getJson('/api/admin/billing/tds-tcs-sections?type=tcs');
         $resTcs->assertStatus(200);
         $tcsCodes = collect($resTcs->json('data'))->pluck('code')->all();
         $this->assertContains('206C(1H)', $tcsCodes);
         $this->assertNotContains('194C', $tcsCodes);
-
-        // Global admin endpoint /api/admin/billing/tds-tcs-sections
-        $resGlobal = $this->getJson('/api/admin/billing/tds-tcs-sections');
-        $resGlobal->assertStatus(200);
-        $this->assertContains('194C', collect($resGlobal->json('data'))->pluck('code')->all());
     }
 }

@@ -13,6 +13,7 @@ use App\Models\TdsTcsSection;
 use App\Models\User;
 use App\Services\Billing\AdminBillingCountService;
 use App\Services\Billing\AdminBillingLockService;
+use App\Services\Billing\BillingPolicy;
 use App\Services\Billing\InvoiceService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -831,15 +832,35 @@ class AdminBillingFullEditTest extends TestCase
         $res->assertStatus(200);
 
         $res->assertJsonStructure([
-            'document',
+            'document' => [
+                'document_date',
+                'due_date',
+                'payment_terms',
+                'place_of_supply',
+                'currency',
+                'notes',
+                'terms',
+                'is_inter_state',
+                'is_reverse_charge',
+                'customer_id',
+                'tax_deduction_type',
+                'tds_tcs_section_id',
+            ],
             'gst',
             'flags' => ['can_edit', 'can_edit_creation_date', 'can_cancel', 'can_delete'],
             'seller',
+            'billing_profile' => ['has_gst', 'dealer_type', 'state_code', 'mode'],
             'customer',
-            'line_items',
+            'line_items' => [
+                '*' => ['discount_percent', 'discount_amount', 'product_id'],
+            ],
             'summary',
         ]);
         $this->assertTrue($res->json('flags.can_edit'));
+        $this->assertTrue($res->json('billing_profile.has_gst'));
+        $this->assertEquals('regular', $res->json('billing_profile.dealer_type'));
+        $this->assertEquals($this->client->state_code, $res->json('billing_profile.state_code'));
+        $this->assertEquals('regular', $res->json('billing_profile.mode'));
     }
 
     public function test_can_edit_flag_variations_in_compute_document_flags(): void
@@ -1008,5 +1029,347 @@ class AdminBillingFullEditTest extends TestCase
 
         $this->assertEquals(-0.39, (float) $this->invoice->round_off);
         $this->assertEquals(118.0, (float) $this->invoice->grand_total);
+    }
+
+    public function test_no_op_round_trip_from_show_to_put(): void
+    {
+        Sanctum::actingAs($this->staff);
+
+        // 1. Create a section for TDS
+        $section = TdsTcsSection::create([
+            'type' => 'tds',
+            'code' => '194C',
+            'description' => 'Contractor',
+            'rate' => 2.0,
+            'is_active' => true,
+        ]);
+
+        // Create a product under this client for the product_id test
+        $product = Product::create([
+            'client_profile_id' => $this->client->id,
+            'name' => 'Physical Goods Widget',
+            'type' => 'goods',
+            'hsn_sac' => '998222',
+            'unit' => 'NOS',
+            'rate' => 500.0,
+            'gst_rate' => 18.0,
+            'is_active' => true,
+        ]);
+
+        // 2. Setup an invoice with customer, discount on line, TDS
+        $this->invoice->update([
+            'customer_id' => $this->customer->id,
+            'due_date' => '2026-06-30',
+            'payment_terms' => 'Net 30',
+            'place_of_supply' => 'Maharashtra',
+            'currency' => 'INR',
+            'notes' => 'Handle with care',
+            'terms' => 'Standard payment terms',
+            'is_inter_state' => false,
+            'is_reverse_charge' => false,
+            'tax_deduction_type' => 'tds',
+            'tds_tcs_section_id' => $section->id,
+            'tds_tcs_rate' => 2.0,
+        ]);
+
+        $this->invoice->lineItems()->delete();
+        // Line 1: Percentage discount line
+        $this->invoice->lineItems()->create([
+            'description' => 'Consulting and Development Services',
+            'hsn_sac' => '998222',
+            'qty' => 10,
+            'unit' => 'NOS',
+            'rate' => 1000.0,
+            'discount_percent' => 10.0,
+            'discount_amount' => 1000.0,
+            'taxable_amount' => 9000.0,
+            'gst_rate' => 18.0,
+            'cgst_amount' => 810.0,
+            'sgst_amount' => 810.0,
+            'igst_amount' => 0.0,
+            'total_amount' => 10620.0,
+        ]);
+        // Line 2: Fixed discount_amount + product_id
+        $this->invoice->lineItems()->create([
+            'product_id' => $product->id,
+            'description' => 'Physical Goods Widget',
+            'hsn_sac' => '998222',
+            'qty' => 4,
+            'unit' => 'NOS',
+            'rate' => 500.0,
+            'discount_percent' => 0.0,
+            'discount_amount' => 200.0,
+            'taxable_amount' => 1800.0,
+            'gst_rate' => 18.0,
+            'cgst_amount' => 162.0,
+            'sgst_amount' => 162.0,
+            'igst_amount' => 0.0,
+            'total_amount' => 2124.0,
+        ]);
+        // Line 3: Mixed discount line (both discount_percent and discount_amount present)
+        $this->invoice->lineItems()->create([
+            'description' => 'Mixed Discount Service Line',
+            'hsn_sac' => '998222',
+            'qty' => 2,
+            'unit' => 'NOS',
+            'rate' => 500.0,
+            'discount_percent' => 5.0,
+            'discount_amount' => 50.0,
+            'taxable_amount' => 950.0,
+            'gst_rate' => 18.0,
+            'cgst_amount' => 85.50,
+            'sgst_amount' => 85.50,
+            'igst_amount' => 0.0,
+            'total_amount' => 1121.0,
+        ]);
+
+        // Totals:
+        // Gross: 10000 + 2000 + 1000 = 13000
+        // Discount: 1000 + 200 + 50 = 1250
+        // Taxable: 9000 + 1800 + 950 = 11750
+        // CGST (9%): 810 + 162 + 85.5 = 1057.50
+        // SGST (9%): 810 + 162 + 85.5 = 1057.50
+        // Subtotal: 13865.00
+        // TDS (2% on taxable 11750): 235.00
+        // Grand total: 13865 - 235 = 13630.00
+        $this->invoice->update([
+            'discount_total' => 1250.0,
+            'taxable_amount' => 11750.0,
+            'cgst_amount' => 1057.50,
+            'sgst_amount' => 1057.50,
+            'igst_amount' => 0.0,
+            'total_amount' => 13865.0,
+            'round_off' => 0.0,
+            'tds_tcs_amount' => 235.0,
+            'grand_total' => 13630.0,
+        ]);
+
+        // 3. Call show()
+        $showRes = $this->getJson("/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$this->invoice->id}");
+        $showRes->assertStatus(200);
+        $showData = $showRes->json();
+
+        $originalGrandTotal = $showData['summary']['grand_total'];
+        $originalTaxable = $showData['summary']['taxable'];
+        $originalCgst = $showData['summary']['cgst'];
+        $originalSgst = $showData['summary']['sgst'];
+        $originalTerms = $showData['document']['terms'];
+
+        // 4. Build PUT body exactly as the frontend form would from show()
+        $putBody = [
+            'fy' => '2026-27',
+            'type' => $showData['document']['type'],
+            'customer_id' => $showData['document']['customer_id'],
+            'document_date' => $showData['document']['document_date'],
+            'due_date' => $showData['document']['due_date'],
+            'payment_terms' => $showData['document']['payment_terms'],
+            'place_of_supply' => $showData['document']['place_of_supply'],
+            'currency' => $showData['document']['currency'],
+            'is_inter_state' => $showData['document']['is_inter_state'],
+            'is_reverse_charge' => $showData['document']['is_reverse_charge'],
+            'tax_deduction_type' => $showData['document']['tax_deduction_type'],
+            'tds_tcs_section_id' => $showData['document']['tds_tcs_section_id'],
+            'notes' => $showData['document']['notes'],
+            'terms' => $showData['document']['terms'],
+            'lines' => array_map(function ($l) {
+                return [
+                    'description' => $l['description'],
+                    'hsn_sac' => $l['hsn_sac'],
+                    'qty' => $l['qty'],
+                    'unit' => $l['unit'],
+                    'rate' => $l['rate'],
+                    'discount_percent' => $l['discount_percent'],
+                    'discount_amount' => $l['discount_amount'],
+                    'product_id' => $l['product_id'],
+                    'gst_rate' => $l['gst_rate'],
+                ];
+            }, $showData['line_items']),
+        ];
+
+        // 5. Save (PUT)
+        $putRes = $this->putJson(
+            "/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$this->invoice->id}",
+            $putBody
+        );
+        $putRes->assertStatus(200);
+
+        // 6. Assert that grand_total, taxes, line values, customer, terms, TDS, product_id and discount_amount are unchanged
+        $updated = $putRes->json();
+        $this->assertEquals($originalGrandTotal, $updated['summary']['grand_total']);
+        $this->assertEquals($originalTaxable, $updated['summary']['taxable']);
+        $this->assertEquals($originalCgst, $updated['summary']['cgst']);
+        $this->assertEquals($originalSgst, $updated['summary']['sgst']);
+        $this->assertEquals($originalTerms, $updated['document']['terms']);
+        $this->assertEquals($this->customer->id, $updated['document']['customer_id']);
+        $this->assertEquals('tds', $updated['document']['tax_deduction_type']);
+        $this->assertEquals($section->id, $updated['document']['tds_tcs_section_id']);
+
+        $this->invoice->refresh();
+        $this->assertEquals($originalGrandTotal, $this->invoice->grand_total);
+        $this->assertEquals($originalTaxable, $this->invoice->taxable_amount);
+        $this->assertEquals(235.0, (float) $this->invoice->tds_tcs_amount);
+        $this->assertEquals($this->customer->id, $this->invoice->customer_id);
+        $this->assertEquals($originalTerms, $this->invoice->terms);
+
+        $lines = $this->invoice->lineItems()->orderBy('id')->get();
+        $this->assertCount(3, $lines);
+
+        // Line 1: percentage discount
+        $this->assertEquals('Consulting and Development Services', $lines[0]->description);
+        $this->assertEquals(10.0, (float) $lines[0]->qty);
+        $this->assertEquals(1000.0, (float) $lines[0]->rate);
+        $this->assertEquals(10.0, (float) $lines[0]->discount_percent);
+        $this->assertEquals(1000.0, (float) $lines[0]->discount_amount);
+        $this->assertNull($lines[0]->product_id);
+        $this->assertEquals(9000.0, (float) $lines[0]->taxable_amount);
+
+        // Line 2: discount_amount + product_id
+        $this->assertEquals('Physical Goods Widget', $lines[1]->description);
+        $this->assertEquals(4.0, (float) $lines[1]->qty);
+        $this->assertEquals(500.0, (float) $lines[1]->rate);
+        $this->assertEquals(0.0, (float) $lines[1]->discount_percent);
+        $this->assertEquals(200.0, (float) $lines[1]->discount_amount);
+        $this->assertEquals($product->id, $lines[1]->product_id);
+        $this->assertEquals(1800.0, (float) $lines[1]->taxable_amount);
+
+        // Line 3: mixed-discount line
+        $this->assertEquals('Mixed Discount Service Line', $lines[2]->description);
+        $this->assertEquals(2.0, (float) $lines[2]->qty);
+        $this->assertEquals(500.0, (float) $lines[2]->rate);
+        $this->assertEquals(5.0, (float) $lines[2]->discount_percent);
+        $this->assertEquals(50.0, (float) $lines[2]->discount_amount);
+        $this->assertNull($lines[2]->product_id);
+        $this->assertEquals(950.0, (float) $lines[2]->taxable_amount);
+    }
+
+    public function test_currency_null_and_tax_deduction_type_null_against_admin_full_update(): void
+    {
+        $invoiceService = app(\App\Services\Billing\InvoiceService::class);
+
+        $payload = [
+            'fy' => '2026-27',
+            'type' => 'tax_invoice',
+            'document_date' => '2026-05-15',
+            'is_inter_state' => false,
+            'is_reverse_charge' => false,
+            'currency' => null,
+            'tax_deduction_type' => null,
+            'lines' => [
+                [
+                    'description' => 'Test Item',
+                    'hsn_sac' => '998222',
+                    'qty' => 1,
+                    'unit' => 'NOS',
+                    'rate' => 1000.0,
+                    'gst_rate' => 18.0,
+                ],
+            ],
+        ];
+
+        // Direct call against adminFullUpdate (not docPayload): assert 'INR' / 422, never 500
+        $updated = $invoiceService->adminFullUpdate(
+            $this->invoice,
+            $this->client,
+            $payload,
+            $this->staff->id,
+            '127.0.0.1'
+        );
+
+        $this->assertEquals('INR', $updated->currency);
+        $this->assertNull($updated->tax_deduction_type);
+        $this->assertNull($updated->tds_tcs_section_id);
+        $this->assertEquals(0, (float) $updated->tds_tcs_amount);
+
+        // Also assert against HTTP endpoint: returns 200 with INR currency, never 500
+        Sanctum::actingAs($this->staff);
+        $httpPayload = $this->validPayload();
+        $httpPayload['currency'] = null;
+        $httpPayload['tax_deduction_type'] = null;
+        $httpPayload['tds_tcs_section_id'] = null;
+
+        $res = $this->putJson(
+            "/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$this->invoice->id}",
+            $httpPayload
+        );
+        $res->assertStatus(200);
+        $this->assertEquals('INR', $res->json('document.currency'));
+        $this->assertNull($res->json('document.tax_deduction_type'));
+    }
+
+    public function test_billing_profile_for_gst_off_client_matches_mode(): void
+    {
+        Sanctum::actingAs($this->staff);
+
+        $user = User::factory()->create(['role' => 'client']);
+        $gstOffClient = ClientProfile::create([
+            'user_id' => $user->id,
+            'client_code' => 'CL-RETAIL-01',
+            'business_name' => 'Non-GST Retailer',
+            'client_name' => 'Non-GST Retailer',
+            'has_gst' => false,
+            'dealer_type' => null,
+            'state_code' => '27',
+            'state' => 'Maharashtra',
+            'pincode' => '400020',
+        ]);
+
+        $doc = CommercialDocument::create([
+            'client_profile_id' => $gstOffClient->id,
+            'type' => 'tax_invoice',
+            'number' => 'RET-001',
+            'document_date' => '2026-05-10',
+            'status' => 'issued',
+            'is_inter_state' => false,
+            'is_reverse_charge' => false,
+            'taxable_amount' => 500.0,
+            'total_amount' => 500.0,
+            'grand_total' => 500.0,
+        ]);
+
+        $res = $this->getJson("/api/admin/billing/client-directory/{$gstOffClient->id}/documents/tax_invoice/{$doc->id}");
+        $res->assertStatus(200);
+
+        $this->assertFalse($res->json('billing_profile.has_gst'));
+        $this->assertEquals('retail', $res->json('billing_profile.mode'));
+        $this->assertEquals(BillingPolicy::mode($gstOffClient), $res->json('billing_profile.mode'));
+    }
+
+    public function test_billing_profile_for_composition_client_matches_mode(): void
+    {
+        Sanctum::actingAs($this->staff);
+
+        $user = User::factory()->create(['role' => 'client']);
+        $compClient = ClientProfile::create([
+            'user_id' => $user->id,
+            'client_code' => 'CL-COMP-01',
+            'business_name' => 'Sunrise Bakery Composition',
+            'client_name' => 'Sunrise Bakery Composition',
+            'has_gst' => true,
+            'dealer_type' => 'composition',
+            'state_code' => '27',
+            'state' => 'Maharashtra',
+            'pincode' => '400020',
+        ]);
+
+        $doc = CommercialDocument::create([
+            'client_profile_id' => $compClient->id,
+            'type' => 'bill_of_supply',
+            'number' => 'BOS-001',
+            'document_date' => '2026-05-10',
+            'status' => 'issued',
+            'is_inter_state' => false,
+            'is_reverse_charge' => false,
+            'taxable_amount' => 1000.0,
+            'total_amount' => 1000.0,
+            'grand_total' => 1000.0,
+        ]);
+
+        $res = $this->getJson("/api/admin/billing/client-directory/{$compClient->id}/documents/bill_of_supply/{$doc->id}");
+        $res->assertStatus(200);
+
+        $this->assertTrue($res->json('billing_profile.has_gst'));
+        $this->assertEquals('composition', $res->json('billing_profile.dealer_type'));
+        $this->assertEquals('composition', $res->json('billing_profile.mode'));
+        $this->assertEquals(BillingPolicy::mode($compClient), $res->json('billing_profile.mode'));
     }
 }

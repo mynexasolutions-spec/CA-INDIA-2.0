@@ -210,7 +210,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/billing/client-directory/{clientId}/parties', [\App\Http\Controllers\Api\Admin\AdminBillingPartyController::class, 'index']);
         Route::get('/billing/client-directory/{clientId}/parties/recent', [\App\Http\Controllers\Api\Admin\AdminBillingPartyController::class, 'recent']);
         Route::get('/billing/client-directory/{clientId}/parties/{id}', [\App\Http\Controllers\Api\Admin\AdminBillingPartyController::class, 'show']);
-        Route::get('/billing/client-directory/{clientId}/tds-tcs-sections', [\App\Http\Controllers\Api\Admin\AdminBillingPartyController::class, 'tdsTcsSections']);
         Route::get('/billing/tds-tcs-sections', [\App\Http\Controllers\Api\Admin\AdminBillingPartyController::class, 'tdsTcsSections']);
         Route::get('/clients/{id}/billing/dashboard', [ClientProfileController::class, 'billingDashboard']);
         Route::get('/clients/{id}/billing/export', [ClientProfileController::class, 'exportBilling']);

@@ -163,6 +163,14 @@ class AdminBillingDocumentController extends Controller
 
         $sellerData = $this->countService->formatSeller($doc->clientProfile);
 
+        $cp = $doc->clientProfile;
+        $billingProfileData = $cp ? [
+            'has_gst' => (bool) $cp->has_gst,
+            'dealer_type' => $cp->dealer_type ?: 'regular',
+            'state_code' => $cp->state_code,
+            'mode' => BillingPolicy::mode($cp),
+        ] : null;
+
         $lineItems = $doc->lineItems->values()->map(function ($line, $idx) {
             return [
                 'sr_no' => $idx + 1,
@@ -171,6 +179,9 @@ class AdminBillingDocumentController extends Controller
                 'qty' => (float) ($line->qty ?? $line->quantity ?? 0),
                 'unit' => $line->unit ?: 'NOS',
                 'rate' => (float) $line->rate,
+                'discount_percent' => (float) ($line->discount_percent ?? 0),
+                'discount_amount' => (float) ($line->discount_amount ?? 0),
+                'product_id' => $line->product_id,
                 'gst_rate' => (float) $line->gst_rate,
                 'taxable_amount' => (float) $line->taxable_amount,
             ];
@@ -194,9 +205,17 @@ class AdminBillingDocumentController extends Controller
                 'status' => $doc->status,
                 'payment_status' => $paymentStatus,
                 'document_date' => $doc->document_date?->format('Y-m-d'),
+                'due_date' => $doc->due_date?->format('Y-m-d'),
+                'payment_terms' => $doc->payment_terms,
+                'currency' => $doc->currency ?: 'INR',
                 'created_at' => $doc->created_at?->timezone('Asia/Kolkata')->toIso8601String(),
                 'place_of_supply' => $doc->place_of_supply,
                 'supply_type' => $doc->is_inter_state ? 'Inter-state' : 'Intra-state',
+                'is_inter_state' => (bool) $doc->is_inter_state,
+                'is_reverse_charge' => (bool) $doc->is_reverse_charge,
+                'customer_id' => $doc->customer_id,
+                'tax_deduction_type' => $doc->tax_deduction_type,
+                'tds_tcs_section_id' => $doc->tds_tcs_section_id,
                 'notes' => $doc->notes,
                 'terms' => $doc->terms,
                 'cancellation_reason' => $doc->cancellation_reason,
@@ -210,6 +229,7 @@ class AdminBillingDocumentController extends Controller
             ],
             'flags' => $flags,
             'seller' => $sellerData,
+            'billing_profile' => $billingProfileData,
             'customer' => $customerData,
             'line_items' => $lineItems,
             'summary' => $summary,
