@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Billing;
 
+use App\Http\Controllers\Api\Billing\Concerns\ResolvesBillingProfile;
 use App\Http\Controllers\Controller;
 use App\Models\ClientProfile;
 use App\Models\CommercialDocument;
@@ -14,6 +15,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
 {
+    use ResolvesBillingProfile;
+
     // Mark Paid/Unpaid is a payment-status change only — it must never remove a document
     // from GST Summary, HSN/SAC Summary, Party-wise Details, or Sales reports. All three
     // "issued family" statuses count as live, finalized documents; only draft/cancelled
@@ -24,9 +27,7 @@ class ReportController extends Controller
 
     private function profileId(Request $request): int
     {
-        abort_unless($request->user()->clientProfile, 403);
-
-        return $request->user()->clientProfile->id;
+        return $this->resolveBillingProfile($request)->id;
     }
 
     private function dateRange(Request $request): array
@@ -82,11 +83,12 @@ class ReportController extends Controller
 
         if ($format === 'pdf') {
             $pdf = Pdf::loadView('pdf.report', [
-                'title' => $this->reportTitle($type),
-                'periodText' => $periodText,
-                'rows' => $rows,
-                'meta' => $meta,
+                'title'        => $this->reportTitle($type),
+                'periodText'   => $periodText,
+                'rows'         => $rows,
+                'meta'         => $meta,
                 'moneyHeaders' => $moneyHeaders,
+                'generatedOn'  => now()->format('d-m-Y'),
             ]);
 
             return $pdf->download("{$type}.pdf");
@@ -141,11 +143,12 @@ class ReportController extends Controller
         ], fn ($part) => filled($part));
 
         return [
-            'name' => $p->business_name ?: ($p->client_name ?: 'Business'),
+            'name'    => $p->business_name ?: ($p->client_name ?: 'Business'),
             'address' => implode(', ', $addressParts),
-            'gstin' => $p->has_gst ? $p->gstin : null,
-            'phone' => $p->mobile ?: ($p->user?->phone ?? null),
-            'email' => $p->email ?: ($p->user?->email ?? null),
+            'pan'     => $p->pan ?: null,
+            'gstin'   => $p->has_gst ? $p->gstin : null,
+            'phone'   => $p->mobile ?: ($p->user?->phone ?? null),
+            'email'   => $p->email ?: ($p->user?->email ?? null),
         ];
     }
 
@@ -192,9 +195,11 @@ class ReportController extends Controller
         // Listing/filtering/GST-period counting spec — Date of Creation, not the
         // document's back-dated Document Date. whereDate() on both bounds keeps this
         // correct against the created_at timestamp column.
-        $base = CommercialDocument::where('client_profile_id', $pid)
-            ->whereDate('created_at', '>=', $from)
-            ->whereDate('created_at', '<=', $to);
+        // Columns are table-qualified because some reports join `customers`, which has the same
+        // client_profile_id / created_at / type / status columns (an unqualified name is "ambiguous").
+        $base = CommercialDocument::where('commercial_documents.client_profile_id', $pid)
+            ->whereDate('commercial_documents.created_at', '>=', $from)
+            ->whereDate('commercial_documents.created_at', '<=', $to);
 
         return match ($type) {
             'sales_register', 'sales_summary' => (clone $base)->where('type', 'tax_invoice')->whereIn('status', self::ISSUED_STATUSES)
@@ -257,6 +262,7 @@ class ReportController extends Controller
                 ->get(),
             'credit_notes' => (clone $base)->where('type', 'credit_note')->with('customer:id,name')->get(),
             'debit_notes' => (clone $base)->where('type', 'debit_note')->with('customer:id,name')->get(),
+            'document_numbering' => $this->documentNumberingSummary($pid, $from, $to),
             default => ['error' => 'Unknown report type', 'available' => $this->availableTypes()],
         };
     }
@@ -285,15 +291,39 @@ class ReportController extends Controller
                 'sgst' => (float) (clone $scope)->sum('sgst_amount'),
                 'igst' => (float) (clone $scope)->sum('igst_amount'),
                 'total_invoice_value' => (float) (clone $scope)->sum(DB::raw('COALESCE(NULLIF(grand_total,0), total_amount)')),
+                'count' => (clone $scope)->count(),
+            ];
+        };
+
+        // B2B = customer has a registered GSTIN; B2C = no GSTIN / unregistered.
+        $bucketB2b = function (string $type, bool $isB2b) use ($base): array {
+            $scope = (clone $base)->where('commercial_documents.type', $type)->whereIn('commercial_documents.status', self::ISSUED_STATUSES)
+                ->leftJoin('customers', 'commercial_documents.customer_id', '=', 'customers.id');
+            if ($isB2b) {
+                $scope = $scope->where('customers.gst_status', 'registered')
+                               ->whereNotNull('customers.gstin')
+                               ->where('customers.gstin', '!=', '');
+            } else {
+                $scope = $scope->where(function ($q) {
+                    $q->whereNull('customers.id')
+                      ->orWhere('customers.gst_status', '!=', 'registered')
+                      ->orWhereNull('customers.gstin')
+                      ->orWhere('customers.gstin', '=', '');
+                });
+            }
+            return [
+                'taxable_value' => (float) $scope->sum('commercial_documents.taxable_amount'),
+                'cgst' => (float) $scope->sum('commercial_documents.cgst_amount'),
+                'sgst' => (float) $scope->sum('commercial_documents.sgst_amount'),
+                'igst' => (float) $scope->sum('commercial_documents.igst_amount'),
+                'total_invoice_value' => (float) $scope->sum(DB::raw('COALESCE(NULLIF(commercial_documents.grand_total,0), commercial_documents.total_amount)')),
+                'count' => $scope->count(),
             ];
         };
 
         $zero = [
-            'taxable_value' => 0.0,
-            'cgst' => 0.0,
-            'sgst' => 0.0,
-            'igst' => 0.0,
-            'total_invoice_value' => 0.0,
+            'taxable_value' => 0.0, 'cgst' => 0.0, 'sgst' => 0.0,
+            'igst' => 0.0, 'total_invoice_value' => 0.0, 'count' => 0,
         ];
 
         $tax = $bucket('tax_invoice');
@@ -312,6 +342,22 @@ class ReportController extends Controller
             $dn = $zero;
         }
 
+        // B2B/B2C bifurcation per doc type
+        $bifurcation = [];
+        foreach (['tax_invoice', 'bill_of_supply', 'debit_note', 'credit_note'] as $docType) {
+            $bifurcation[$docType] = [
+                'b2b' => $bucketB2b($docType, true),
+                'b2c' => $bucketB2b($docType, false),
+            ];
+        }
+        // Apply same dealer-mode zeroing
+        if ($mode === 'regular') {
+            $bifurcation['bill_of_supply'] = ['b2b' => $zero, 'b2c' => $zero];
+        } elseif ($mode === 'composition') {
+            $bifurcation['tax_invoice'] = ['b2b' => $zero, 'b2c' => $zero];
+            $bifurcation['debit_note']  = ['b2b' => $zero, 'b2c' => $zero];
+        }
+
         return [
             'matrix' => [
                 'tax_invoice' => $tax,
@@ -319,6 +365,7 @@ class ReportController extends Controller
                 'debit_note' => $dn,
                 'credit_note' => $cn,
             ],
+            'bifurcation' => $bifurcation,
             'dealer_mode' => $mode,
             // Legacy flat fields
             'taxable' => $tax['taxable_value'],
@@ -415,8 +462,105 @@ class ReportController extends Controller
         return [
             'sales_register', 'invoice_register', 'gst_summary', 'gst_liability', 'hsn_summary',
             'party_wise_sales', 'monthly_sales', 'outstanding_report', 'paid_invoices',
-            'credit_notes', 'debit_notes',
+            'credit_notes', 'debit_notes', 'document_numbering',
         ];
+    }
+
+    private static array $DOC_TYPE_ORDER = [
+        'tax_invoice', 'bill_of_supply', 'debit_note', 'credit_note', 'quotation', 'delivery_challan',
+    ];
+
+    private static array $DOC_TYPE_LABELS = [
+        'tax_invoice'      => 'Tax Invoice',
+        'bill_of_supply'   => 'Bill of Supply',
+        'debit_note'       => 'Debit Note',
+        'credit_note'      => 'Credit Note',
+        'quotation'        => 'Quotation',
+        'delivery_challan' => 'Delivery Challan',
+    ];
+
+    private function documentNumberingSummary(int $pid, string $from, string $to): array
+    {
+        $rows = [];
+        foreach (self::$DOC_TYPE_ORDER as $type) {
+            $docs = CommercialDocument::where('client_profile_id', $pid)
+                ->where('type', $type)
+                ->whereDate('created_at', '>=', $from)
+                ->whereDate('created_at', '<=', $to)
+                ->whereNotIn('status', ['draft'])
+                ->orderBy('number')
+                ->get(['id', 'number', 'status']);
+
+            if ($docs->isEmpty()) {
+                continue;
+            }
+
+            $allNums   = $docs->pluck('number');
+            $prefix    = $this->extractPrefix((string) ($allNums->first() ?? ''));
+            $cancelled = $docs->where('status', 'cancelled')->count();
+            $active    = $docs->count() - $cancelled;
+
+            $rows[] = [
+                'type'           => $type,
+                'label'          => self::$DOC_TYPE_LABELS[$type] ?? $type,
+                'prefix'         => $prefix,
+                'start_sequence' => $allNums->first(),
+                'end_sequence'   => $allNums->last(),
+                'total'          => $docs->count(),
+                'cancelled'      => $cancelled,
+                'active'         => $active,
+            ];
+        }
+
+        $totalDocs      = array_sum(array_column($rows, 'total'));
+        $activeDocs     = array_sum(array_column($rows, 'active'));
+        $cancelledDocs  = array_sum(array_column($rows, 'cancelled'));
+        $docTypesCount  = count($rows);
+
+        return [
+            'summary' => compact('totalDocs', 'activeDocs', 'cancelledDocs', 'docTypesCount'),
+            'rows'    => $rows,
+        ];
+    }
+
+    public function drillDown(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $pid      = $this->profileId($request);
+        $period   = array_combine(['from', 'to'], $this->dateRange($request));
+        $docType  = $request->input('document_type');
+
+        abort_unless(in_array($docType, self::$DOC_TYPE_ORDER, true), 422, 'Invalid document type.');
+
+        $docs = CommercialDocument::where('client_profile_id', $pid)
+            ->where('type', $docType)
+            ->whereDate('created_at', '>=', $period['from'])
+            ->whereDate('created_at', '<=', $period['to'])
+            ->whereNotIn('status', ['draft'])
+            ->orderBy('number')
+            ->get(['id', 'number', 'status', 'document_date', 'created_at', 'type']);
+
+        return response()->json([
+            'document_type' => $docType,
+            'label'         => self::$DOC_TYPE_LABELS[$docType] ?? $docType,
+            'from'          => $period['from'],
+            'to'            => $period['to'],
+            'documents'     => $docs->map(fn ($d) => [
+                'id'            => $d->id,
+                'number'        => $d->number,
+                'document_date' => $d->document_date?->format('d M Y'),
+                'status'        => $d->status,
+                'created_at'    => $d->created_at?->format('d M Y, h:i A'),
+                'filing_status' => null,
+            ]),
+        ]);
+    }
+
+    private function extractPrefix(string $number): string
+    {
+        if (preg_match('/^([A-Za-z\-_\/]+)/u', $number, $m)) {
+            return rtrim($m[1], '-_/');
+        }
+        return '—';
     }
 
     private function flattenRows($data): array
@@ -489,18 +633,19 @@ class ReportController extends Controller
         $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
 
         $xml .= '<Styles>';
-        $xml .= '<Style ss:ID="bizName"><Font ss:Bold="1" ss:Size="14" ss:Color="#1E40AF"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="bizLine"><Font ss:Size="10" ss:Color="#475569"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="bizMeta"><Font ss:Size="10" ss:Color="#334155"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="title"><Font ss:Bold="1" ss:Size="13" ss:Color="#FFFFFF"/><Interior ss:Color="#1E40AF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="period"><Font ss:Italic="1" ss:Size="10" ss:Color="#64748B"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="colHead"><Font ss:Bold="1" ss:Size="10" ss:Color="#FFFFFF"/><Interior ss:Color="#1E40AF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="bizName"><Font ss:Bold="1" ss:Size="14" ss:Color="#000000"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="bizLine"><Font ss:Size="10" ss:Color="#222222"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="bizMeta"><Font ss:Size="10" ss:Color="#222222"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="title"><Font ss:Bold="1" ss:Size="13" ss:Color="#000000"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="period"><Font ss:Size="10" ss:Color="#444444"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="colHead"><Font ss:Bold="1" ss:Size="10" ss:Color="#FFFFFF"/><Interior ss:Color="#4B5563" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
         $xml .= '<Style ss:ID="cell"><Alignment ss:Horizontal="Center"/></Style>';
         $xml .= '<Style ss:ID="cellLabel"><Font ss:Bold="1"/><Alignment ss:Horizontal="Left"/></Style>';
         $xml .= '<Style ss:ID="cellMoney"><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
-        $xml .= '<Style ss:ID="totalCell"><Font ss:Bold="1" ss:Color="#1E40AF"/><Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="totalLabel"><Font ss:Bold="1" ss:Color="#1E40AF"/><Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/><Alignment ss:Horizontal="Left"/></Style>';
-        $xml .= '<Style ss:ID="totalMoney"><Font ss:Bold="1" ss:Color="#1E40AF"/><Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
+        $xml .= '<Style ss:ID="totalCell"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="totalLabel"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Left"/></Style>';
+        $xml .= '<Style ss:ID="totalMoney"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
+        $xml .= '<Style ss:ID="footer"><Font ss:Size="9" ss:Color="#444444"/><Alignment ss:Horizontal="Left"/></Style>';
         $xml .= '</Styles>';
 
         $xml .= '<Worksheet ss:Name="Report"><Table>';
@@ -512,9 +657,10 @@ class ReportController extends Controller
                 $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="bizLine"><Data ss:Type="String">'.$esc($meta['address']).'</Data></Cell></Row>';
             }
             $metaLine = implode('   |   ', array_filter([
-                ($meta['gstin'] ?? null) ? 'GSTIN: '.$meta['gstin'] : null,
-                ($meta['phone'] ?? null) ? 'Contact: '.$meta['phone'] : null,
-                ($meta['email'] ?? null) ? 'Email: '.$meta['email'] : null,
+                ($meta['pan']   ?? null) ? 'PAN: '.$meta['pan']       : null,
+                ($meta['gstin'] ?? null) ? 'GSTIN: '.$meta['gstin']   : null,
+                ($meta['email'] ?? null) ? 'Email: '.$meta['email']   : null,
+                ($meta['phone'] ?? null) ? 'Mobile: '.$meta['phone']  : null,
             ]));
             if ($metaLine) {
                 $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="bizMeta"><Data ss:Type="String">'.$esc($metaLine).'</Data></Cell></Row>';
@@ -522,8 +668,8 @@ class ReportController extends Controller
             $xml .= '<Row></Row>';
         }
 
-        $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="title"><Data ss:Type="String">'.$esc(strtoupper($title)).'</Data></Cell></Row>';
-        $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="period"><Data ss:Type="String">'.$esc('Report Period: '.$periodText).'</Data></Cell></Row>';
+        $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="title"><Data ss:Type="String">'.$esc($title).'</Data></Cell></Row>';
+        $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="period"><Data ss:Type="String">'.$esc('Period: '.$periodText).'</Data></Cell></Row>';
         $xml .= '<Row></Row>';
 
         $xml .= '<Row>';
@@ -551,6 +697,8 @@ class ReportController extends Controller
             }
             $xml .= '</Row>';
         }
+        $xml .= '<Row></Row>';
+        $xml .= '<Row><Cell ss:StyleID="footer"><Data ss:Type="String">'.$esc('Report Generated On: '.now()->format('d-m-Y')).'</Data></Cell></Row>';
         $xml .= '</Table></Worksheet></Workbook>';
 
         return response($xml, 200, [

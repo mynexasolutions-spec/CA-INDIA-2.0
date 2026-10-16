@@ -1,210 +1,141 @@
-import { buildFyOptions, currentFyRange } from './billingUtils';
-import { isDocTypeDisabled } from './billingProfile';
+import { currentFyRange } from './billingUtils';
 
-function FilterField({ label, children }) {
+function SearchIcon() {
   return (
-    <label className="bp-filter-field">
-      <span className="bp-filter-title">{label}</span>
-      {children}
-    </label>
+    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="9" r="6" /><path d="m16 16-3.5-3.5" />
+    </svg>
   );
 }
-
-function FunnelIcon() {
+function ApplyIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 4h14l-5.5 6.5V16l-3 1.5v-7L3 4Z" />
     </svg>
   );
 }
-
-function RefreshIcon() {
+function ResetIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 8a6 6 0 1 0-1.5 5.7" />
-      <path d="M16 4v4h-4" />
+      <path d="M16 8a6 6 0 1 0-1.5 5.7" /><path d="M16 4v4h-4" />
     </svg>
   );
 }
 
-/** Billing Module spec §7 — the shared filter bar reused across every document tab. */
+/**
+ * Simplified filter bar for all billing document list pages.
+ * Props:
+ *   q / setQ             — free-text search
+ *   docFrom / setDocFrom — Invoice/Document Date From
+ *   docTo   / setDocTo   — Invoice/Document Date To
+ *   from    / setFrom    — Creation Date From
+ *   to      / setTo      — Creation Date To
+ *   gstType / setGstType — B2B / B2C customer type (optional)
+ *   showGstType          — show the Customer Type dropdown
+ *   onApply / onClear
+ */
 export default function BillingDateFilters({
-  q = '',
-  setQ,
-  month = '',
-  setMonth,
-  fy = '',
-  setFy,
-  from = '',
-  setFrom,
-  to = '',
-  setTo,
-  status = '',
-  setStatus,
-  docType = '',
-  setDocType,
+  q = '',          setQ,
+  docFrom = '',    setDocFrom,
+  docTo = '',      setDocTo,
+  from = '',       setFrom,
+  to = '',         setTo,
+  gstType = '',    setGstType,
+  showGstType = false,
   onApply,
   onClear,
-  showSearch = true,
-  showDocType = false,
-  profile = null,
+  /* legacy props kept for backward compat — no-op */
+  month, setMonth, fy, setFy, status, setStatus, docType, setDocType,
+  showSearch = true, showDocType = false, profile = null,
 }) {
-  const fyOptions = buildFyOptions();
-
-  const now = new Date();
-  const currentMonthVal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const prevDate = new Date();
-  prevDate.setMonth(prevDate.getMonth() - 1);
-  const prevMonthVal = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
-
-  const applyMonth = (value) => {
-    setMonth(value);
-    if (value) {
-      setFy('');
-      const [y, m] = value.split('-').map(Number);
-      const last = new Date(y, m, 0).getDate();
-      setFrom(`${value}-01`);
-      setTo(`${value}-${String(last).padStart(2, '0')}`);
-    }
-  };
-
-  const applyFy = (value) => {
-    setFy(value);
-    if (value) {
-      setMonth('');
-      const [y1] = value.split('-');
-      const year = parseInt(y1, 10);
-      if (year) {
-        setFrom(`${year}-04-01`);
-        setTo(`${year + 1}-03-31`);
-      }
-    }
-  };
-
   const clearAll = () => {
     const next = currentFyRange();
     setQ?.('');
-    setMonth?.('');
-    setFy?.(next.fy);
+    setDocFrom?.(next.from);
+    setDocTo?.(next.to);
     setFrom?.(next.from);
     setTo?.(next.to);
-    setStatus?.('');
-    setDocType?.('');
+    setGstType?.('');
     onClear?.();
   };
 
-  const applyCurrentMonth = () => {
-    const now = new Date();
-    const value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    applyMonth(value);
-    onApply?.();
-  };
-
-  const applyPreviousMonth = () => {
-    const now = new Date();
-    now.setMonth(now.getMonth() - 1);
-    const value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    applyMonth(value);
-    onApply?.();
-  };
+  const F = { display: 'flex', flexDirection: 'column', gap: 4 };
+  const LBL = { fontSize: 11.5, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.3 };
+  const CTL = { height: 36, borderRadius: 8, border: '1.5px solid #e2e8f0', padding: '0 10px', fontSize: 13, color: '#1e293b', background: '#fff', outline: 'none', boxSizing: 'border-box', width: '100%' };
 
   return (
-    <div className="bp-filters-panel">
-      <div className="bp-filters-grid">
-        <FilterField label="Quick Filters">
-          <div className="bp-filter-quick-row">
-            <button
-              type="button"
-              className={`bp-filter-item bp-filter-btn ${month === currentMonthVal ? 'active' : ''}`}
-              onClick={applyCurrentMonth}
-            >
-              This Month
-            </button>
-            <button
-              type="button"
-              className={`bp-filter-item bp-filter-btn ${month === prevMonthVal ? 'active' : ''}`}
-              onClick={applyPreviousMonth}
-            >
-              Previous Month
-            </button>
-          </div>
-        </FilterField>
-        {showSearch && (
-          <FilterField label="Search">
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', padding: '14px 0 12px', borderBottom: '1px solid #f1f5f9', marginBottom: 14 }}>
+
+      {/* Search */}
+      {showSearch && (
+        <div style={{ ...F, flex: '1 1 180px', minWidth: 160 }}>
+          <span style={LBL}>Search</span>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }}><SearchIcon /></span>
             <input
-              className="bp-filter-item bp-filter-control"
-              placeholder="Search by document no., party or GSTIN..."
+              style={{ ...CTL, paddingLeft: 32 }}
+              placeholder="Search by invoice no., party name, GSTIN"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => setQ?.(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && onApply?.()}
             />
-          </FilterField>
-        )}
-        <FilterField label="Financial Year">
-          <select
-            className="bp-filter-item bp-filter-control"
-            value={fy}
-            onChange={(e) => applyFy(e.target.value)}
-          >
-            <option value="">All FY</option>
-            {fyOptions.map((opt) => (
-              <option key={opt} value={opt}>FY {opt}</option>
-            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Customer Type */}
+      {showGstType && setGstType && (
+        <div style={{ ...F, flex: '0 0 140px', minWidth: 120 }}>
+          <span style={LBL}>Customer Type</span>
+          <select style={CTL} value={gstType} onChange={(e) => setGstType?.(e.target.value)}>
+            <option value="">All (B2B &amp; B2C)</option>
+            <option value="b2b">B2B</option>
+            <option value="b2c">B2C</option>
           </select>
-        </FilterField>
-        <FilterField label="From Date">
-          <input
-            className="bp-filter-item bp-filter-control"
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-          />
-        </FilterField>
-        <FilterField label="To Date">
-          <input
-            className="bp-filter-item bp-filter-control"
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-          />
-        </FilterField>
-        {setStatus && (
-          <FilterField label="Payment Status">
-            <select
-              className="bp-filter-item bp-filter-control"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              <option value="">All Status</option>
-              <option value="draft">Draft</option>
-              <option value="issued">Unpaid</option>
-              <option value="paid">Paid</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </FilterField>
-        )}
-        {showDocType && setDocType && (
-          <FilterField label="Document Type">
-            <select
-              className="bp-filter-item bp-filter-control"
-              value={docType}
-              onChange={(e) => setDocType(e.target.value)}
-            >
-              <option value="">All Types</option>
-              <option value="quotation">Quotation</option>
-              {!isDocTypeDisabled(profile, 'tax_invoice') && <option value="tax_invoice">Tax Invoice</option>}
-              {!isDocTypeDisabled(profile, 'bill_of_supply') && <option value="bill_of_supply">Bill of Supply</option>}
-              <option value="debit_note">Debit Note</option>
-              <option value="credit_note">Credit Note</option>
-            </select>
-          </FilterField>
-        )}
-      </div>
-      <div className="bp-filters-actions">
-        <button type="button" className="bp-filter-item bp-filter-btn bp-filter-btn-primary" onClick={onApply}>
-          <FunnelIcon /> Apply Filters
+        </div>
+      )}
+
+      {/* Invoice Date From */}
+      {setDocFrom && (
+        <div style={{ ...F, flex: '0 0 140px', minWidth: 120 }}>
+          <span style={LBL}>Invoice Date From</span>
+          <input type="date" style={CTL} value={docFrom} onChange={(e) => setDocFrom?.(e.target.value)} />
+        </div>
+      )}
+
+      {/* Invoice Date To */}
+      {setDocTo && (
+        <div style={{ ...F, flex: '0 0 140px', minWidth: 120 }}>
+          <span style={LBL}>Invoice Date To</span>
+          <input type="date" style={CTL} value={docTo} onChange={(e) => setDocTo?.(e.target.value)} />
+        </div>
+      )}
+
+      {/* Creation Date From */}
+      {setFrom && (
+        <div style={{ ...F, flex: '0 0 140px', minWidth: 120 }}>
+          <span style={LBL}>Creation Date From</span>
+          <input type="date" style={CTL} value={from} onChange={(e) => setFrom?.(e.target.value)} />
+        </div>
+      )}
+
+      {/* Creation Date To */}
+      {setTo && (
+        <div style={{ ...F, flex: '0 0 140px', minWidth: 120 }}>
+          <span style={LBL}>Creation Date To</span>
+          <input type="date" style={CTL} value={to} onChange={(e) => setTo?.(e.target.value)} />
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flex: '0 0 auto' }}>
+        <button type="button" onClick={onApply}
+          style={{ height: 36, padding: '0 16px', borderRadius: 8, border: 'none', background: '#1e3a5f', color: '#fff', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+          <ApplyIcon /> Apply
         </button>
-        <button type="button" className="bp-filter-item bp-filter-btn" onClick={clearAll}>
-          <RefreshIcon /> Clear Filters
+        <button type="button" onClick={clearAll}
+          style={{ height: 36, padding: '0 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+          <ResetIcon /> Reset
         </button>
       </div>
     </div>

@@ -114,7 +114,7 @@ export default function AdminBillingDocPlaceholder() {
               gap: 8,
             }}
           >
-            ← Back to Client List
+            Back to Client List
           </Link>
         </div>
       </div>

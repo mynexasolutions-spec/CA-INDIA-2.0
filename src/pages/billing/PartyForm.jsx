@@ -48,6 +48,9 @@ export default function PartyForm() {
   const [gstinError, setGstinError] = useState('');
   const [confirmModal, setConfirmModal] = useState(null);
   const [showDiscardModal, setShowDiscardModal] = useState(false);
+  const [gstinFetching, setGstinFetching] = useState(false);
+  const [gstinVerified, setGstinVerified] = useState(false);
+  const [gstinFetchErr, setGstinFetchErr] = useState('');
   // Shipping Address auto-fills from Billing Address until the user types into Shipping
   // Address directly — after that, Billing Address edits no longer overwrite it.
   const [shippingTouched, setShippingTouched] = useState(false);
@@ -62,6 +65,28 @@ export default function PartyForm() {
   }, [id, editing]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const fetchGstin = async () => {
+    const gstin = (form.gstin || '').trim().toUpperCase();
+    if (!GSTIN_REGEX.test(gstin)) { setGstinFetchErr('Enter a valid 15-digit GSTIN first.'); return; }
+    setGstinFetching(true); setGstinFetchErr(''); setGstinVerified(false);
+    try {
+      const d = await api(`/billing/parties/gstin-lookup?gstin=${gstin}`);
+      setForm((f) => ({
+        ...f,
+        gstin,
+        name:            d.legal_name  || f.name,
+        proprietor_name: d.trade_name  || f.proprietor_name,
+        state:           d.state       || f.state,
+        state_code:      d.state_code  || f.state_code,
+        billing_address: d.address     || f.billing_address,
+        shipping_address: !shippingTouched ? (d.address || f.shipping_address) : f.shipping_address,
+      }));
+      setGstinVerified(true);
+    } catch (e) {
+      setGstinFetchErr(e.message || 'GST lookup failed. Please try again or enter details manually.');
+    } finally { setGstinFetching(false); }
+  };
 
   const onSave = async (e) => {
     e.preventDefault();
@@ -145,29 +170,56 @@ export default function PartyForm() {
         <div className="bp-form two">
           <Field label="GST Registration Status" required>
             <div className="bp-gst-radio-row">
-              <label className="bp-gst-radio">
-                <input type="radio" name="gst_status" checked={form.gst_status === 'registered'} onChange={() => { set('gst_status', 'registered'); setGstinError(''); }} />
-                Registered
+              <label className="bp-gst-radio" style={{ alignItems: 'flex-start' }}>
+                <input type="radio" name="gst_status" checked={form.gst_status === 'registered'} onChange={() => { set('gst_status', 'registered'); setGstinError(''); }} style={{ marginTop: 3 }} />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>Registered (B2B)</div>
+                  <div style={{ fontSize: 11, color: 'var(--bp-muted)', marginTop: 2 }}>Customer has GSTIN</div>
+                </div>
               </label>
-              <label className="bp-gst-radio">
-                <input type="radio" name="gst_status" checked={form.gst_status === 'unregistered'} onChange={() => { set('gst_status', 'unregistered'); set('gstin', ''); setGstinError(''); }} />
-                Unregistered
+              <label className="bp-gst-radio" style={{ alignItems: 'flex-start' }}>
+                <input type="radio" name="gst_status" checked={form.gst_status === 'unregistered'} onChange={() => { set('gst_status', 'unregistered'); set('gstin', ''); setGstinError(''); }} style={{ marginTop: 3 }} />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>Unregistered (B2C)</div>
+                  <div style={{ fontSize: 11, color: 'var(--bp-muted)', marginTop: 2 }}>Customer does not have GSTIN</div>
+                </div>
               </label>
             </div>
           </Field>
 
           {form.gst_status === 'registered' ? (
             <Field label="GSTIN" required help="Enter 15 digit GST Identification Number">
-              <input
-                className="bp-input"
-                value={form.gstin}
-                maxLength={15}
-                placeholder="E.g. 27ABCDE1234F1Z5"
-                style={{ textTransform: 'uppercase' }}
-                onChange={(e) => { set('gstin', e.target.value.toUpperCase()); setGstinError(''); }}
-                required
-              />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+                <input
+                  className="bp-input"
+                  value={form.gstin}
+                  maxLength={15}
+                  placeholder="E.g. 27ABCDE1234F1Z5"
+                  style={{ textTransform: 'uppercase', flex: 1, borderColor: gstinVerified ? '#16a34a' : undefined }}
+                  onChange={(e) => { set('gstin', e.target.value.toUpperCase()); setGstinError(''); setGstinVerified(false); setGstinFetchErr(''); }}
+                  required
+                />
+                <button type="button" onClick={fetchGstin} disabled={gstinFetching}
+                  style={{ padding: '0 16px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: gstinFetching ? 'wait' : 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {gstinFetching
+                    ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin 1s linear infinite' }}><path d="M21 12a9 9 0 1 1-2.6-6.4"/></svg> Fetching…</>
+                    : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Fetch GST Details</>}
+                </button>
+              </div>
+              {gstinVerified && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 12, fontWeight: 700, color: '#16a34a' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  GSTIN Verified — details auto-filled below. Please review before saving.
+                </div>
+              )}
+              {gstinFetchErr && <span style={{ display: 'block', fontSize: 12, color: '#dc2626', marginTop: 6 }}>{gstinFetchErr}</span>}
               {gstinError && <span className="bp-gstin-error">{gstinError}</span>}
+              {!gstinVerified && !gstinFetchErr && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 11, color: '#15803d', background: '#dcfce7', border: '1px solid #86efac', borderRadius: 7, padding: '7px 12px', fontWeight: 600 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="#15803d"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12" stroke="white" strokeWidth="2"/><line x1="12" y1="16" x2="12.01" y2="16" stroke="white" strokeWidth="2.5"/></svg>
+                  GSTIN is mandatory for Registered (B2B) customers.
+                </div>
+              )}
             </Field>
           ) : <div />}
 

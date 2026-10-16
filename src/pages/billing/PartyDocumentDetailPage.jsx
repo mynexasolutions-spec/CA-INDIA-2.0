@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, getAuthToken } from '../../api/client';
-import { useAuth } from '../../auth/AuthContext';
 import { LoadingBlock } from '../../components/Spinner';
 import { partyDocumentSections } from './billingProfile';
-import { billingDocPath, filterDocsByPeriod } from './billingUtils';
+import { filterDocsByPeriod } from './billingUtils';
+import { useReportsEnv } from './ReportsContext';
 
 /* ── Icons ─────────────────────────────────────────────────── */
 function ArrowLeftIcon() {
@@ -116,8 +116,8 @@ export default function PartyDocumentDetailPage() {
   const { partyId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const profile = user?.client_profile;
+  const env = useReportsEnv();
+  const profile = env.profile;
 
   const from      = searchParams.get('from') || '';
   const to        = searchParams.get('to')   || '';
@@ -144,7 +144,7 @@ export default function PartyDocumentDetailPage() {
     if (to)   qs.set('to', to);
     if (!from && !to && fy) qs.set('fy', fy);
 
-    api(`/billing/documents?${qs}`)
+    api(`${env.docsApi}?${qs}`)
       .then((d) => setRows(d.data || d || []))
       .catch((e) => setErr(e.message || 'Failed to load documents'))
       .finally(() => setLoading(false));
@@ -180,7 +180,7 @@ export default function PartyDocumentDetailPage() {
   const download = async (format) => {
     const token = getAuthToken();
     const qs = new URLSearchParams({ type: 'party_documents', party_id: partyId, from, to, format });
-    const res = await fetch(`/api/billing/reports/export?${qs}`, {
+    const res = await fetch(`${env.exportUrl}?${qs}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: '*/*' },
     });
     if (!res.ok) return;
@@ -287,7 +287,7 @@ export default function PartyDocumentDetailPage() {
               <tbody>
                 {pageRows.map((r, i) => {
                   const srNo = (safePage - 1) * pageSize + i + 1;
-                  const path = billingDocPath(r.type, r.id);
+                  const path = env.docLink(r.type, r.id);
                   return (
                     <tr key={r.id || `${r.type}-${r.number}`}
                       style={{ borderBottom: '1px solid var(--bp-border)', background: '#fff', transition: 'background .12s' }}

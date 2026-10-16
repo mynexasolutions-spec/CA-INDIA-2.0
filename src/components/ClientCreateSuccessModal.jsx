@@ -14,6 +14,7 @@ export default function ClientCreateSuccessModal({
   isOpen = true,
   clientId,
   clientName,
+  temporaryPassword = '',
   onClose,
   onGoToDetails,
 }) {
@@ -79,6 +80,13 @@ export default function ClientCreateSuccessModal({
                 {clientName}
               </div>
             )}
+          </div>
+        )}
+
+        {temporaryPassword && (
+          <div style={{ marginBottom: 20, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', fontSize: 12.5, color: '#92400e' }}>
+            Temporary password (shown only once — share it with the client securely):
+            <div style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 700, color: '#0f172a', marginTop: 4, userSelect: 'all' }}>{temporaryPassword}</div>
           </div>
         )}
 

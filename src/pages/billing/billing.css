@@ -268,12 +268,25 @@
 .bp-stat-grid-5 {
   display: grid;
 }
-.bp-stat-grid-2 { grid-template-columns: repeat(2, 1fr); }
-.bp-stat-grid-3 { grid-template-columns: repeat(3, 1fr); }
-.bp-stat-grid-4 { grid-template-columns: repeat(4, 1fr); }
-.bp-stat-grid-5 { grid-template-columns: repeat(5, 1fr); }
+
+.bp-stat-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.bp-stat-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.bp-stat-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.bp-stat-grid-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
 
 @media (max-width: 1024px) {
+
   .bp-stat-grid-4,
   .bp-stat-grid-5 {
     grid-template-columns: repeat(3, 1fr);
@@ -281,6 +294,7 @@
 }
 
 @media (max-width: 768px) {
+
   .bp-stat-grid-3,
   .bp-stat-grid-4,
   .bp-stat-grid-5 {
@@ -289,6 +303,7 @@
 }
 
 @media (max-width: 480px) {
+
   .bp-stat-grid-2,
   .bp-stat-grid-3,
   .bp-stat-grid-4,
@@ -296,13 +311,27 @@
     grid-template-columns: 1fr;
   }
 
-  .bp-gst-feature-row { grid-template-columns: repeat(2, 1fr) !important; }
+  .bp-gst-feature-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
 
-  .bp-modal { width: 100% !important; padding: 22px 18px 20px !important; }
+  .bp-modal {
+    width: 100% !important;
+    padding: 22px 18px 20px !important;
+  }
 
-  .bp-gate-footer-btn { font-size: 10px !important; padding: 0 4px !important; gap: 3px !important; white-space: nowrap !important; }
+  .bp-gate-footer-btn {
+    font-size: 10px !important;
+    padding: 0 4px !important;
+    gap: 3px !important;
+    white-space: nowrap !important;
+  }
 
-  .bp-toolbar .bp-toolbar-export-btn { font-size: 11.5px !important; padding: 0 6px !important; gap: 5px !important; }
+  .bp-toolbar .bp-toolbar-export-btn {
+    font-size: 11.5px !important;
+    padding: 0 6px !important;
+    gap: 5px !important;
+  }
 }
 
 .bp-card {
@@ -866,11 +895,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: nowrap; /* No wrapping to keep elements on a single horizontal line */
+  flex-wrap: nowrap;
+  /* No wrapping to keep elements on a single horizontal line */
   gap: 10px;
 }
 
-.bp-table-footer .bp-pagination > span {
+.bp-table-footer .bp-pagination>span {
   white-space: nowrap;
   flex-shrink: 0;
   font-size: 12px;
@@ -1019,7 +1049,8 @@
 
 .bp-doctype-tile.active {
   border-color: var(--bp-blue);
-  background: #f4f8ff; /* Soft blue tint */
+  background: #f4f8ff;
+  /* Soft blue tint */
   box-shadow: 0 0 0 1px var(--bp-blue);
 }
 
@@ -1058,7 +1089,8 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: #2563eb; /* Vibrant royal blue like screenshot */
+  background: #2563eb;
+  /* Vibrant royal blue like screenshot */
   color: #fff;
   font-size: 13px;
   font-weight: 800;
@@ -1535,23 +1567,23 @@
     flex-wrap: wrap;
   }
 
-  .bp-filters-grid > .bp-filter-field:first-child {
+  .bp-filters-grid>.bp-filter-field:first-child {
     border-right: none;
     padding-right: 0;
   }
 
-  .bp-filters-grid > .bp-filter-field:nth-child(2),
-  .bp-filters-grid > .bp-filter-field:nth-child(3),
-  .bp-filters-grid > .bp-filter-field:nth-child(4),
-  .bp-filters-grid > .bp-filter-field:nth-child(5),
-  .bp-filters-grid > .bp-filter-field:nth-child(6),
-  .bp-filters-grid > .bp-filter-field:nth-child(7) {
+  .bp-filters-grid>.bp-filter-field:nth-child(2),
+  .bp-filters-grid>.bp-filter-field:nth-child(3),
+  .bp-filters-grid>.bp-filter-field:nth-child(4),
+  .bp-filters-grid>.bp-filter-field:nth-child(5),
+  .bp-filters-grid>.bp-filter-field:nth-child(6),
+  .bp-filters-grid>.bp-filter-field:nth-child(7) {
     flex: 1 1 140px;
   }
 }
 
 @media (max-width: 480px) {
-  .bp-filters-grid > .bp-filter-field {
+  .bp-filters-grid>.bp-filter-field {
     flex: 1 1 100% !important;
   }
 
@@ -1858,12 +1890,18 @@ select.bp-filter-control {
 }
 
 .bp-gst-badge.is-unregistered {
-  background: #eef1f5;
-  color: var(--bp-muted);
+  background: #fef9ec;
+  color: #b45309;
 }
 
 .bp-gst-badge.is-unregistered .dot {
-  background: #94a3b8;
+  background: #d97706;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .bp-pagination {
@@ -3245,14 +3283,49 @@ select.bp-filter-control {
 
 /* Mobile responsive overrides for all updated Client Portal pages */
 @media (max-width: 768px) {
-  .bp-gate-dots { display: none; }
-  .bp-gate-illustration { margin: 10px auto 0 !important; transform: scale(0.8); }
-  .bp-gst-feature-row { grid-template-columns: repeat(3, 1fr) !important; row-gap: 16px !important; }
-  .bp-gate-hero { padding: 22px 20px !important; text-align: center; justify-content: center !important; }
-  .bp-gate-hero > div:nth-child(2) { min-width: 0 !important; }
-  .bp-gate-hero .bp-gate-cta { width: auto !important; margin: 0 auto !important; }
-  .bp-gate-footer-btns { flex-wrap: nowrap !important; width: 100%; }
-  .bp-gate-footer-btns .bp-gate-footer-btn { flex: 1 1 0 !important; width: auto !important; min-width: 0 !important; padding: 0 8px !important; font-size: 11.5px !important; gap: 5px !important; white-space: nowrap !important; }
+  .bp-gate-dots {
+    display: none;
+  }
+
+  .bp-gate-illustration {
+    margin: 10px auto 0 !important;
+    transform: scale(0.8);
+  }
+
+  .bp-gst-feature-row {
+    grid-template-columns: repeat(3, 1fr) !important;
+    row-gap: 16px !important;
+  }
+
+  .bp-gate-hero {
+    padding: 22px 20px !important;
+    text-align: center;
+    justify-content: center !important;
+  }
+
+  .bp-gate-hero>div:nth-child(2) {
+    min-width: 0 !important;
+  }
+
+  .bp-gate-hero .bp-gate-cta {
+    width: auto !important;
+    margin: 0 auto !important;
+  }
+
+  .bp-gate-footer-btns {
+    flex-wrap: nowrap !important;
+    width: 100%;
+  }
+
+  .bp-gate-footer-btns .bp-gate-footer-btn {
+    flex: 1 1 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 0 8px !important;
+    font-size: 11.5px !important;
+    gap: 5px !important;
+    white-space: nowrap !important;
+  }
 
   /* 1. GSTR KPI & Status card grids */
   .bp-content div[style*="grid-template-columns: repeat(5, 1fr)"],
@@ -3265,18 +3338,18 @@ select.bp-filter-control {
     grid-template-columns: 1fr !important;
     padding: 10px 0 !important;
   }
-  
+
   /* Scoped to children that actually declare their own border-right (the ClientGstDashboard-style
      divider row) — a plain repeat(4,1fr) grid of independent gradient KPI/highlight cards (Outstanding,
      GST Liability, Parties' Key Highlights, etc.) has no border-right on its children, so it's left
      alone instead of getting an unwanted divider line and padding stamped onto every card. */
-  .bp-content div[style*="grid-template-columns: repeat(4, 1fr)"] > div[style*="border-right"] {
+  .bp-content div[style*="grid-template-columns: repeat(4, 1fr)"]>div[style*="border-right"] {
     border-right: none !important;
     border-bottom: 1px solid #cbd5e1 !important;
     padding: 12px 16px !important;
   }
 
-  .bp-content div[style*="grid-template-columns: repeat(4, 1fr)"] > div[style*="border-right"]:last-child {
+  .bp-content div[style*="grid-template-columns: repeat(4, 1fr)"]>div[style*="border-right"]:last-child {
     border-bottom: none !important;
   }
 
@@ -3293,7 +3366,7 @@ select.bp-filter-control {
   }
 
   /* 2. Filters & Selection Forms Alignment */
-  .bp-filters, 
+  .bp-filters,
   .bp-card div[style*="display: flex; flex-wrap: wrap; gap: 12px;"],
   .bp-card div[style*="display: flex; flex-wrap: wrap; gap: 16px;"],
   .bp-card div[style*="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;"] {
@@ -3336,9 +3409,9 @@ select.bp-filter-control {
      Prev/Next, page-number triples — must not each be forced to 100% width, or every one of them
      fights for the full row and they collide or overflow instead of sitting neatly in a line. */
   .bp-card button:has(+ button),
-  .bp-card button + button,
+  .bp-card button+button,
   .bp-card input:has(+ button),
-  .bp-card input + button {
+  .bp-card input+button {
     width: auto !important;
     min-width: 0 !important;
   }
@@ -3357,9 +3430,9 @@ select.bp-filter-control {
     align-items: stretch !important;
     gap: 10px !important;
   }
-  
-  .bp-card div[style*="display: flex; gap: 10px; align-items: flex-end;"] > div,
-  .bp-card div[style*="display: flex; gap: 10px; align-items: flex-end;"] > button {
+
+  .bp-card div[style*="display: flex; gap: 10px; align-items: flex-end;"]>div,
+  .bp-card div[style*="display: flex; gap: 10px; align-items: flex-end;"]>button {
     width: 100% !important;
   }
 
@@ -3376,16 +3449,16 @@ select.bp-filter-control {
     align-items: stretch !important;
     gap: 12px !important;
   }
-  
+
   .bp-toolbar div[style*="display: flex; gap: 10px;"],
   .bp-toolbar div[style*="display: flex; gap: 10px"] {
     flex-direction: column !important;
     width: 100% !important;
     gap: 8px !important;
   }
-  
-  .bp-toolbar div[style*="display: flex; gap: 10px;"] > button,
-  .bp-toolbar div[style*="display: flex; gap: 10px;"] > a,
+
+  .bp-toolbar div[style*="display: flex; gap: 10px;"]>button,
+  .bp-toolbar div[style*="display: flex; gap: 10px;"]>a,
   .bp-toolbar button {
     width: 100% !important;
   }
@@ -3415,7 +3488,8 @@ select.bp-filter-control {
   }
 
   .bp-fy-dates {
-    display: none !important; /* Hide secondary date range on mobile topbar */
+    display: none !important;
+    /* Hide secondary date range on mobile topbar */
   }
 
   .bp-fy-select-box {
@@ -3444,7 +3518,8 @@ select.bp-filter-control {
   }
 
   .bp-avatar-name {
-    display: none !important; /* Hide avatar name text on mobile */
+    display: none !important;
+    /* Hide avatar name text on mobile */
   }
 
   .bp-avatar-btn {

@@ -5,7 +5,11 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ClientChangeRequest;
 use App\Models\ClientGstReturn;
+use App\Models\ClientGstr3bRequest;
 use App\Models\ClientProfile;
+use App\Services\ClientRequestFeed;
+use App\Services\Gst\Cmp08Period;
+use Illuminate\Http\Request;
 use App\Models\DocumentEditRequest;
 use App\Models\GstFilingRequest;
 use App\Models\User;
@@ -14,8 +18,12 @@ use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        // The header's Financial Year: limits the request counts below to that period.
+        $from = $request->filled('from') ? (string) $request->input('from') : null;
+        $to = $request->filled('to') ? (string) $request->input('to') : null;
+
         $now = now();
         $today = $now->copy()->startOfDay();
 
@@ -31,37 +39,61 @@ class DashboardController extends Controller
         // - Bank Details = client_change_requests section 'bank'
         // - Invoice Settings = client_change_requests section 'invoice_settings'
         // - Others = client_change_requests sections other than bank & invoice_settings
-        $docTotal = DocumentEditRequest::count();
-        $docPending = DocumentEditRequest::where('status', 'pending')->count();
-        $docApproved = DocumentEditRequest::where('status', 'approved')->count();
-        $docRejected = DocumentEditRequest::where('status', 'rejected')->count();
+        // Real sources, one status vocabulary (pending / approved / rejected):
+        //  - the Request module (client "Other Request" form + invoice amendments), where Admin marks
+        //    a request Completed (= approved) or Rejected,
+        //  - Settings change requests (bank / invoice settings ...) and document edit requests.
+        $feed = ClientRequestFeed::countsByType($from, $to);
+        $inRange = fn ($q) => $q
+            ->when($from, fn ($w) => $w->whereDate('created_at', '>=', $from))
+            ->when($to, fn ($w) => $w->whereDate('created_at', '<=', $to));
+        $changeCounts = function (array $sections, bool $exclude = false) use ($inRange) {
+            $base = fn () => $inRange(ClientChangeRequest::query())
+                ->when($exclude, fn ($q) => $q->whereNotIn('section', $sections), fn ($q) => $q->whereIn('section', $sections));
 
-        $bankTotal = ClientChangeRequest::where('section', 'bank')->count();
-        $bankPending = ClientChangeRequest::where('section', 'bank')->where('status', 'pending')->count();
-        $bankApproved = ClientChangeRequest::where('section', 'bank')->where('status', 'approved')->count();
-        $bankRejected = ClientChangeRequest::where('section', 'bank')->where('status', 'rejected')->count();
+            return [
+                'total' => $base()->count(),
+                'pending' => $base()->where('status', 'pending')->count(),
+                'approved' => $base()->where('status', 'approved')->count(),
+                'rejected' => $base()->where('status', 'rejected')->count(),
+            ];
+        };
+        $fromFeed = fn (array $types) => [
+            'total' => array_sum(array_map(fn ($t) => $feed[$t]['total'], $types)),
+            'pending' => array_sum(array_map(fn ($t) => $feed[$t]['pending'], $types)),
+            'approved' => array_sum(array_map(fn ($t) => $feed[$t]['completed'], $types)),
+            'rejected' => array_sum(array_map(fn ($t) => $feed[$t]['rejected'], $types)),
+        ];
+        $merge = fn (array ...$parts) => array_map(fn ($k) => array_sum(array_column($parts, $k)), array_combine(['total', 'pending', 'approved', 'rejected'], ['total', 'pending', 'approved', 'rejected']));
 
-        $invTotal = ClientChangeRequest::where('section', 'invoice_settings')->count();
-        $invPending = ClientChangeRequest::where('section', 'invoice_settings')->where('status', 'pending')->count();
-        $invApproved = ClientChangeRequest::where('section', 'invoice_settings')->where('status', 'approved')->count();
-        $invRejected = ClientChangeRequest::where('section', 'invoice_settings')->where('status', 'rejected')->count();
+        $docEdits = [
+            'total' => $inRange(DocumentEditRequest::query())->count(),
+            'pending' => $inRange(DocumentEditRequest::query())->where('status', 'pending')->count(),
+            'approved' => $inRange(DocumentEditRequest::query())->where('status', 'approved')->count(),
+            'rejected' => $inRange(DocumentEditRequest::query())->where('status', 'rejected')->count(),
+        ];
 
-        $otherTotal = ClientChangeRequest::whereNotIn('section', ['bank', 'invoice_settings'])->count();
-        $otherPending = ClientChangeRequest::whereNotIn('section', ['bank', 'invoice_settings'])->where('status', 'pending')->count();
-        $otherApproved = ClientChangeRequest::whereNotIn('section', ['bank', 'invoice_settings'])->where('status', 'approved')->count();
-        $otherRejected = ClientChangeRequest::whereNotIn('section', ['bank', 'invoice_settings'])->where('status', 'rejected')->count();
+        $profileC = $fromFeed(['profile_update']);
+        $docC = $merge($fromFeed(['document_change']), $docEdits);
+        $bankC = $merge($fromFeed(['bank_details']), $changeCounts(['bank']));
+        $invC = $merge($fromFeed(['invoice_setting']), $changeCounts(['invoice_settings']));
+        $otherC = $merge($fromFeed(['other', 'invoice_amendment']), $changeCounts(['bank', 'invoice_settings'], true));
+
+        [$docTotal, $docPending, $docApproved, $docRejected] = array_values($docC);
+        [$bankTotal, $bankPending, $bankApproved, $bankRejected] = array_values($bankC);
+        [$invTotal, $invPending, $invApproved, $invRejected] = array_values($invC);
+        [$otherTotal, $otherPending, $otherApproved, $otherRejected] = array_values($otherC);
 
         $clientRequestsRows = [
             [
                 'key' => 'profile_update',
                 'title' => 'Profile Update',
                 'icon' => 'user',
-                'total' => 0,
-                'pending' => 0,
-                'approved' => 0,
-                'rejected' => 0,
-                'action_url' => '/admin/pending-approval',
-                'note' => 'No DB request section exists today; flagged for lead',
+                'total' => $profileC['total'],
+                'pending' => $profileC['pending'],
+                'approved' => $profileC['approved'],
+                'rejected' => $profileC['rejected'],
+                'action_url' => '/admin/requests',
             ],
             [
                 'key' => 'document_change',
@@ -108,46 +140,81 @@ class DashboardController extends Controller
         $totalClientRequests = array_sum(array_column($clientRequestsRows, 'total'));
         $pendingClientRequests = array_sum(array_column($clientRequestsRows, 'pending'));
 
-        // 3. GST Filing Requests
-        $totalGstFilingRequests = GstFilingRequest::count();
-        $pendingGstFilingRequests = GstFilingRequest::where('status', '!=', 'GST Filed')->count();
-        $filedGstFilingRequests = GstFilingRequest::where('status', 'GST Filed')->count();
-        $confirmedGstFilingRequests = GstFilingRequest::where('client_declaration', true)->count();
-        // Per spec line 79: "Confirmation Pending / Not Started cannot exist today. Show 0 for it in the strip and flag it for the lead."
-        $confPendingGstFilingRequests = GstFilingRequest::where('client_declaration', false)->count();
+        // 3. GST Filing Requests — only requests where something is still pending:
+        //    Confirmation Received + Filing Pending, or Confirmation Pending + Filing Not Started.
+        //    Received + Filed (the whole process is done) is never listed.
+        $filingInRange = fn ($q) => $q
+            ->when($from, fn ($w) => $w->whereDate('created_at', '>=', $from))
+            ->when($to, fn ($w) => $w->whereDate('created_at', '<=', $to));
 
-        // GST Filing Requests table: Show only if action is still pending (status != 'GST Filed')
-        $filingRequestsList = GstFilingRequest::with('clientProfile')
-            ->where('status', '!=', 'GST Filed')
-            ->orderBy('id', 'desc')
-            ->limit(10)
-            ->get()
-            ->map(function ($req) use ($now) {
-                // Derive due date from filing_period
-                $dueDate = null;
-                if ($req->filing_period && preg_match('/^(\d{4})-(\d{2})$/', $req->filing_period, $m)) {
-                    $periodDate = Carbon::createFromDate((int)$m[1], (int)$m[2], 1);
-                    $dueDay = (stripos($req->return_type, 'GSTR-1') !== false || stripos($req->return_type, 'GSTR1') !== false) ? 11 : 20;
-                    $dueDate = $periodDate->copy()->addMonth()->day($dueDay);
-                } elseif ($req->filing_period && preg_match('/^(\d{4})-Q(\d)$/', $req->filing_period, $m)) {
-                    $qEndMonth = (int)$m[2] * 3;
-                    $periodDate = Carbon::createFromDate((int)$m[1], $qEndMonth, 1);
-                    $dueDate = $periodDate->copy()->addMonth()->day(22);
-                } else {
-                    $dueDate = $req->created_at ? $req->created_at->copy()->addDays(15) : $now->copy();
-                }
+        $dueFor = function (string $returnType, ?string $period, $fallback) {
+            if ($period && preg_match('/^(\d{4})-(\d{2})$/', $period, $m)) {
+                $day = $returnType === 'GSTR-1' ? 11 : 20;
 
-                return [
-                    'id' => $req->id,
-                    'client_name' => $req->clientProfile?->business_name ?: $req->clientProfile?->client_name ?: 'N/A',
-                    'return_type' => $req->return_type,
-                    'due_date' => $dueDate ? $dueDate->format('d M Y') : '—',
-                    'confirmation_status' => $req->client_declaration ? 'Received' : 'Pending',
-                    'filing_status' => $req->status === 'GST Filed' ? 'Filed' : ($req->status === 'Pending CA Review' ? 'Pending' : 'Pending'),
-                    'raw_status' => $req->status,
-                    'action_url' => "/admin/gst-filing-requests/{$req->id}",
-                ];
-            });
+                return Carbon::createFromDate((int) $m[1], (int) $m[2], 1)->addMonth()->day($day);
+            }
+            if ($period && ($q = Cmp08Period::parse($period))) {
+                // Quarter ends -> due the 22nd (GSTR-3B) / 18th (CMP-08) of the following month.
+                $endMonth = Carbon::createFromDate($q[1] === 'Q4' ? $q[0] + 1 : $q[0], ['Q1' => 6, 'Q2' => 9, 'Q3' => 12, 'Q4' => 3][$q[1]], 1);
+
+                return $endMonth->addMonth()->day($returnType === 'CMP-08' ? 18 : 22);
+            }
+
+            return $fallback;
+        };
+
+        $filedRequests = GstFilingRequest::where('status', 'GST Filed');
+        $openFilings = $filingInRange(GstFilingRequest::with('clientProfile')->where('status', '!=', 'GST Filed'));
+        $awaitingClient = $filingInRange(ClientGstr3bRequest::with('client')->where('status', ClientGstr3bRequest::PENDING_CLIENT));
+        $acceptedByClient = $filingInRange(ClientGstr3bRequest::with('client')->where('status', ClientGstr3bRequest::ACCEPTED));
+
+        $rows = collect();
+        foreach ((clone $awaitingClient)->get() as $r) {
+            $rt = $r->return_label;
+            $rows->push([
+                'sort' => $r->created_at, 'id' => 'r'.$r->id,
+                'client_name' => $r->client?->business_name ?: $r->client?->client_name ?: 'N/A',
+                'return_type' => $rt,
+                'due_date' => $dueFor($rt, $r->tax_period, $now)->format('d M Y'),
+                'confirmation_status' => 'Pending',
+                'filing_status' => 'Not Started',
+                'raw_status' => $r->status,
+                'action_url' => $r->return_type === ClientGstr3bRequest::RETURN_CMP08 ? '/admin/cmp08' : '/admin/gst-returns?tab=gstr-3b',
+            ]);
+        }
+        foreach ((clone $acceptedByClient)->get() as $r) {
+            $rt = $r->return_label;
+            $rows->push([
+                'sort' => $r->created_at, 'id' => 'r'.$r->id,
+                'client_name' => $r->client?->business_name ?: $r->client?->client_name ?: 'N/A',
+                'return_type' => $rt,
+                'due_date' => $dueFor($rt, $r->tax_period, $now)->format('d M Y'),
+                'confirmation_status' => 'Received',
+                'filing_status' => 'Pending',
+                'raw_status' => $r->status,
+                'action_url' => $r->return_type === ClientGstr3bRequest::RETURN_CMP08 ? '/admin/cmp08' : '/admin/gst-returns?tab=gstr-3b',
+            ]);
+        }
+        foreach ((clone $openFilings)->get() as $req) {
+            $rows->push([
+                'sort' => $req->created_at, 'id' => $req->id,
+                'client_name' => $req->clientProfile?->business_name ?: $req->clientProfile?->client_name ?: 'N/A',
+                'return_type' => $req->return_type,
+                'due_date' => $dueFor($req->return_type, $req->filing_period, $req->created_at?->copy()->addDays(15) ?? $now)->format('d M Y'),
+                // The client declares and confirms when raising the request, so confirmation is in.
+                'confirmation_status' => 'Received',
+                'filing_status' => 'Pending',
+                'raw_status' => $req->status,
+                'action_url' => "/admin/gst-filing-requests/{$req->id}",
+            ]);
+        }
+        $filingRequestsList = $rows->sortByDesc('sort')->take(10)->map(fn ($r) => collect($r)->except('sort')->all())->values();
+
+        $confPendingGstFilingRequests = (clone $awaitingClient)->count();
+        $confirmedGstFilingRequests = (clone $openFilings)->count() + (clone $acceptedByClient)->count();
+        $filedGstFilingRequests = $filingInRange($filedRequests)->count();
+        $totalGstFilingRequests = $confPendingGstFilingRequests + $confirmedGstFilingRequests + $filedGstFilingRequests;
+        $pendingGstFilingRequests = $confPendingGstFilingRequests + $confirmedGstFilingRequests;
 
         // 4. GST Return Status (Current Filing Cycle)
         // We evaluate applicable GST clients
@@ -155,10 +222,10 @@ class DashboardController extends Controller
 
         $prevMonthDate = $now->copy()->subMonth();
         $prevMonthPeriod = $prevMonthDate->format('Y-m');
-        $quarterNum = ceil($now->month / 3);
-        $prevQuarterNum = $quarterNum > 1 ? $quarterNum - 1 : 4;
-        $prevQuarterYear = $quarterNum > 1 ? $now->year : $now->year - 1;
-        $prevQuarterPeriod = "{$prevQuarterYear}-Q{$prevQuarterNum}";
+        // In Jan / Apr / Jul / Oct the quarter that just ended is the previous FINANCIAL-YEAR quarter,
+        // keyed "FYSTART-Qn" (e.g. Apr 2026 -> the Jan-Mar 2026 quarter = "2025-Q4").
+        $prevQuarterPeriod = Cmp08Period::keyForDate($now->copy()->subMonth());
+        $isQuarterDueMonth = in_array($now->month, [1, 4, 7, 10], true);
 
         $returnsPendingCount = 0;
         $returnsOverdueCount = 0;
@@ -172,13 +239,15 @@ class DashboardController extends Controller
 
             $applicableReturns = [];
             if ($isComposition) {
-                // Composition: CMP-08 quarterly
-                $applicableReturns[] = [
-                    'return_type' => 'CMP-08',
-                    'db_type' => ClientGstReturn::TYPE_CMP08,
-                    'period' => $prevQuarterPeriod,
-                    'due_date' => Carbon::createFromDate($now->year, $now->month, 18),
-                ];
+                // Composition: CMP-08 is quarterly — it is only due (18th) in Jan / Apr / Jul / Oct.
+                if ($isQuarterDueMonth) {
+                    $applicableReturns[] = [
+                        'return_type' => 'CMP-08',
+                        'db_type' => ClientGstReturn::TYPE_CMP08,
+                        'period' => $prevQuarterPeriod,
+                        'due_date' => Carbon::createFromDate($now->year, $now->month, 18),
+                    ];
+                }
             } else {
                 if ($frequency === 'monthly') {
                     // Regular Monthly: GSTR-1 (11th) and GSTR-3B (20th)
@@ -202,7 +271,7 @@ class DashboardController extends Controller
                         'period' => $prevMonthPeriod,
                         'due_date' => Carbon::createFromDate($now->year, $now->month, 13),
                     ];
-                    if (in_array($now->month, [1, 4, 7, 10], true)) {
+                    if ($isQuarterDueMonth) {
                         $applicableReturns[] = [
                             'return_type' => 'GSTR-3B',
                             'db_type' => ClientGstReturn::TYPE_GSTR3B,

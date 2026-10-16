@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { api, getAuthToken } from '../../api/client';
 import { LoadingBlock } from '../../components/Spinner';
 import { partyDocumentSections } from './billingProfile';
-import { billingDocPath, filterDocsByPeriod, money } from './billingUtils';
+import { filterDocsByPeriod, money } from './billingUtils';
+import { useReportsEnv } from './ReportsContext';
 
 const TYPE_LABEL = {
   tax_invoice: 'Tax Invoice',
@@ -115,6 +116,7 @@ export default function PartyDocumentsModal({
   to = '',
   fy = '',
 }) {
+  const env = useReportsEnv();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -141,7 +143,7 @@ export default function PartyDocumentsModal({
 
   const viewPath = (doc) => {
     if (detailBasePath) return `${detailBasePath}/${doc.id}`;
-    return billingDocPath(doc.type, doc.id);
+    return env.docLink(doc.type, doc.id);
   };
 
   // FY label
@@ -165,7 +167,7 @@ export default function PartyDocumentsModal({
   const downloadModal = async (format) => {
     const token = getAuthToken();
     const qs = new URLSearchParams({ type: 'party_documents', from, to, format });
-    const res = await fetch(`/api/billing/reports/export?${qs}`, {
+    const res = await fetch(`${env.exportUrl}?${qs}`, {
       headers: { Authorization: `Bearer ${token}`, Accept: '*/*' },
     });
     if (!res.ok) return;

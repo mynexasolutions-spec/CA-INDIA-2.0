@@ -262,7 +262,7 @@ export default function AdminBillingDocumentDetail() {
               gap: 8,
             }}
           >
-            ← Back to Client Dashboard
+            Back to Client Dashboard
           </Link>
         </div>
       </div>
@@ -315,7 +315,7 @@ export default function AdminBillingDocumentDetail() {
               gap: 8,
             }}
           >
-            ← Back to {docConfig.pluralLabel}
+            Back to {docConfig.pluralLabel}
           </Link>
         </div>
       </div>
@@ -633,7 +633,7 @@ export default function AdminBillingDocumentDetail() {
             gap: 6,
           }}
         >
-          <span>←</span> Back
+          Back
         </button>
 
         {/* 2. Edit */}

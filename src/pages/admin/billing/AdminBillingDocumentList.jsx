@@ -253,7 +253,7 @@ export default function AdminBillingDocumentList() {
               gap: 8,
             }}
           >
-            ← Back to Client Dashboard
+            Back to Client Dashboard
           </Link>
         </div>
       </div>
@@ -304,7 +304,7 @@ export default function AdminBillingDocumentList() {
               gap: 8,
             }}
           >
-            ← Back to Client List
+            Back to Client List
           </Link>
         </div>
       </div>
@@ -1041,7 +1041,6 @@ export default function AdminBillingDocumentList() {
                           }}
                         >
                           <span>View</span>
-                          <span>&rarr;</span>
                         </Link>
                       </td>
                     </tr>
@@ -1132,7 +1131,7 @@ export default function AdminBillingDocumentList() {
                     cursor: page <= 1 ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  ← Previous
+                  Previous
                 </button>
 
                 {Array.from({ length: paginator.last_page }, (_, i) => i + 1)
@@ -1178,7 +1177,7 @@ export default function AdminBillingDocumentList() {
                     cursor: page >= paginator.last_page ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  Next →
+                  Next
                 </button>
               </div>
             )}

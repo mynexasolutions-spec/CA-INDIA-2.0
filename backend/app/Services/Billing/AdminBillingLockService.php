@@ -147,6 +147,16 @@ class AdminBillingLockService
      */
     public static function formatFyQuarter(Carbon $date): string
     {
-        return \App\Services\Gst\GstPeriodService::fyQuarterOf($date);
+        // CMP-08 / filing-request convention: year = FINANCIAL-YEAR START year, so Jan-Mar 2027 is
+        // "2026-Q4" (the same key Cmp08Period and the client's filing requests store).
+        $fyStart = $date->month >= 4 ? $date->year : $date->year - 1;
+        $q = match (true) {
+            $date->month >= 4 && $date->month <= 6 => 1,
+            $date->month >= 7 && $date->month <= 9 => 2,
+            $date->month >= 10 => 3,
+            default => 4,
+        };
+
+        return "{$fyStart}-Q{$q}";
     }
 }

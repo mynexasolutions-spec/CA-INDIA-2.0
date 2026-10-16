@@ -210,6 +210,12 @@ class BillingMonitorController extends Controller
 
         // GST-period counting spec — Date of Creation, not the back-dated Document Date.
         $base = CommercialDocument::whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to);
+
+        // If called via /clients/{id}/reports, filter to that client only
+        $clientId = $request->route('id') ?? $request->input('client_profile_id');
+        if ($clientId) {
+            $base->where('client_profile_id', (int) $clientId);
+        }
         $data = match ($type) {
             'client_wise_register' => (clone $base)->with(['customer:id,name', 'clientProfile:id,business_name'])->orderBy('created_at')->get(),
             'monthly_sales' => (clone $base)->where('type', 'tax_invoice')->where('status', 'issued')
@@ -221,6 +227,7 @@ class BillingMonitorController extends Controller
                 ->whereDate('d.created_at', '>=', $from)
                 ->whereDate('d.created_at', '<=', $to)
                 ->where('d.type', 'tax_invoice')->where('d.status', 'issued')
+                ->when($clientId, fn($q) => $q->where('d.client_profile_id', (int)$clientId))
                 ->select(
                     'li.hsn_sac',
                     DB::raw('MAX(li.description) as description'),
@@ -258,11 +265,12 @@ class BillingMonitorController extends Controller
         }
         if ($format === 'pdf') {
             return Pdf::loadView('pdf.report', [
-                'title' => strtoupper(str_replace('_', ' ', $type)),
-                'periodText' => $from.' to '.$to,
-                'rows' => $rows,
-                'meta' => [], // firm-wide report, spans every client — no single business header
+                'title'        => ucwords(str_replace('_', ' ', $type)),
+                'periodText'   => $from.' to '.$to,
+                'rows'         => $rows,
+                'meta'         => [],
                 'moneyHeaders' => $this->computeMoneyHeaders($rows),
+                'generatedOn'  => now()->format('d-m-Y'),
             ])->download("{$type}.pdf");
         }
 
@@ -300,16 +308,29 @@ class BillingMonitorController extends Controller
         $xml = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>';
         $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
         $xml .= '<Styles>';
-        $xml .= '<Style ss:ID="title"><Font ss:Bold="1" ss:Size="13" ss:Color="#FFFFFF"/><Interior ss:Color="#1E40AF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="colHead"><Font ss:Bold="1" ss:Size="10" ss:Color="#FFFFFF"/><Interior ss:Color="#1E40AF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="title"><Font ss:Bold="1" ss:Size="13" ss:Color="#000000"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="period"><Font ss:Size="10" ss:Color="#444444"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="colHead"><Font ss:Bold="1" ss:Size="10" ss:Color="#FFFFFF"/><Interior ss:Color="#4B5563" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
         $xml .= '<Style ss:ID="cell"><Alignment ss:Horizontal="Center"/></Style>';
         $xml .= '<Style ss:ID="cellLabel"><Font ss:Bold="1"/><Alignment ss:Horizontal="Left"/></Style>';
         $xml .= '<Style ss:ID="cellMoney"><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
+        $xml .= '<Style ss:ID="totalCell"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="totalLabel"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Left"/></Style>';
+        $xml .= '<Style ss:ID="totalMoney"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
+        $xml .= '<Style ss:ID="footer"><Font ss:Size="9" ss:Color="#444444"/><Alignment ss:Horizontal="Left"/></Style>';
         $xml .= '</Styles>';
         $xml .= '<Worksheet ss:Name="Report"><Table>';
 
+        // Determine period from request or default
+        $reqFrom = request()->input('from', '');
+        $reqTo   = request()->input('to', '');
+        $periodStr = $reqFrom && $reqTo ? $reqFrom.' to '.$reqTo : '';
+
         $mergeAttr = $colCount > 1 ? ' ss:MergeAcross="'.($colCount - 1).'"' : '';
-        $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="title"><Data ss:Type="String">'.$esc($title).'</Data></Cell></Row>';
+        $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="title"><Data ss:Type="String">'.$esc(ucwords(str_replace('_', ' ', $type))).'</Data></Cell></Row>';
+        if ($periodStr) {
+            $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="period"><Data ss:Type="String">'.$esc('Period: '.$periodStr).'</Data></Cell></Row>';
+        }
         $xml .= '<Row></Row>';
 
         $xml .= '<Row>';
@@ -319,19 +340,27 @@ class BillingMonitorController extends Controller
         }
         $xml .= '</Row>';
 
-        foreach ($rows as $row) {
-            $arr = (array) $row;
+        $lastIndex = count($rows) - 1;
+        foreach ($rows as $i => $row) {
+            $arr   = (array) $row;
+            $first = reset($arr);
+            $isTotal = $i === $lastIndex && is_string($first) && stripos($first, 'total') !== false;
             $xml .= '<Row>';
             foreach ($headers as $ci => $h) {
                 $v = $arr[$h] ?? '';
                 $isMoney = in_array($h, $moneyHeaders, true) && is_numeric($v);
-                $style = $ci === 0 ? 'cellLabel' : ($isMoney ? 'cellMoney' : 'cell');
+                $isLabelCol = $ci === 0;
+                $style = $isTotal
+                    ? ($isLabelCol ? 'totalLabel' : ($isMoney ? 'totalMoney' : 'totalCell'))
+                    : ($isLabelCol ? 'cellLabel'  : ($isMoney ? 'cellMoney'  : 'cell'));
                 $typeAttr = is_numeric($v) ? 'Number' : 'String';
                 $xml .= '<Cell ss:StyleID="'.$style.'"><Data ss:Type="'.$typeAttr.'">'.$esc(is_scalar($v) ? $v : json_encode($v)).'</Data></Cell>';
             }
             $xml .= '</Row>';
         }
-        $xml .= '</Table></Worksheet></Workbook>';
+        $xml .= '<Row></Row>';
+        $xml .= '<Row><Cell ss:StyleID="footer"><Data ss:Type="String">'.$esc('Report Generated On: '.now()->format('d-m-Y')).'</Data></Cell></Row>';
+        $xml .= '</TABLE></Worksheet></Workbook>';
 
         return response($xml, 200, [
             'Content-Type' => 'application/vnd.ms-excel',

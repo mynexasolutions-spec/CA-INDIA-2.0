@@ -46,6 +46,24 @@ class GstFilingController extends Controller
 
         $filingRequest->save();
 
+        // Keep the GSTR-3B request record (Admin screen / Client request list) in step with this filing request.
+        $reqReturn = match (true) {
+            $filingRequest->return_type === 'GSTR-3B' && preg_match('/^\d{4}-\d{2}$/', $filingRequest->filing_period) === 1 => \App\Models\ClientGstr3bRequest::RETURN_GSTR3B,
+            $filingRequest->return_type === 'CMP-08' && preg_match('/^\d{4}-Q[1-4]$/', $filingRequest->filing_period) === 1 => \App\Models\ClientGstr3bRequest::RETURN_CMP08,
+            default => null,
+        };
+        if ($reqReturn) {
+            $open = \App\Models\ClientGstr3bRequest::where('client_profile_id', $filingRequest->client_profile_id)
+                ->where('return_type', $reqReturn)
+                ->where('tax_period', $filingRequest->filing_period);
+            if ($request->status === 'GST Filed') {
+                (clone $open)->whereIn('status', ['submitted', 'accepted'])->update(['status' => 'completed']);
+            } elseif ($request->status === 'Correction Required') {
+                (clone $open)->where('status', 'submitted')
+                    ->update(['status' => 'rejected', 'rejection_reason' => 'Correction required by the administrator.']);
+            }
+        }
+
         // Admin Portal and Client Portal read the filing status from the same underlying
         // record: marking a request "GST Filed" here immediately upserts the matching
         // client_gst_returns row, so it shows up in Client Portal → GST Returns → Filing

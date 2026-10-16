@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { Navigate, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { api } from '../../api/client';
+import GstFilingReminderPopup from './GstFilingReminderPopup';
+import Gstr3bRequestNotifier from './Gstr3bRequestNotifier';
 import { LoadingBlock } from '../Spinner';
 import BillingSubNav from '../../pages/billing/BillingSubNav';
 import ReportsSubNav from '../../pages/billing/ReportsSubNav';
@@ -221,7 +223,7 @@ export function ClientNotificationBell() {
         setNotices(d.notifications || []);
         setUnread(d.stats?.unread_notifications ?? 0);
       })
-      .catch(() => {});
+      .catch(() => { });
   };
 
   useEffect(() => {
@@ -722,6 +724,98 @@ function formatLastLogin(iso) {
   return `${day} ${month} ${year}, ${strHours}:${mins} ${ampm}`;
 }
 
+/** Real admin bell — polls /admin/notifications every 30 s. */
+function AdminNotificationBell() {
+  const [open, setOpen] = useState(false);
+  const [notices, setNotices] = useState(null);
+  const [unread, setUnread] = useState(0);
+  const ref = useOutsideClose(() => setOpen(false));
+
+  const load = () => {
+    api('/admin/notifications')
+      .then((d) => {
+        setNotices(d.notifications || []);
+        setUnread(d.unread ?? 0);
+      })
+      .catch(() => { });
+  };
+
+  useEffect(() => {
+    load();
+    const t = window.setInterval(load, 30000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const markRead = (id) => {
+    api('/admin/notifications/' + id + '/read', { method: 'POST' }).catch(() => { });
+    setNotices((prev) => prev?.map((n) => n.id === id ? { ...n, read_at: new Date().toISOString() } : n));
+    setUnread((c) => Math.max(0, c - 1));
+  };
+
+  const markAll = () => {
+    api('/admin/notifications/read-all', { method: 'POST' }).catch(() => { });
+    setNotices((prev) => prev?.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
+    setUnread(0);
+    setOpen(false);
+  };
+
+  return (
+    <div className="bp-dropdown-wrap" ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        title="Notifications"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 38, height: 38, borderRadius: '50%',
+          border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', flexShrink: 0,
+        }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        {unread > 0 && (
+          <span style={{
+            position: 'absolute', top: 6, right: 6,
+            width: 8, height: 8, borderRadius: '50%', background: '#ef4444',
+            border: '1.5px solid #fff',
+          }} />
+        )}
+      </button>
+
+      {open && (
+        <div className="bp-dropdown-panel" style={{ right: 0, left: 'auto', minWidth: 300, maxWidth: 360 }}>
+          <div className="bp-dropdown-panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Notifications {unread > 0 && <span style={{ background: '#ef4444', color: '#fff', borderRadius: 20, padding: '1px 7px', fontSize: 11, fontWeight: 700, marginLeft: 6 }}>{unread}</span>}</span>
+            {unread > 0 && (
+              <button type="button" onClick={markAll} style={{ fontSize: 11, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                Mark all read
+              </button>
+            )}
+          </div>
+          {!notices || notices.length === 0 ? (
+            <div className="bp-dropdown-empty">No notifications yet.</div>
+          ) : (
+            notices.slice(0, 10).map((n) => (
+              <div
+                key={n.id}
+                className="bp-dropdown-item"
+                style={{ opacity: n.read_at ? 0.6 : 1, cursor: n.read_at ? 'default' : 'pointer', borderLeft: n.read_at ? 'none' : '3px solid #2563eb' }}
+                onClick={() => !n.read_at && markRead(n.id)}
+              >
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{n.title}</div>
+                {n.body && <div style={{ color: 'var(--bp-muted)', marginTop: 2, fontSize: 12 }}>{n.body}</div>}
+                <div style={{ color: 'var(--bp-muted)', fontSize: 11, marginTop: 4 }}>{timeAgo(n.created_at)}</div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminTopbarControls() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -729,7 +823,7 @@ function AdminTopbarControls() {
   const [loggingOut, setLoggingOut] = useState(false);
   const adminFy = useAdminFy();
   const fy = adminFy?.fy ?? currentFyLabel();
-  const setFy = adminFy?.setFy ?? (() => {});
+  const setFy = adminFy?.setFy ?? (() => { });
   const fyOptions = adminFy?.fyOptions ?? buildFyOptions();
   const range = adminFy?.range ?? fyDateRange(fy);
   const refreshing = adminFy?.refreshing ?? false;
@@ -824,29 +918,8 @@ function AdminTopbarControls() {
         </div>
       </div>
 
-      {/* Notification Bell with red dot */}
-      <div
-        title="Notifications"
-        style={{
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 38,
-          height: 38,
-          borderRadius: '50%',
-          border: '1px solid #e2e8f0',
-          background: '#fff',
-          cursor: 'pointer',
-          flexShrink: 0,
-        }}
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-        </svg>
-        <span style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: '50%', background: '#ef4444' }} />
-      </div>
+      {/* Notification Bell */}
+      <AdminNotificationBell />
 
       {/* Logout (power icon) */}
       <button
@@ -944,11 +1017,16 @@ export function ClientPortalLayout() {
       label: 'GST Compliance',
       icon: ShieldCheckIcon,
       locked: !gstComplianceEnabled,
-      children: [
-        { to: '/portal/gstr-2b', label: 'GSTR-2B' },
-        { to: '/portal/gst-returns', label: 'GST Returns' },
-        { to: '/portal/gst-filing', label: 'GST Filing Confirmation' },
-      ],
+      children: mode === 'composition'
+        ? [
+          { to: '/portal/cmp-08', label: 'CMP-08' },
+        ]
+        : [
+          { to: '/portal/gstr-1', label: 'GSTR-1' },
+          { to: '/portal/gstr-2b', label: 'GSTR-2B' },
+          { to: '/portal/gstr-3b', label: 'GSTR-3B' },
+          { to: '/portal/gst-filing', label: 'GST Filing Confirmation' },
+        ],
     },
     {
       label: 'Document Change',
@@ -956,6 +1034,7 @@ export function ClientPortalLayout() {
       children: [
         { to: '/portal/edit-requests', label: 'Edit Request' },
         { to: '/portal/amendments', label: 'Amendment Request' },
+        { to: '/portal/other-requests', label: 'Other Request' },
       ],
     },
     {
@@ -988,6 +1067,8 @@ export function ClientPortalLayout() {
         }
         sidebarFoot={<NeedHelpCard />}
       />
+      {hasGst && gstComplianceEnabled && <GstFilingReminderPopup />}
+      {hasGst && gstComplianceEnabled && <Gstr3bRequestNotifier />}
     </ClientPortalCtx.Provider>
   );
 }
@@ -1029,32 +1110,50 @@ export function AdminPortalLayout() {
         {
           to: '/admin/gst-returns?tab=gstr-1',
           label: 'GSTR-1',
-          isActive: (_, { pathname, search }) => pathname === '/admin/gst-returns' && search.includes('gstr-1'),
+          isActive: (_, { pathname, search }) =>
+            pathname.startsWith('/admin/gst-returns/gstr-1') ||
+            (pathname === '/admin/gst-returns' &&
+              (search.includes('gstr-1') ||
+                (!search.includes('gstr-2b') && !search.includes('gstr-3b') && !search.includes('cmp-08')))),
         },
-        { to: '/admin/gstr-2b', label: 'GSTR-2B' },
+        {
+          to: '/admin/gst-returns?tab=gstr-2b',
+          label: 'GSTR-2B',
+          isActive: (_, { pathname, search }) =>
+            pathname.startsWith('/admin/gst-returns/gstr-2b') ||
+            pathname.startsWith('/admin/gstr-2b') ||
+            pathname.includes('/gstr-2b') ||
+            (pathname === '/admin/gst-returns' && search.includes('gstr-2b')),
+        },
         {
           to: '/admin/gst-returns?tab=gstr-3b',
           label: 'GSTR-3B',
-          isActive: (_, { pathname, search }) => pathname === '/admin/gst-returns' && (search.includes('gstr-3b') || (!search.includes('gstr-1') && !search.includes('cmp-08'))),
+          isActive: (_, { pathname, search }) =>
+            pathname.startsWith('/admin/gst-returns/gstr-3b') ||
+            (pathname === '/admin/gst-returns' && search.includes('gstr-3b')),
         },
         {
-          to: '/admin/gst-returns?tab=cmp-08',
+          to: '/admin/cmp08',
           label: 'CMP-08',
-          isActive: (_, { pathname, search }) => pathname === '/admin/gst-returns' && search.includes('cmp-08'),
+          isActive: (_, { pathname, search }) =>
+            pathname.startsWith('/admin/cmp08') ||
+            pathname.startsWith('/admin/gst-returns/cmp-08') ||
+            (pathname === '/admin/gst-returns' && search.includes('cmp-08')),
         },
       ],
     },
     {
-      to: '/admin/gst-filing-requests',
+      to: '/admin/requests',
       label: 'Request',
       icon: RequestIcon,
       isActive: (_, { pathname }) =>
+        pathname.startsWith('/admin/requests') ||
         pathname.startsWith('/admin/gst-filing-requests') ||
         pathname.startsWith('/admin/edit-requests') ||
         pathname.startsWith('/admin/pending-approval'),
     },
-    { to: '/admin/firm-billing/reports', label: 'Reports', icon: ReportIcon },
-    { to: '/admin/configuration', label: 'Configuration', icon: NavGearIcon },
+    { to: '/admin/reports', label: 'Reports', icon: ReportIcon, isActive: (_, { pathname }) => pathname.startsWith('/admin/reports') },
+    { to: '/admin/configuration', label: 'Configuration', icon: NavGearIcon, isActive: (_, { pathname }) => pathname.startsWith('/admin/configuration') },
     {
       label: 'Settings',
       icon: NavGearIcon,
@@ -1064,11 +1163,11 @@ export function AdminPortalLayout() {
           label: 'Admin Security',
           isActive: (_, { pathname, search }) => pathname === '/admin/settings' && !search.includes('company-deletion'),
         },
-        { to: '/admin/staff', label: 'Sub-User Management' },
+        { to: '/admin/staff', label: 'Sub-User Management', isActive: (_, { pathname }) => pathname.startsWith('/admin/staff') },
         {
-          to: '/admin/settings?tab=company-deletion',
+          to: '/admin/company-deletion',
           label: 'Company Deletion',
-          isActive: (_, { pathname, search }) => pathname === '/admin/settings' && search.includes('company-deletion'),
+          isActive: (_, { pathname }) => pathname.startsWith('/admin/company-deletion'),
         },
       ],
     },

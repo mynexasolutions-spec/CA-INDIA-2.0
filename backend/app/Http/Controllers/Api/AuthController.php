@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\User;
+use App\Services\EmailOtp;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
@@ -93,6 +95,60 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['email' => ['This account is not authorized for the client portal.']]);
         }
 
+        // Settings -> Admin Security -> "Two-Factor Authentication (Email OTP)": the password alone is not
+        // enough — no session is issued until the emailed code is verified.
+        if ($portal === 'admin' && $user->login_2fa_enabled) {
+            $challenge = bin2hex(random_bytes(20));
+            $dev = EmailOtp::send("login_{$challenge}", $user, 'admin login', ['portal' => $portal]);
+
+            return response()->json([
+                'two_factor' => true,
+                'challenge'  => $challenge,
+                'email'      => EmailOtp::mask($user->email),
+                'expires_in' => EmailOtp::TTL_MINUTES * 60,
+                '_dev_otp'   => $dev,
+            ]);
+        }
+
+        return $this->startSession($request, $user, $portal);
+    }
+
+    /** Second step of a two-factor login: the code that was emailed after the password was accepted. */
+    public function verifyLoginOtp(Request $request)
+    {
+        $data = $request->validate(['challenge' => 'required|string|size:40', 'otp' => 'required|string|size:6']);
+
+        $res = EmailOtp::check("login_{$data['challenge']}", $data['otp']);
+        if (! $res['ok']) {
+            throw ValidationException::withMessages(['otp' => [$res['error']]]);
+        }
+
+        $user = User::find($res['data']['user_id']);
+        if (! $user || ! $user->is_active || ! $user->isStaff()) {
+            throw ValidationException::withMessages(['otp' => ['This account cannot sign in.']]);
+        }
+
+        return $this->startSession($request, $user, $res['data']['portal'] ?? 'admin');
+    }
+
+    /** Sends a fresh code for a pending two-factor login (the old one stops working). */
+    public function resendLoginOtp(Request $request)
+    {
+        $data = $request->validate(['challenge' => 'required|string|size:40']);
+
+        $pending = Cache::get("email_otp_login_{$data['challenge']}");
+        $user = $pending ? User::find($pending['user_id']) : null;
+        if (! $user) {
+            throw ValidationException::withMessages(['otp' => ['This sign-in has expired. Please sign in again.']]);
+        }
+
+        $dev = EmailOtp::send("login_{$data['challenge']}", $user, 'admin login', ['portal' => $pending['portal'] ?? 'admin']);
+
+        return response()->json(['sent' => true, 'email' => EmailOtp::mask($user->email), '_dev_otp' => $dev]);
+    }
+
+    private function startSession(Request $request, User $user, string $portal)
+    {
         $user->update(['last_login_at' => now()]);
         ActivityLog::create([
             'user_id' => $user->id,

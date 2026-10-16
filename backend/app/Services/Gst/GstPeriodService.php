@@ -113,9 +113,10 @@ class GstPeriodService
             return $appDate->lte($periodEnd);
         }
 
-        if (preg_match('/^(\d{4})-Q(\d)$/', $period, $m)) {
-            $qEndMonth = (int) $m[2] * 3;
-            $periodEnd = Carbon::createFromDate((int) $m[1], $qEndMonth, 1)->endOfMonth();
+        if (preg_match('/^(\d{4})-Q([1-4])$/', $period, $m)) {
+            // "YYYY-Qn": YYYY is the financial-year START year, so Q4 (Jan-Mar) ends in YYYY+1.
+            $q = (int) $m[2];
+            $periodEnd = Carbon::createFromDate($q === 4 ? (int) $m[1] + 1 : (int) $m[1], $q === 4 ? 3 : $q * 3, 1)->endOfMonth();
             return $appDate->lte($periodEnd);
         }
 

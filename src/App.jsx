@@ -43,8 +43,14 @@ const ReportsDashboard = lazy(() => import('./pages/billing/ReportsDashboard'));
 const EditRequestPage = lazy(() => import('./pages/portal/EditRequestPage'));
 const AmendmentsPage = lazy(() => import('./pages/portal/AmendmentsPage'));
 const ClientGstr2b = lazy(() => import('./pages/portal/ClientGstr2b'));
+const Gstr2bPeriodPage = lazy(() => import('./pages/portal/Gstr2bPeriodPage'));
+const Gstr3bPage = lazy(() => import('./pages/portal/Gstr3bPage'));
 const GstReturnsWorkspace = lazy(() => import('./pages/portal/GstReturnsWorkspace'));
 const GstFilingConfirmation = lazy(() => import('./pages/portal/GstFilingConfirmation'));
+const Gstr1Page = lazy(() => import('./pages/portal/Gstr1Page'));
+const ClientCmp08Page = lazy(() => import('./pages/portal/ClientCmp08Page'));
+const OtherRequestPage = lazy(() => import('./pages/portal/OtherRequestPage'));
+const DocumentNumberingPage = lazy(() => import('./pages/billing/DocumentNumberingPage'));
 
 /* ── Admin pages (lazy-loaded — only fetched when admin logs in) ── */
 const AdminGstFilingRequests = lazy(() => import('./pages/admin/AdminGstFilingRequests'));
@@ -69,6 +75,19 @@ const AdminBillingDocumentEdit = lazy(() => import('./pages/admin/billing/AdminB
 const AdminGstr2bClientPicker = lazy(() => import('./pages/admin/AdminGstr2bClientPicker'));
 const AdminClientGstr2b = lazy(() => import('./pages/admin/AdminClientGstr2b'));
 const AdminGstReturns = lazy(() => import('./pages/admin/AdminGstReturns'));
+const AdminGstr1Detail = lazy(() => import('./pages/admin/AdminGstr1Detail'));
+const AdminGstr1Review = lazy(() => import('./pages/admin/AdminGstr1Review'));
+const AdminGstr2bDetail = lazy(() => import('./pages/admin/AdminGstr2bDetail'));
+const AdminGstr2bPeriod = lazy(() => import('./pages/admin/AdminGstr2bPeriod'));
+const AdminGstr2bDocuments = lazy(() => import('./pages/admin/AdminGstr2bDocuments'));
+const AdminGstr3bDetail = lazy(() => import('./pages/admin/AdminGstr3bDetail'));
+const AdminGstr3bReview = lazy(() => import('./pages/admin/AdminGstr3bReview'));
+const AdminCmp08List = lazy(() => import('./pages/admin/AdminCmp08List'));
+const AdminCmp08Detail = lazy(() => import('./pages/admin/AdminCmp08Detail'));
+const AdminRequests = lazy(() => import('./pages/admin/AdminRequests'));
+const AdminClientRequests = lazy(() => import('./pages/admin/AdminClientRequests'));
+const AdminReportsList = lazy(() => import('./pages/admin/AdminReportsList'));
+const AdminReportsLayout = lazy(() => import('./pages/admin/AdminReportsLayout'));
 const ClientsUnlockGate = lazy(() => import('./pages/admin/ClientsUnlockGate'));
 const AdminPages = lazy(() => import('./pages/admin/AdminPages'));
 const AdminActivity = lazy(() => import('./pages/admin/AdminPages').then(m => ({ default: m.AdminActivity })));
@@ -77,7 +96,8 @@ const AdminArticles = lazy(() => import('./pages/admin/AdminPages').then(m => ({
 const AdminCompliance = lazy(() => import('./pages/admin/AdminPages').then(m => ({ default: m.AdminCompliance })));
 const AdminDueDates = lazy(() => import('./pages/admin/AdminPages').then(m => ({ default: m.AdminDueDates })));
 const AdminEnquiries = lazy(() => import('./pages/admin/AdminPages').then(m => ({ default: m.AdminEnquiries })));
-const AdminStaff = lazy(() => import('./pages/admin/AdminPages').then(m => ({ default: m.AdminStaff })));
+const AdminStaff = lazy(() => import('./pages/admin/AdminStaff'));
+const AdminCompanyDeletion = lazy(() => import('./pages/admin/AdminCompanyDeletion'));
 const AdminBillingPages = lazy(() => import('./pages/admin/AdminBillingPages'));
 const AdminBillingDashboard = lazy(() => import('./pages/admin/AdminBillingPages').then(m => ({ default: m.AdminBillingDashboard })));
 const AdminBillingInvoices = lazy(() => import('./pages/admin/AdminBillingPages').then(m => ({ default: m.AdminBillingInvoices })));
@@ -165,6 +185,7 @@ export default function App() {
           <Route path="quotation" element={<Navigate to="/portal/billing/quotation" replace />} />
           <Route path="quotation/*" element={<Navigate to="/portal/billing/quotation" replace />} />
           <Route path="edit-requests" element={<EditRequestPage />} />
+          <Route path="other-requests" element={<OtherRequestPage />} />
           <Route path="amendments">
             <Route index element={<AmendmentsPage />} />
             <Route path="new" element={<InvoiceForm docType="amendment" title="Create Amendment" />} />
@@ -174,7 +195,12 @@ export default function App() {
           <Route path="billing/parties" element={<PartiesPage />} />
           <Route path="billing/parties/new" element={<PartyForm />} />
           <Route path="billing/parties/:id/edit" element={<PartyForm />} />
+          <Route path="gstr-1" element={<GstComplianceGate><Gstr1Page /></GstComplianceGate>} />
           <Route path="gstr-2b" element={<GstComplianceGate><ClientGstr2b /></GstComplianceGate>} />
+          <Route path="gstr-2b/:period" element={<GstComplianceGate><Gstr2bPeriodPage /></GstComplianceGate>} />
+          <Route path="gstr-3b" element={<GstComplianceGate><Gstr3bPage /></GstComplianceGate>} />
+          <Route path="cmp-08" element={<GstComplianceGate><ClientCmp08Page /></GstComplianceGate>} />
+          <Route path="cmp-08/:period" element={<GstComplianceGate><ClientCmp08Page /></GstComplianceGate>} />
           <Route path="gst-returns" element={<GstComplianceGate><GstReturnsWorkspace /></GstComplianceGate>} />
           <Route path="gst-filing" element={<GstComplianceGate><GstFilingConfirmation /></GstComplianceGate>} />
           <Route path="billing" element={<ClientBillingLayout />}>
@@ -215,6 +241,7 @@ export default function App() {
             <Route path="gst-summary" element={<GstSummaryPage />} />
             <Route path="gst-liability" element={<GstLiabilityReport />} />
             <Route path="hsn-summary" element={<HsnSummaryPage />} />
+            <Route path="document-numbering" element={<DocumentNumberingPage />} />
             <Route path="party-wise" element={<PartyWisePage />} />
             <Route path="party-wise/:partyId" element={<PartyDocumentDetailPage />} />
             <Route path="sales-register" element={<BillingReports defaultType="sales_register" title="Sales Register" />} />
@@ -240,6 +267,29 @@ export default function App() {
           <Route path="clients/:id/gstr-2b" element={<AdminClientGstr2b />} />
           <Route path="gstr-2b" element={<AdminGstr2bClientPicker />} />
           <Route path="gst-returns" element={<AdminGstReturns />} />
+          <Route path="gst-returns/gstr-2b/:clientId" element={<AdminGstr2bDetail />} />
+          <Route path="gst-returns/gstr-2b/:clientId/period/:period" element={<AdminGstr2bPeriod />} />
+          <Route path="gst-returns/gstr-2b/:clientId/period/:period/documents" element={<AdminGstr2bDocuments />} />
+          <Route path="gst-returns/gstr-1/:clientId" element={<AdminGstr1Detail />} />
+          <Route path="gst-returns/gstr-1/:clientId/review/:period" element={<AdminGstr1Review />} />
+          <Route path="gst-returns/gstr-3b/:clientId" element={<AdminGstr3bDetail />} />
+          <Route path="gst-returns/gstr-3b/:clientId/review/:period" element={<AdminGstr3bReview />} />
+          <Route path="cmp08" element={<AdminCmp08List />} />
+          <Route path="cmp08/:clientId/period/:period" element={<AdminCmp08Detail />} />
+          <Route path="requests" element={<AdminRequests />} />
+          <Route path="requests/:clientId" element={<AdminClientRequests />} />
+          <Route path="reports" element={<AdminReportsList />} />
+          {/* A client's reports as the Admin sees them: the very same pages the Client Portal uses. */}
+          <Route path="reports/:clientId" element={<AdminReportsLayout />}>
+            <Route index element={<ReportsDashboard />} />
+            <Route path="gst-summary" element={<GstSummaryPage />} />
+            <Route path="gst-liability" element={<GstLiabilityReport />} />
+            <Route path="hsn-summary" element={<HsnSummaryPage />} />
+            <Route path="document-numbering" element={<DocumentNumberingPage />} />
+            <Route path="party-wise" element={<PartyWisePage />} />
+            <Route path="party-wise/:partyId" element={<PartyDocumentDetailPage />} />
+            <Route path="outstanding" element={<OutstandingPage />} />
+          </Route>
           <Route path="gst-filing-requests" element={<AdminGstFilingRequests />} />
           <Route path="gst-filing-requests/:id" element={<AdminGstFilingReview />} />
           <Route path="edit-requests" element={<AdminEditRequestList />} />
@@ -251,6 +301,7 @@ export default function App() {
           <Route path="change-requests" element={<Navigate to="/admin/pending-approval" replace />} />
           <Route path="change-requests/:id" element={<PendingApprovalIdRedirect />} />
           <Route path="staff" element={<AdminStaff />} />
+          <Route path="company-deletion" element={<AdminCompanyDeletion />} />
           <Route path="enquiries" element={<AdminEnquiries />} />
           <Route path="articles" element={<AdminArticles />} />
           <Route path="due-dates" element={<AdminDueDates />} />

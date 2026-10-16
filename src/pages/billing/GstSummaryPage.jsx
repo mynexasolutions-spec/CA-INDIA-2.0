@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, getAuthToken } from '../../api/client';
-import { useAuth } from '../../auth/AuthContext';
+import { useReportsEnv } from './ReportsContext';
 import { LoadingBlock } from '../../components/Spinner';
 import { buildFyOptions, currentFyRange, money } from './billingUtils';
 import { resolveGstMatrix, GST_MATRIX_ROWS, GST_MATRIX_COLS } from './GstSummaryMatrix';
@@ -167,11 +167,13 @@ function formatDateDisplay(isoStr) {
 
 export default function GstSummaryPage({
   title = 'GST Summary',
-  apiPath = '/billing/reports',
-  exportPath = '/api/billing/reports/export',
+  apiPath: apiPathProp,
+  exportPath: exportPathProp,
 }) {
-  const { user } = useAuth();
-  const profile = user?.client_profile;
+  const env = useReportsEnv();
+  const profile = env.profile;
+  const apiPath = apiPathProp ?? env.reportsApi;
+  const exportPath = exportPathProp ?? env.exportUrl;
   const fyDefault = currentFyRange();
   const fyOptions = buildFyOptions();
 
@@ -252,7 +254,10 @@ export default function GstSummaryPage({
     a.click();
   };
 
+  const [bifTab, setBifTab] = useState('value'); // 'value' | 'document'
+
   const matrix = resolveGstMatrix(data, profile);
+  const bifurcation = data?.data?.bifurcation || null;
 
   // Net across all doc-type columns — Credit Notes reduce the value (subtracted),
   // every other column (Tax Invoices, Bills of Supply, Debit Notes) adds to it.
@@ -467,7 +472,7 @@ export default function GstSummaryPage({
       </div>
 
       {/* ── Summary Table ────────────────────────────────── */}
-      <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="bp-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
         {/* Report Period Bar */}
         <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--bp-border)', display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -545,6 +550,188 @@ export default function GstSummaryPage({
             </table>
           </div>
         )}
+      </div>
+      {/* ── B2B & B2C Bifurcation ────────────────────────── */}
+      <B2bBifurcationSection
+        bifurcation={bifurcation}
+        loading={loading}
+        activeTab={bifTab}
+        onTabChange={setBifTab}
+      />
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   B2B & B2C Bifurcation Section
+   ───────────────────────────────────────────────────────────── */
+const BIF_DOC_TYPES = [
+  { key: 'tax_invoice',    label: 'Tax Invoices',  color: '#16a34a', bg: '#f0fdf4', iconBg: '#dcfce7' },
+  { key: 'bill_of_supply', label: 'Bill of Supply', color: '#2563eb', bg: '#eff6ff', iconBg: '#dbeafe' },
+  { key: 'debit_note',     label: 'Debit Notes',   color: '#7c3aed', bg: '#faf5ff', iconBg: '#e9d5ff' },
+  { key: 'credit_note',    label: 'Credit Notes',  color: '#dc2626', bg: '#fef2f2', iconBg: '#fee2e2' },
+];
+
+const VALUE_ROWS = [
+  { key: 'taxable_value',      label: 'Total Taxable Value',    bold: false },
+  { key: 'igst',               label: 'IGST Amount',            bold: false },
+  { key: 'cgst',               label: 'CGST Amount',            bold: false },
+  { key: 'sgst',               label: 'SGST / UTGST Amount',    bold: false },
+  { key: 'total_invoice_value',label: 'Total Gross Value',      bold: true  },
+];
+
+function zeroSums() {
+  return { taxable_value:0, igst:0, cgst:0, sgst:0, total_invoice_value:0, count:0 };
+}
+
+function sumB(a, b) {
+  const keys = ['taxable_value','igst','cgst','sgst','total_invoice_value','count'];
+  const r = {};
+  keys.forEach((k) => { r[k] = (a[k] || 0) + (b[k] || 0); });
+  return r;
+}
+
+function B2bBifurcationSection({ bifurcation, loading, activeTab, onTabChange }) {
+  if (!bifurcation && !loading) return null;
+
+  // Totals across all doc types
+  const totalB2b = BIF_DOC_TYPES.reduce((acc, dt) => sumB(acc, bifurcation?.[dt.key]?.b2b || zeroSums()), zeroSums());
+  const totalB2c = BIF_DOC_TYPES.reduce((acc, dt) => sumB(acc, bifurcation?.[dt.key]?.b2c || zeroSums()), zeroSums());
+  const totalAll = sumB(totalB2b, totalB2c);
+
+  return (
+    <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* Section Header */}
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--bp-navy)', marginBottom: 2 }}>B2B &amp; B2C Bifurcation</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>Value-wise and document-wise summary for each document type.</div>
+        </div>
+        {/* Toggle */}
+        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 10, padding: 3, gap: 2 }}>
+          {[
+            { id: 'value',    label: 'Value-wise Summary' },
+            { id: 'document', label: 'Document-wise Summary' },
+          ].map(({ id, label }) => (
+            <button key={id} type="button" onClick={() => onTabChange(id)}
+              style={{
+                padding: '6px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 700, transition: 'all 0.15s',
+                background: activeTab === id ? '#fff' : 'transparent',
+                color: activeTab === id ? '#1e3a5f' : '#64748b',
+                boxShadow: activeTab === id ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Loading…</div>
+      ) : activeTab === 'value' ? (
+        /* ── Value-wise grid ── */
+        <div style={{ padding: '18px 20px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+          {BIF_DOC_TYPES.map((dt) => {
+            const b2b = bifurcation?.[dt.key]?.b2b || zeroSums();
+            const b2c = bifurcation?.[dt.key]?.b2c || zeroSums();
+            return (
+              <div key={dt.key} style={{ border: `1.5px solid ${dt.iconBg}`, borderRadius: 12, overflow: 'hidden' }}>
+                {/* Card header */}
+                <div style={{ background: dt.bg, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${dt.iconBg}` }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: dt.color }} />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: dt.color }}>{dt.label} – B2B &amp; B2C Summary</span>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Particulars</th>
+                      <th style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 700, color: '#16a34a', borderBottom: '1px solid #e2e8f0' }}>B2B</th>
+                      <th style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 700, color: '#ea580c', borderBottom: '1px solid #e2e8f0' }}>B2C</th>
+                      <th style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 700, color: '#1e3a5f', borderBottom: '1px solid #e2e8f0' }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {VALUE_ROWS.map((row, i) => {
+                      const total = (b2b[row.key] || 0) + (b2c[row.key] || 0);
+                      return (
+                        <tr key={row.key} style={{ borderBottom: '1px solid #f1f5f9', background: row.bold ? '#f0f9ff' : i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                          <td style={{ padding: '8px 14px', color: row.bold ? '#2563eb' : 'var(--bp-navy)', fontWeight: row.bold ? 800 : 600 }}>{row.label}</td>
+                          <td style={{ padding: '8px 14px', textAlign: 'right', color: row.bold ? '#2563eb' : 'var(--bp-text)', fontWeight: row.bold ? 800 : 500 }}>{money(b2b[row.key] || 0)}</td>
+                          <td style={{ padding: '8px 14px', textAlign: 'right', color: row.bold ? '#2563eb' : 'var(--bp-text)', fontWeight: row.bold ? 800 : 500 }}>{money(b2c[row.key] || 0)}</td>
+                          <td style={{ padding: '8px 14px', textAlign: 'right', color: '#2563eb', fontWeight: 800 }}>{money(total)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* ── Document-wise table ── */
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: '#1e3a5f', color: '#fff' }}>
+                <th style={{ padding: '10px 20px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Document Type</th>
+                <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>B2B</th>
+                <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>B2C</th>
+                <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {BIF_DOC_TYPES.map((dt, i) => {
+                const b2b = bifurcation?.[dt.key]?.b2b || zeroSums();
+                const b2c = bifurcation?.[dt.key]?.b2c || zeroSums();
+                const tot = (b2b.count || 0) + (b2c.count || 0);
+                return (
+                  <tr key={dt.key} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                    <td style={{ padding: '11px 20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: dt.color, flexShrink: 0 }} />
+                        <span style={{ fontWeight: 700, color: dt.color }}>{dt.label}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                      <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '3px 12px', borderRadius: 8, fontWeight: 700 }}>{b2b.count || 0}</span>
+                    </td>
+                    <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                      <span style={{ background: '#fff7ed', color: '#ea580c', padding: '3px 12px', borderRadius: 8, fontWeight: 700 }}>{b2c.count || 0}</span>
+                    </td>
+                    <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                      <span style={{ background: '#eff6ff', color: '#2563eb', padding: '3px 12px', borderRadius: 8, fontWeight: 700 }}>{tot}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {/* Totals row */}
+              <tr style={{ background: '#f0f9ff', borderTop: '2px solid #bfdbfe' }}>
+                <td style={{ padding: '11px 20px', fontWeight: 800, color: '#1e3a5f' }}>Total Documents</td>
+                <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                  <span style={{ background: '#dcfce7', color: '#16a34a', padding: '4px 14px', borderRadius: 8, fontWeight: 800 }}>{totalB2b.count}</span>
+                </td>
+                <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                  <span style={{ background: '#fed7aa', color: '#ea580c', padding: '4px 14px', borderRadius: 8, fontWeight: 800 }}>{totalB2c.count}</span>
+                </td>
+                <td style={{ padding: '11px 14px', textAlign: 'center' }}>
+                  <span style={{ background: '#bfdbfe', color: '#1d4ed8', padding: '4px 14px', borderRadius: 8, fontWeight: 800 }}>{totalAll.count}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Note */}
+      <div style={{ padding: '10px 20px', background: '#f0f7ff', borderTop: '1px solid #bfdbfe', fontSize: 12, color: '#1e3a8a' }}>
+        <strong>Note:</strong>
+        <ul style={{ margin: '4px 0 0', paddingLeft: 18, lineHeight: 1.7 }}>
+          <li>B2B and B2C classification is based on the document party type and GSTIN availability.</li>
+          <li>Values include only active documents. Cancelled documents are excluded.</li>
+          <li>Data is shown for the selected period.</li>
+        </ul>
       </div>
     </div>
   );

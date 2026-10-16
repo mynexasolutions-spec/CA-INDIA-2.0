@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import ForgotPasswordModal from '../../components/ForgotPasswordModal';
 import PasswordField from '../../components/PasswordField';
@@ -108,7 +109,7 @@ const gstFeatures = [
 ];
 
 export default function LoginPage() {
-  const { login, user, loading } = useAuth();
+  const { login, verifyLoginOtp, user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
@@ -120,6 +121,8 @@ export default function LoginPage() {
   ));
   const [busy, setBusy] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [twoFactor, setTwoFactor] = useState(null); // { challenge, email, devOtp } while the emailed code is awaited
+  const [otp, setOtp] = useState('');
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -127,13 +130,44 @@ export default function LoginPage() {
     setError('');
     setInfo('');
     try {
-      const user = await login(email, password, null, remember);
-      if (['super_admin', 'admin', 'staff'].includes(user.role)) navigate('/admin');
+      const result = await login(email, password, null, remember);
+      if (result?.twoFactor) {
+        setTwoFactor(result);
+        setOtp('');
+        return;
+      }
+      if (['super_admin', 'admin', 'staff'].includes(result.role)) navigate('/admin');
       else navigate('/portal');
     } catch (err) {
       setError(err.message || 'Request failed');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const onVerifyOtp = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const u = await verifyLoginOtp(twoFactor.challenge, otp, remember);
+      navigate(['super_admin', 'admin', 'staff'].includes(u.role) ? '/admin' : '/portal');
+    } catch (err) {
+      setError(err.message || 'Verification failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onResendOtp = async () => {
+    setError('');
+    setInfo('');
+    try {
+      const r = await api('/auth/login/resend-otp', { method: 'POST', body: { challenge: twoFactor.challenge } });
+      setTwoFactor((t) => ({ ...t, devOtp: r._dev_otp ?? null }));
+      setInfo('A new code has been sent to your email.');
+    } catch (err) {
+      setError(err.message || 'Could not resend the code');
     }
   };
 
@@ -194,6 +228,41 @@ export default function LoginPage() {
             <p className="login-page__copy">
               Sign in securely to access your Billing Dashboard, Invoices, and Financial Summaries.
             </p>
+            {twoFactor ? (
+              <form onSubmit={onVerifyOtp} className="login-page__form">
+                <p className="login-page__copy" style={{ marginTop: 0 }}>
+                  Two-factor verification. Enter the 6-digit code we emailed to <strong>{twoFactor.email}</strong>. It is valid for 5 minutes.
+                </p>
+                <label className="login-page__field">
+                  <span>Verification Code</span>
+                  <input
+                    className="form-control"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    required
+                    autoFocus
+                    placeholder="------"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    style={{ letterSpacing: 8, textAlign: 'center', fontSize: 20, fontWeight: 700 }}
+                  />
+                </label>
+                {twoFactor.devOtp && <p className="login-page__info">Dev mode code: <strong>{twoFactor.devOtp}</strong></p>}
+                {error && <p className="login-page__error" role="alert">{error}</p>}
+                {info && <p className="login-page__info">{info}</p>}
+                <button type="submit" className="btn btn-navy login-page__submit" disabled={busy || otp.length !== 6}>
+                  <IconLock size={16} />
+                  {busy ? 'Please wait…' : 'Verify & Sign In'}
+                </button>
+                <p style={{ textAlign: 'center', marginTop: 12, fontSize: 13 }}>
+                  <button type="button" className="btn-link" onClick={onResendOtp} style={{ background: 'none', border: 'none', color: '#1d4ed8', cursor: 'pointer', fontWeight: 600 }}>Resend code</button>
+                  {' · '}
+                  <button type="button" onClick={() => { setTwoFactor(null); setOtp(''); setError(''); setInfo(''); }} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>Back</button>
+                </p>
+              </form>
+            ) : (
             <form onSubmit={onSubmit} className="login-page__form">
               <label className="login-page__field">
                 <span>Email Address / User ID</span>
@@ -230,6 +299,7 @@ export default function LoginPage() {
                 {busy ? 'Please wait…' : 'Sign In'}
               </button>
             </form>
+            )}
             <div className="login-page__divider"><span>or</span></div>
             <div className="login-page__support-row">
               <button type="button" onClick={() => setForgotOpen(true)}>

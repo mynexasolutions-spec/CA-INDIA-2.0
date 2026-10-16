@@ -71,6 +71,18 @@ export function AuthProvider({ children }) {
       method: 'POST',
       body: portal ? { email, password, portal } : { email, password },
     });
+    // Two-Factor (Email OTP) accounts get no session yet: the emailed code must be verified first.
+    if (data.two_factor) {
+      return { twoFactor: true, challenge: data.challenge, email: data.email, devOtp: data._dev_otp ?? null };
+    }
+    setAuthToken(data.token, remember);
+    setUser(data.user);
+    bump();
+    return data.user;
+  }, [bump]);
+
+  const verifyLoginOtp = useCallback(async (challenge, otp, remember = true) => {
+    const data = await api('/auth/login/verify-otp', { method: 'POST', body: { challenge, otp } });
     setAuthToken(data.token, remember);
     setUser(data.user);
     bump();
@@ -78,8 +90,8 @@ export function AuthProvider({ children }) {
   }, [bump]);
 
   const value = useMemo(
-    () => ({ user, loading, login, logout, refresh }),
-    [user, loading, login, logout, refresh]
+    () => ({ user, loading, login, verifyLoginOtp, logout, refresh }),
+    [user, loading, login, verifyLoginOtp, logout, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

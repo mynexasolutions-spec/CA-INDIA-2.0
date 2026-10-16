@@ -86,7 +86,7 @@ class GstLiabilityService
                 ->where('match_status', ClientGstr2bInvoice::MATCH_STATUS_MATCHED)
                 ->count(),
             'unmatched_invoices' => (clone $gstr2b)
-                ->where('match_status', ClientGstr2bInvoice::MATCH_STATUS_UNMATCHED)
+                ->notMatched()
                 ->count(),
         ];
     }
@@ -119,7 +119,7 @@ class GstLiabilityService
             ['key' => "{$fyStartYear}-Q1", 'from' => "{$fyStartYear}-04-01", 'to' => "{$fyStartYear}-06-30"],
             ['key' => "{$fyStartYear}-Q2", 'from' => "{$fyStartYear}-07-01", 'to' => "{$fyStartYear}-09-30"],
             ['key' => "{$fyStartYear}-Q3", 'from' => "{$fyStartYear}-10-01", 'to' => "{$fyStartYear}-12-31"],
-            ['key' => ($fyStartYear + 1)."-Q4", 'from' => ($fyStartYear + 1).'-01-01', 'to' => ($fyStartYear + 1).'-03-31'],
+            ['key' => "{$fyStartYear}-Q4", 'from' => ($fyStartYear + 1).'-01-01', 'to' => ($fyStartYear + 1).'-03-31'],
         ];
         $overlapping = array_filter($quarters, fn ($q) => $q['from'] <= $to && $q['to'] >= $from);
         $filedKeys = ClientGstReturn::where('client_profile_id', $clientProfileId)
@@ -161,7 +161,7 @@ class GstLiabilityService
                 ->where('match_status', ClientGstr2bInvoice::MATCH_STATUS_MATCHED)
                 ->count(),
             'unmatched_invoices' => (clone $gstr2b)
-                ->where('match_status', ClientGstr2bInvoice::MATCH_STATUS_UNMATCHED)
+                ->notMatched()
                 ->count(),
         ];
     }

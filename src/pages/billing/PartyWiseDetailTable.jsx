@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../../auth/AuthContext';
+import { useReportsEnv } from './ReportsContext';
 import PartyDocumentsModal from './PartyDocumentsModal';
 import { filterDocsByPeriod, money } from './billingUtils';
 
@@ -19,8 +19,8 @@ export default function PartyWiseDetailTable({
   /** Optional client profile (admin client billing). Defaults to logged-in client. */
   profile = null,
 }) {
-  const { user } = useAuth();
-  const dealerProfile = profile || user?.client_profile;
+  const env = useReportsEnv();
+  const dealerProfile = profile || env.profile;
   const [open, setOpen] = useState(false);
   const [party, setParty] = useState(null);
 
@@ -52,7 +52,7 @@ export default function PartyWiseDetailTable({
       setParty({
         name,
         documents: null,
-        fetchUrl: `/billing/documents?${qs}`,
+        fetchUrl: `${env.docsApi}?${qs}`,
       });
     }
     setOpen(true);

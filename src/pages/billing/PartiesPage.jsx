@@ -158,8 +158,8 @@ export default function PartiesPage() {
           </select>
           <select className="bp-select" style={{ maxWidth: 170 }} value={gstFilter} onChange={(e) => setGstFilter(e.target.value)}>
             <option value="">GST Status</option>
-            <option value="registered">Registered</option>
-            <option value="unregistered">Unregistered</option>
+            <option value="registered">B2B</option>
+            <option value="unregistered">B2C</option>
           </select>
           <button type="button" className="bp-btn bp-btn-blue" onClick={applyFilters}>Apply</button>
           <button type="button" className="bp-btn bp-btn-outline" onClick={resetFilters}>↺ Reset</button>
@@ -169,11 +169,11 @@ export default function PartiesPage() {
           <thead>
             <tr>
               <th>Company Name</th>
-              <th>GSTIN</th>
-              <th>Contact</th>
-              <th>State</th>
-              <th>GST Status</th>
-              <th>Actions</th>
+              <th style={{ textAlign: 'center' }}>GSTIN</th>
+              <th style={{ textAlign: 'center' }}>Contact</th>
+              <th style={{ textAlign: 'center' }}>State</th>
+              <th style={{ textAlign: 'center' }}>GST Status</th>
+              <th style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -191,19 +191,19 @@ export default function PartiesPage() {
                       </div>
                     </div>
                   </td>
-                  <td>
+                  <td style={{ textAlign: 'center' }}>
                     {registered
                       ? (p.gstin || <span className="bp-party-muted">—</span>)
-                      : <span className="bp-party-muted">Unregistered</span>}
+                      : <span className="bp-party-muted">—</span>}
                   </td>
-                  <td>{p.phone || '—'}</td>
-                  <td>{p.state || p.state_code || '—'}</td>
-                  <td>
-                    <span className={`bp-gst-badge ${registered ? 'is-registered' : 'is-unregistered'}`}>
-                      <span className="dot" /> {registered ? 'Registered' : 'Unregistered'}
+                  <td style={{ textAlign: 'center' }}>{p.phone || '—'}</td>
+                  <td style={{ textAlign: 'center' }}>{p.state || p.state_code || '—'}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <span className={`bp-gst-badge ${registered ? 'is-registered' : 'is-unregistered'}`} style={{ justifyContent: 'center' }}>
+                      <span className="dot" /> {registered ? 'B2B' : 'B2C'}
                     </span>
                   </td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
+                  <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
                     <Link to={`/portal/billing/parties/${p.id}/edit`} className="bp-btn bp-btn-outline" style={{ padding: '4px 8px' }}>Edit</Link>
                     {status === 'archived'
                       ? <button type="button" className="bp-btn bp-btn-outline" style={{ padding: '4px 8px', marginLeft: 6 }} onClick={() => restoreParty(p)}>Restore</button>

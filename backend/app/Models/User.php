@@ -14,9 +14,10 @@ class User extends Authenticatable
     protected $fillable = [
         'name', 'email', 'password', 'role', 'phone', 'is_active', 'last_login_at',
         'password_updated_at', 'password_updated_by',
+        'login_2fa_enabled', 'clients_verify_method', 'clients_secondary_password',
     ];
 
-    protected $hidden = ['password', 'remember_token'];
+    protected $hidden = ['password', 'remember_token', 'clients_secondary_password'];
 
     protected function casts(): array
     {
@@ -26,12 +27,18 @@ class User extends Authenticatable
             'password_updated_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'login_2fa_enabled' => 'boolean',
         ];
     }
 
     public function clientProfile()
     {
         return $this->hasOne(ClientProfile::class);
+    }
+
+    public function staffAssignments()
+    {
+        return $this->hasMany(StaffClientAssignment::class, 'user_id');
     }
 
     public function isAdmin(): bool

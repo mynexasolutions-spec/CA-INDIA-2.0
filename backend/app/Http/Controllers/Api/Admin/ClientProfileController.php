@@ -62,6 +62,12 @@ class ClientProfileController extends Controller
                 $q->where(fn ($w) => $w->where(fn ($sq) => $sq->where('has_gst', 0)->orWhereNull('has_gst'))->where(fn ($sq) => $sq->whereNull('gstin')->orWhere('gstin', '')));
             }
         }
+        if ($request->filled('dealer_type')) {
+            $q->where('dealer_type', $request->dealer_type);
+        }
+        if ($request->filled('gst_filing_frequency')) {
+            $q->where('gst_filing_frequency', $request->gst_filing_frequency);
+        }
         if ($request->filled('registered_from')) {
             $q->whereDate('created_at', '>=', $request->registered_from);
         }
@@ -244,6 +250,8 @@ class ClientProfileController extends Controller
                 'phone' => $data['mobile'] ?? $data['phone'] ?? null,
                 'role' => 'client',
                 'is_active' => $data['is_active'] ?? true,
+                'password_updated_at' => now(),
+                'password_updated_by' => 'admin',
             ]);
 
             $profileData = $this->profileFields($data);
@@ -273,7 +281,13 @@ class ClientProfileController extends Controller
                 'ip_address' => $request->ip(),
             ]);
 
-            return response()->json($profile->fresh()->load('user'), 201);
+            $payload = $profile->fresh()->load('user')->toArray();
+            // Shown once, never stored in readable form.
+            if ($temp = $request->attributes->get('generated_password')) {
+                $payload['temporary_password'] = $temp;
+            }
+
+            return response()->json($payload, 201);
         });
     }
 
@@ -524,6 +538,18 @@ class ClientProfileController extends Controller
         $type = $request->input('type', 'invoice_register');
         $format = $request->input('format', 'xls');
 
+        $addrParts = array_filter([$profile->address, $profile->city, trim(($profile->state ?: '').($profile->pincode ? ' - '.$profile->pincode : ''))], fn ($p) => filled($p));
+        $exportMeta = [
+            'name'    => $profile->business_name ?: ($profile->client_name ?: 'Business'),
+            'address' => implode(', ', $addrParts),
+            'pan'     => $profile->pan ?: null,
+            'gstin'   => $profile->has_gst ? $profile->gstin : null,
+            'phone'   => $profile->mobile ?: ($profile->user?->phone ?? null),
+            'email'   => $profile->email ?: ($profile->user?->email ?? null),
+        ];
+        $exportTitle  = ucwords(str_replace('_', ' ', $type));
+        $exportPeriod = $from.' to '.$to;
+
         if ($type === 'gst_summary') {
             $base = CommercialDocument::where('client_profile_id', $profile->id)
                 ->whereDate('created_at', '>=', $from)->whereDate('created_at', '<=', $to)
@@ -561,7 +587,7 @@ class ClientProfileController extends Controller
                 ];
             }
 
-            return $this->respondExport($format, $type, $rows);
+            return $this->respondExport($format, $type, $rows, $exportMeta, $exportTitle, $exportPeriod);
         }
 
         if ($type === 'billing_summary') {
@@ -588,7 +614,7 @@ class ClientProfileController extends Controller
                 ->map(fn ($row) => $row->toArray())
                 ->all();
 
-            return $this->respondExport($format, $type, $rows);
+            return $this->respondExport($format, $type, $rows, $exportMeta, $exportTitle, $exportPeriod);
         }
 
         if ($type === 'hsn_summary') {
@@ -611,7 +637,7 @@ class ClientProfileController extends Controller
                 ->groupBy('li.hsn_sac')->orderByDesc('total')->get()
                 ->map(fn ($r) => (array) $r)->all();
 
-            return $this->respondExport($format, $type, $hsn);
+            return $this->respondExport($format, $type, $hsn, $exportMeta, $exportTitle, $exportPeriod);
         }
 
         if ($type === 'monthly_report') {
@@ -631,7 +657,7 @@ class ClientProfileController extends Controller
                     '.$cn('cgst_amount+sgst_amount+igst_amount').' as gst_liability')
                 ->groupBy('month')->orderBy('month')->get()->map(fn ($r) => (array) $r->toArray())->all();
 
-            return $this->respondExport($format, $type, $rows);
+            return $this->respondExport($format, $type, $rows, $exportMeta, $exportTitle, $exportPeriod);
         }
 
         if ($type === 'yearly_report') {
@@ -641,7 +667,7 @@ class ClientProfileController extends Controller
                 ->groupBy('year', 'type')->orderBy('year')->get();
             $rows = $this->yearlyTotals($yearly);
 
-            return $this->respondExport($format, $type, $rows);
+            return $this->respondExport($format, $type, $rows, $exportMeta, $exportTitle, $exportPeriod);
         }
 
         $registerMap = [
@@ -673,7 +699,7 @@ class ClientProfileController extends Controller
                 'Status' => $d->status,
             ])->all();
 
-        return $this->respondExport($format, $type, $docs);
+        return $this->respondExport($format, $type, $docs, $exportMeta, $exportTitle, $exportPeriod);
     }
 
     public function downloadZip(Request $request, int $id)
@@ -738,7 +764,9 @@ class ClientProfileController extends Controller
             $request->merge(['login_prefix' => $testPrefix]);
         }
         if ($creating && empty($request->input('password'))) {
-            $request->merge(['password' => 'Client@123456']);
+            // No shared default password: a random temporary one is generated, hashed, and shown to the admin once.
+            $request->attributes->set('generated_password', $generated = \Illuminate\Support\Str::password(12, true, true, true, false));
+            $request->merge(['password' => $generated]);
         }
 
         // Fallbacks for Name as per PAN and CIN Date if primary is empty but alternate was supplied
@@ -1192,44 +1220,46 @@ class ClientProfileController extends Controller
         return array_values($byYear);
     }
 
-    private function respondExport(string $format, string $type, array $rows)
+    private function respondExport(string $format, string $type, array $rows, array $meta = [], string $title = '', string $periodText = '')
     {
         if ($format === 'csv') {
             return $this->csvDownload($type, $rows);
         }
         if ($format === 'pdf') {
-            return $this->pdfDownload($type, $rows);
+            return $this->pdfDownload($type, $rows, $meta, $title ?: ucwords(str_replace('_', ' ', $type)), $periodText);
         }
 
-        return $this->xlsxDownload($type, $rows);
+        return $this->xlsxDownload($type, $rows, $meta, $title ?: ucwords(str_replace('_', ' ', $type)), $periodText);
     }
 
-    private function pdfDownload(string $type, array $rows)
+    private function pdfDownload(string $type, array $rows, array $meta = [], string $title = '', string $periodText = '')
     {
-        $headers = array_keys($rows[0] ?? ['Message' => 'No data']);
-        $html = '<html><head><style>body{font-family:DejaVu Sans,sans-serif;font-size:11px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px;text-align:left}th{background:#eee}</style></head><body>';
-        $html .= '<h2>'.htmlspecialchars(strtoupper(str_replace('_', ' ', $type))).'</h2>';
-        $html .= '<table><thead><tr>';
-        foreach ($headers as $h) {
-            $html .= '<th>'.htmlspecialchars((string) $h).'</th>';
-        }
-        $html .= '</tr></thead><tbody>';
-        foreach ($rows as $row) {
-            $html .= '<tr>';
-            foreach ($headers as $h) {
-                $v = $row[$h] ?? '';
-                $html .= '<td>'.htmlspecialchars(is_scalar($v) || $v === null ? (string) $v : json_encode($v)).'</td>';
-            }
-            $html .= '</tr>';
-        }
-        if (! $rows) {
-            $html .= '<tr><td colspan="'.max(1, count($headers)).'">No data</td></tr>';
-        }
-        $html .= '</tbody></table></body></html>';
+        $moneyHeaders = $this->computeMoneyHeaders($rows);
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)->setPaper('a4', 'landscape');
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.report', [
+            'title'        => $title ?: ucwords(str_replace('_', ' ', $type)),
+            'periodText'   => $periodText,
+            'rows'         => $rows,
+            'meta'         => $meta,
+            'moneyHeaders' => $moneyHeaders,
+            'generatedOn'  => now()->format('d-m-Y'),
+        ])->download("{$type}.pdf");
+    }
 
-        return $pdf->download("{$type}.pdf");
+    /** Basic money-column detector matching the client portal's ReportController logic. */
+    private function computeMoneyHeaders(array $rows): array
+    {
+        if (! $rows) return [];
+        $nonMoneyExact   = ['invoices', 'documents', 'count', 'id'];
+        $nonMoneyPattern = '/code|hsn|sac|qty|quantity|uqc|rate|no\.|number|\bname\b|particular|\btype\b|description|party|customer|date|sr\.|percent|%/i';
+        $out = [];
+        foreach ((array) ($rows[0] ?? []) as $h => $v) {
+            if (! is_numeric($v)) continue;
+            if (in_array(strtolower(trim((string) $h)), $nonMoneyExact, true)) continue;
+            if (preg_match($nonMoneyPattern, (string) $h)) continue;
+            $out[] = $h;
+        }
+        return $out;
     }
 
     private function csvDownload(string $type, array $rows)
@@ -1359,29 +1389,86 @@ class ClientProfileController extends Controller
         return null;
     }
 
-    private function xlsxDownload(string $type, array $rows)
+    private function xlsxDownload(string $type, array $rows, array $meta = [], string $title = '', string $periodText = '')
     {
-        $headers = array_keys($rows[0] ?? ['value' => '']);
+        $headers      = array_keys($rows[0] ?? ['value' => '']);
+        $colCount     = max(count($headers), 1);
+        $moneyHeaders = $this->computeMoneyHeaders($rows);
+        $esc          = fn ($v) => htmlspecialchars((string) $v, ENT_QUOTES | ENT_XML1);
+
         $xml = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>';
-        $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Report"><Table>';
+        $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
+        $xml .= '<Styles>';
+        $xml .= '<Style ss:ID="bizName"><Font ss:Bold="1" ss:Size="14" ss:Color="#000000"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="bizLine"><Font ss:Size="10" ss:Color="#222222"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="bizMeta"><Font ss:Size="10" ss:Color="#222222"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="title"><Font ss:Bold="1" ss:Size="13" ss:Color="#000000"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="period"><Font ss:Size="10" ss:Color="#444444"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="colHead"><Font ss:Bold="1" ss:Size="10" ss:Color="#FFFFFF"/><Interior ss:Color="#4B5563" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="cell"><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="cellLabel"><Font ss:Bold="1"/><Alignment ss:Horizontal="Left"/></Style>';
+        $xml .= '<Style ss:ID="cellMoney"><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
+        $xml .= '<Style ss:ID="totalCell"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
+        $xml .= '<Style ss:ID="totalLabel"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Left"/></Style>';
+        $xml .= '<Style ss:ID="totalMoney"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
+        $xml .= '<Style ss:ID="footer"><Font ss:Size="9" ss:Color="#444444"/><Alignment ss:Horizontal="Left"/></Style>';
+        $xml .= '</Styles>';
+        $xml .= '<Worksheet ss:Name="Report"><Table>';
+
+        $mergeAttr = $colCount > 1 ? ' ss:MergeAcross="'.($colCount - 1).'"' : '';
+        if ($meta['name'] ?? null) {
+            $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="bizName"><Data ss:Type="String">'.$esc(strtoupper($meta['name'])).'</Data></Cell></Row>';
+            if ($meta['address'] ?? null) {
+                $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="bizLine"><Data ss:Type="String">'.$esc($meta['address']).'</Data></Cell></Row>';
+            }
+            $metaLine = implode('   |   ', array_filter([
+                ($meta['pan']   ?? null) ? 'PAN: '.$meta['pan']      : null,
+                ($meta['gstin'] ?? null) ? 'GSTIN: '.$meta['gstin']  : null,
+                ($meta['email'] ?? null) ? 'Email: '.$meta['email']  : null,
+                ($meta['phone'] ?? null) ? 'Mobile: '.$meta['phone'] : null,
+            ]));
+            if ($metaLine) {
+                $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="bizMeta"><Data ss:Type="String">'.$esc($metaLine).'</Data></Cell></Row>';
+            }
+            $xml .= '<Row></Row>';
+        }
+        $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="title"><Data ss:Type="String">'.$esc($title ?: ucwords(str_replace('_', ' ', $type))).'</Data></Cell></Row>';
+        if ($periodText) {
+            $xml .= '<Row><Cell'.$mergeAttr.' ss:StyleID="period"><Data ss:Type="String">'.$esc('Period: '.$periodText).'</Data></Cell></Row>';
+        }
+        $xml .= '<Row></Row>';
+
         $xml .= '<Row>';
         foreach ($headers as $h) {
-            $xml .= '<Cell><Data ss:Type="String">'.htmlspecialchars((string) $h).'</Data></Cell>';
+            $label = $h.(in_array($h, $moneyHeaders, true) ? ' (₹)' : '');
+            $xml .= '<Cell ss:StyleID="colHead"><Data ss:Type="String">'.$esc($label).'</Data></Cell>';
         }
         $xml .= '</Row>';
-        foreach ($rows as $row) {
+
+        $lastIndex = count($rows) - 1;
+        foreach ($rows as $i => $row) {
+            $arr   = (array) $row;
+            $first = reset($arr);
+            $isTotal = $i === $lastIndex && is_string($first) && stripos($first, 'total') !== false;
             $xml .= '<Row>';
-            foreach ($headers as $h) {
-                $v = $row[$h] ?? '';
+            foreach ($headers as $ci => $h) {
+                $v = $arr[$h] ?? '';
+                $isMoney    = in_array($h, $moneyHeaders, true) && is_numeric($v);
+                $isLabelCol = $ci === 0;
+                $style = $isTotal
+                    ? ($isLabelCol ? 'totalLabel' : ($isMoney ? 'totalMoney' : 'totalCell'))
+                    : ($isLabelCol ? 'cellLabel'  : ($isMoney ? 'cellMoney'  : 'cell'));
                 $typeAttr = is_numeric($v) ? 'Number' : 'String';
-                $xml .= '<Cell><Data ss:Type="'.$typeAttr.'">'.htmlspecialchars((string) $v).'</Data></Cell>';
+                $xml .= '<Cell ss:StyleID="'.$style.'"><Data ss:Type="'.$typeAttr.'">'.$esc(is_scalar($v) ? (string) $v : json_encode($v)).'</Data></Cell>';
             }
             $xml .= '</Row>';
         }
+        $xml .= '<Row></Row>';
+        $xml .= '<Row><Cell ss:StyleID="footer"><Data ss:Type="String">'.$esc('Report Generated On: '.now()->format('d-m-Y')).'</Data></Cell></Row>';
         $xml .= '</Table></Worksheet></Workbook>';
 
         return response($xml, 200, [
-            'Content-Type' => 'application/vnd.ms-excel',
+            'Content-Type'        => 'application/vnd.ms-excel',
             'Content-Disposition' => "attachment; filename=\"{$type}.xls\"",
         ]);
     }

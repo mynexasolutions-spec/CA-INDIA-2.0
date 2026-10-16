@@ -416,7 +416,7 @@ export default function ClientProfileForm() {
   const [showDiscardModal, setShowDiscardModal] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [showCreateSuccess, setShowCreateSuccess] = useState(false);
-  const [createdInfo, setCreatedInfo] = useState({ clientId: '', clientName: '', id: null });
+  const [createdInfo, setCreatedInfo] = useState({ clientId: '', clientName: '', id: null, temporaryPassword: '' });
 
   // Toast Notification State
   const [toast, setToast] = useState(null);
@@ -847,8 +847,8 @@ export default function ClientProfileForm() {
     showToast('Bank account form closed.', 'info');
   };
 
-  const handleVerifyBankFormIfsc = async () => {
-    const ifsc = (bankForm.ifsc_code || '').trim().toUpperCase();
+  const handleVerifyBankFormIfsc = async (override) => {
+    const ifsc = (typeof override === 'string' ? override : bankForm.ifsc_code || '').trim().toUpperCase();
     if (!ifsc || ifsc.length !== 11) {
       setBankIfscNotice({ verifying: false, success: false, error: 'Please enter a valid 11-character IFSC code.', message: '' });
       return;
@@ -872,18 +872,20 @@ export default function ClientProfileForm() {
           message: `Verified: ${bankName}${branchName ? ` (${branchName})` : ''}`,
         });
       } else {
+        setBankForm((b) => ({ ...b, bank_name: '', branch: '' }));
         setBankIfscNotice({
           verifying: false,
           success: false,
-          error: (data && data.message) || 'Invalid or not found IFSC code. You can enter Bank Name and Branch manually.',
+          error: (data && data.message) || 'Invalid or not found IFSC code.',
           message: '',
         });
       }
     } catch (err) {
+      setBankForm((b) => ({ ...b, bank_name: '', branch: '' }));
       setBankIfscNotice({
         verifying: false,
         success: false,
-        error: err.message || 'Invalid or not found IFSC code. You can enter Bank Name and Branch manually.',
+        error: err.message || 'Invalid or not found IFSC code.',
         message: '',
       });
     }
@@ -1448,8 +1450,8 @@ export default function ClientProfileForm() {
         fd.set('business_name', primaryName);
       }
       if (!isEdit) {
-        if (!fd.get('password')) {
-          fd.set('password', form.password || 'Client@123456');
+        if (!fd.get('password') && form.password) {
+          fd.set('password', form.password);
         }
         if (!fd.get('login_prefix')) {
           const autoPrefix = (primaryName || 'client').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -1506,6 +1508,7 @@ export default function ClientProfileForm() {
           clientId: data.client_code || `CL-${String(data.id).padStart(3, '0')}`,
           clientName: data.client_name || form.client_name,
           id: data.id,
+          temporaryPassword: data.temporary_password || '',
         });
         setShowCreateSuccess(true);
       }
@@ -2155,6 +2158,17 @@ export default function ClientProfileForm() {
                 />
               </Field>
             </div>
+
+            {/* Registered Office Address — same shared component and same stored fields as Personal Information */}
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1d4ed8', margin: '24px 0 16px' }}>
+              Registered Office Address
+            </h3>
+            <AddressFields
+              values={form}
+              onChange={(k, v) => set(k, v)}
+              onBatchChange={(updates) => setForm((prev) => ({ ...prev, ...updates }))}
+              disabled={!isEditing}
+            />
           </div>
         )}
 
@@ -3389,8 +3403,10 @@ export default function ClientProfileForm() {
                       id="bank-name-input"
                       className="bp-input"
                       value={bankForm.bank_name}
+                      readOnly={bankIfscNotice.success}
+                      style={bankIfscNotice.success ? { background: '#f8fafc' } : undefined}
                       onChange={(e) => setBankForm({ ...bankForm, bank_name: e.target.value })}
-                      placeholder="e.g. HDFC Bank"
+                      placeholder="Auto-fetched from IFSC"
                     />
                   </label>
 
@@ -3452,8 +3468,11 @@ export default function ClientProfileForm() {
                         placeholder="e.g. HDFC0000123"
                         value={bankForm.ifsc_code}
                         onChange={(e) => {
-                          setBankForm({ ...bankForm, ifsc_code: e.target.value.toUpperCase() });
+                          const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                          // Bank / Branch stay linked to the verified IFSC: changing it clears them.
+                          setBankForm({ ...bankForm, ifsc_code: v, ...(bankIfscNotice.success ? { bank_name: '', branch: '' } : {}) });
                           setBankIfscNotice({ verifying: false, success: false, error: '', message: '' });
+                          if (v.length === 11) handleVerifyBankFormIfsc(v);
                         }}
                       />
                       <button
@@ -3496,8 +3515,10 @@ export default function ClientProfileForm() {
                     <input
                       className="bp-input"
                       value={bankForm.branch}
+                      readOnly={bankIfscNotice.success}
+                      style={bankIfscNotice.success ? { background: '#f8fafc' } : undefined}
                       onChange={(e) => setBankForm({ ...bankForm, branch: e.target.value })}
-                      placeholder="e.g. Bandra Kurla Complex"
+                      placeholder="Auto-fetched from IFSC"
                     />
                   </label>
 
@@ -4495,7 +4516,7 @@ export default function ClientProfileForm() {
                       <polyline points="12 6 12 12 16 14" />
                     </svg>
                     <span style={{ fontSize: 12.5, color: '#475569' }}>
-                      Last Login: <strong style={{ color: '#0f172a' }}>{formatDateTime(form.last_login_at || form.user?.last_login_at) || '08 Sep 2026, 02:15 PM'}</strong>
+                      Last Login: <strong style={{ color: '#0f172a' }}>{formatDateTime(form.last_login_at || form.user?.last_login_at) || 'Never'}</strong>
                     </span>
                   </div>
 
@@ -4963,7 +4984,7 @@ export default function ClientProfileForm() {
                       className="bp-input"
                       disabled
                       readOnly
-                      value={form.registration_type === 'Composition' ? 'Composition Dealer' : 'Regular Dealer'}
+                      value={form.registration_type === 'Composition' ? 'Composition' : 'Regular'}
                       style={{
                         width: '100%',
                         background: '#f8fafc',
@@ -5397,6 +5418,7 @@ export default function ClientProfileForm() {
           isOpen={showCreateSuccess}
           clientId={createdInfo.clientId}
           clientName={createdInfo.clientName}
+          temporaryPassword={createdInfo.temporaryPassword}
           onClose={() => navigate('/admin/clients')}
           onGoToDetails={() => {
             setShowCreateSuccess(false);

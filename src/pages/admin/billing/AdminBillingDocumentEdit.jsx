@@ -138,7 +138,7 @@ export default function AdminBillingDocumentEdit() {
               fontWeight: 600,
             }}
           >
-            ← Back to Document
+            Back to Document
           </Link>
         </div>
       </div>
@@ -171,7 +171,7 @@ export default function AdminBillingDocumentEdit() {
               fontWeight: 600,
             }}
           >
-            ← Back to Document
+            Back to Document
           </Link>
         </div>
       </div>
@@ -209,7 +209,7 @@ export default function AdminBillingDocumentEdit() {
               fontWeight: 600,
             }}
           >
-            ← Back to Document
+            Back to Document
           </Link>
         </div>
       </div>

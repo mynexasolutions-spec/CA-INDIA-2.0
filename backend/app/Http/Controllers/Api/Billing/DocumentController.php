@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api\Billing;
 
+use App\Http\Controllers\Api\Billing\Concerns\ResolvesBillingProfile;
 use App\Http\Controllers\Controller;
 use App\Models\CommercialDocument;
 use App\Models\Customer;
+use App\Models\DocumentPaymentLog;
 use App\Models\Product;
 use App\Services\Billing\BillingPolicy;
 use App\Services\Billing\InvoiceService;
@@ -18,14 +20,13 @@ use Illuminate\Validation\Rule;
 
 class DocumentController extends Controller
 {
+    use ResolvesBillingProfile;
+
     public function __construct(private InvoiceService $invoices) {}
 
     private function profile(Request $request)
     {
-        $profile = $request->user()->clientProfile;
-        abort_unless($profile, 403);
-
-        return $profile;
+        return $this->resolveBillingProfile($request);
     }
 
     /** Applies every list filter except `type` — shared by the row query and the
@@ -56,6 +57,13 @@ class DocumentController extends Controller
         }
         if ($request->filled('to')) {
             $q->whereDate('created_at', '<=', $request->to);
+        }
+        // Document Date (Invoice Date) range — separate from Creation Date above.
+        if ($request->filled('doc_from')) {
+            $q->whereDate('document_date', '>=', $request->doc_from);
+        }
+        if ($request->filled('doc_to')) {
+            $q->whereDate('document_date', '<=', $request->doc_to);
         }
         if ($request->filled('month')) {
             // YYYY-MM — real date bounds instead of a MySQL-only DATE_FORMAT() compare,
@@ -93,11 +101,17 @@ class DocumentController extends Controller
 
         // Filtered aggregate totals (spec §24) and per-type summary counts —
         // computed from the FULL filtered set, not just the current page.
-        $summaryTypes = ['tax_invoice', 'bill_of_supply', 'debit_note', 'credit_note'];
+        $summaryTypes = ['tax_invoice', 'bill_of_supply', 'debit_note', 'credit_note', 'quotation', 'delivery_challan'];
         $typeCounts = [];
         foreach ($summaryTypes as $t) {
             $typeCounts[$t] = (clone $base)->where('type', $t)->count();
         }
+        // B2B (registered) vs B2C (unregistered) breakdown for tax invoices.
+        $taxBase = (clone $base)->where('type', 'tax_invoice');
+        $typeCounts['tax_invoice_b2b'] = (clone $taxBase)
+            ->whereHas('customer', fn ($q) => $q->where('gst_status', 'registered'))->count();
+        $typeCounts['tax_invoice_b2c'] = (clone $taxBase)
+            ->whereHas('customer', fn ($q) => $q->where('gst_status', 'unregistered'))->count();
         $totalsScope = clone $base;
         if ($request->filled('type')) {
             $totalsScope->where('type', $request->type);
@@ -118,6 +132,15 @@ class DocumentController extends Controller
         $q = clone $base;
         if ($request->filled('type')) {
             $q->where('type', $request->type);
+        }
+        // B2B/B2C tab filter — applied to the row query only, not to $base, so
+        // type_counts (summary tiles) always reflect the full un-filtered set.
+        if ($request->filled('gst_type')) {
+            if ($request->gst_type === 'b2b') {
+                $q->whereHas('customer', fn ($c) => $c->where('gst_status', 'registered'));
+            } elseif ($request->gst_type === 'b2c') {
+                $q->whereHas('customer', fn ($c) => $c->where('gst_status', 'unregistered'));
+            }
         }
         $q->with('customer:id,name,gstin,gst_status')->latest('created_at')->latest('id');
 
@@ -268,13 +291,56 @@ class DocumentController extends Controller
         abort_unless(in_array($doc->status, ['issued', 'partial', 'paid'], true), 422, 'Only issued documents can be marked paid/unpaid');
 
         $data = $request->validate([
-            'status' => 'required|in:paid,unpaid,partial',
+            'status'           => 'required|in:paid,unpaid,partial',
+            'paid_on'          => 'nullable|date',
+            'payment_mode'     => 'nullable|string|max:30',
+            'reference_number' => 'nullable|string|max:120',
+            'received_by'      => 'nullable|string|max:200',
+            'paid_amount'      => 'nullable|numeric|min:0',
+            'remarks'          => 'nullable|string|max:500',
+            'unmark_reason'    => 'nullable|string|max:500',
         ]);
 
-        $status = $data['status'] === 'unpaid' ? 'issued' : $data['status'];
-        $doc->update(['status' => $status]);
+        $newStatus = $data['status'] === 'unpaid' ? 'issued' : $data['status'];
+
+        $now = now();
+        $action = $data['status'] === 'paid' ? 'mark_paid' : 'unmark_paid';
+
+        DocumentPaymentLog::create([
+            'commercial_document_id' => $doc->id,
+            'client_profile_id'      => $profile->id,
+            'action'                 => $action,
+            'paid_on'                => $data['paid_on'] ?? null,
+            'payment_time'           => $action === 'mark_paid' ? $now->format('h:i A') : null,
+            'payment_mode'           => $data['payment_mode'] ?? null,
+            'reference_number'       => $data['reference_number'] ?? null,
+            'received_by'            => $data['received_by'] ?? null,
+            'paid_amount'            => $data['paid_amount'] ?? ($doc->grand_total ?: $doc->total_amount),
+            'remarks'                => $data['remarks'] ?? null,
+            'unmark_reason'          => $data['unmark_reason'] ?? null,
+            'recorded_by'            => $request->user()?->id,
+        ]);
+
+        $doc->update(['status' => $newStatus]);
 
         return response()->json($doc->fresh(['customer', 'lineItems']));
+    }
+
+    public function paymentLog(Request $request, int $id)
+    {
+        $profile = $this->profile($request);
+        $doc = CommercialDocument::where('client_profile_id', $profile->id)->findOrFail($id);
+
+        $logs = DocumentPaymentLog::where('commercial_document_id', $doc->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $latest = $logs->where('action', 'mark_paid')->first();
+
+        return response()->json([
+            'latest'  => $latest,
+            'history' => $logs->values(),
+        ]);
     }
 
     public function preview(Request $request)

@@ -150,7 +150,7 @@ export default function AdminBillingClientDashboard() {
               display: 'inline-flex',
             }}
           >
-            ← Back to Client List
+            Back to Client List
           </Link>
         </div>
       </div>
@@ -498,7 +498,6 @@ export default function AdminBillingClientDashboard() {
                   }}
                 >
                   <span>View {t.pluralLabel}</span>
-                  <span style={{ fontSize: 13 }}>&rarr;</span>
                 </Link>
               </div>
             </div>

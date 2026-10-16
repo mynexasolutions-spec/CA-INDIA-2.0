@@ -115,6 +115,11 @@ class ClientProfile extends Model
         return $this->hasMany(ClientGstReturn::class);
     }
 
+    public function clientRequests()
+    {
+        return $this->hasMany(\App\Models\ClientRequest::class);
+    }
+
     public function complianceTasks()
     {
         return $this->hasMany(ComplianceTask::class);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, getAuthToken } from '../../api/client';
-import { useAuth } from '../../auth/AuthContext';
+import { useReportsEnv } from './ReportsContext';
 import { LoadingBlock } from '../../components/Spinner';
 import { billingMode } from './billingProfile';
 import { buildFyOptions, currentFyRange, money } from './billingUtils';
@@ -169,8 +169,8 @@ function LiabilityBarChart({ outputGst, eligibleItc }) {
 }
 
 export default function GstLiabilityReport() {
-  const { user } = useAuth();
-  const profile = user?.client_profile;
+  const env = useReportsEnv();
+  const profile = env.profile;
   const fyDefault = currentFyRange();
   const fyOptions = buildFyOptions();
 
@@ -186,7 +186,7 @@ export default function GstLiabilityReport() {
     setErr('');
     setLoading(true);
     const qs = new URLSearchParams({ type: 'gst_liability', from, to });
-    api(`/billing/reports?${qs}`)
+    api(`${env.reportsApi}?${qs}`)
       .then(setReport)
       .catch((e) => {
         // Don't leave stale figures from a previous period on screen once the fetch
@@ -231,7 +231,7 @@ export default function GstLiabilityReport() {
     setErr('');
     try {
       const qs = new URLSearchParams({ type: 'gst_liability', from, to, format });
-      const res = await fetch(`/api/billing/reports/export?${qs}`, {
+      const res = await fetch(`${env.exportUrl}?${qs}`, {
         headers: { Authorization: `Bearer ${getAuthToken()}`, Accept: '*/*' },
       });
       if (!res.ok) throw new Error('Failed to export');

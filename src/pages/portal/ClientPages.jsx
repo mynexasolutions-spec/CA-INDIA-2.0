@@ -126,19 +126,27 @@ function chartFreqTitle(base, profile) {
   return `${base} ${profile?.gst_filing_frequency === 'quarterly' ? '(Quarterly)' : '(Monthly)'}`;
 }
 
-function StatTile({ label, count, value, color, bg }) {
+function StatTile({ label, count, value, color, bg, icon, sub }) {
   const valueLen = String(value).length;
   const valueFontSize = valueLen > 13 ? 14 : valueLen > 10 ? 16 : 18;
   return (
-    <div className="bp-stat-tile" style={{ background: bg, borderRadius: 12, padding: '14px 16px', border: `1px solid ${color}22`, minWidth: 0, overflow: 'hidden' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--bp-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 8 }}>{label}</div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: valueFontSize, fontWeight: 850, color, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{value}</span>
-        {count != null && (
-          <span style={{ background: '#fff', color, padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, border: `1px solid ${color}33`, whiteSpace: 'nowrap' }}>
-            {count} {count === 1 ? 'Doc' : 'Docs'}
-          </span>
-        )}
+    <div className="bp-stat-tile" style={{ background: bg, borderRadius: 12, padding: '14px 16px', border: `1px solid ${color}22`, minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 12 }}>
+      {icon && (
+        <div style={{ width: 40, height: 40, borderRadius: 10, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {icon}
+        </div>
+      )}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--bp-muted)', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>{label}</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: valueFontSize, fontWeight: 850, color, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{value}</span>
+          {count != null && (
+            <span style={{ background: '#fff', color, padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, border: `1px solid ${color}33`, whiteSpace: 'nowrap' }}>
+              {count} {count === 1 ? 'Doc' : 'Docs'}
+            </span>
+          )}
+        </div>
+        {sub && <div style={{ fontSize: 11, color: 'var(--bp-muted)', fontWeight: 600, marginTop: 2 }}>{sub}</div>}
       </div>
     </div>
   );
@@ -246,6 +254,24 @@ function WsCreditIcon({ color }) {
       <line x1="9" y1="15" x2="15" y2="15" />
     </svg>
   );
+}
+
+/* ── Billing Overview tile icons ─────────────────────────────────── */
+const TILE_ICON = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'white', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+function TiTotalDocs()     { return <svg {...TILE_ICON}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>; }
+function TiTaxInv()        { return <svg {...TILE_ICON}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>; }
+function TiBillSupply()    { return <svg {...TILE_ICON}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>; }
+function TiDebitNote()     { return <svg {...TILE_ICON}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>; }
+function TiCreditNote()    { return <svg {...TILE_ICON}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>; }
+function TiCancelled()     { return <svg {...TILE_ICON}><circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/></svg>; }
+function TiQuotation()     { return <svg {...TILE_ICON}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>; }
+function TiChallan()       { return <svg {...TILE_ICON}><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>; }
+
+function dealerBadgeLabel(profile) {
+  const mode = billingMode(profile);
+  if (mode === 'retail') return 'Dealer – Non-GST';
+  if (mode === 'composition') return 'Dealer – Composition';
+  return 'Dealer – Regular';
 }
 
 export function ClientDashboard() {
@@ -362,146 +388,99 @@ export function ClientDashboard() {
   const compMatchTotal = (composition?.matched_invoices || 0) + (composition?.unmatched_invoices || 0);
   const compMatchRate = compMatchTotal ? ((composition.matched_invoices / compMatchTotal) * 100).toFixed(2) : '0.00';
 
+  const d = billingOverviewData;
+  const totalDocs = (d.tax_invoices ?? 0) + (d.bill_of_supply ?? 0) + (d.debit_notes ?? 0) + (d.credit_notes ?? 0) + (d.cancelled_invoices ?? 0) + (d.quotations ?? 0) + (d.delivery_challans ?? 0);
+
+  const GstSummaryCard = ({ summaryData }) => (
+    <DashCard title={returnTitle('GST Summary', profile)} icon={<GstSummaryIcon />} iconColor="#0f766e">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+        {isQuarterly && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--bp-text)' }}>
+            Quarter
+            <select className="bp-select" style={{ padding: '4px 8px', fontSize: 11, fontWeight: 700 }} value={selectedQuarter} onChange={(e) => selectQuarter(e.target.value, fy)}>
+              {quarterOptions.map((q) => <option key={q.value} value={q.value}>{q.label}</option>)}
+            </select>
+          </label>
+        )}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--bp-text)' }}>
+          From <input type="date" className="bp-input" style={{ padding: '4px 8px', fontSize: 11, maxWidth: 130 }} value={gstFrom} onChange={(e) => setGstFrom(e.target.value)} />
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--bp-text)' }}>
+          To <input type="date" className="bp-input" style={{ padding: '4px 8px', fontSize: 11, maxWidth: 130 }} value={gstTo} onChange={(e) => setGstTo(e.target.value)} />
+        </label>
+        <button type="button" className="bp-btn bp-btn-primary" style={{ padding: '5px 14px', fontSize: 11 }} onClick={() => loadGstSummary(gstFrom, gstTo)}>Apply</button>
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--bp-muted)', fontWeight: 600, marginBottom: 16 }}>Period: {gstFrom?.split('-').reverse().join('/')} – {gstTo?.split('-').reverse().join('/')}</div>
+      {isComposition ? (
+        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+          <StatTile label="Turnover" value={money(compositionData?.turnover)} color="#2563eb" bg="rgba(37,99,235,0.08)" />
+          <StatTile label="Tax Payable" value={money(compositionData?.tax_payable)} color="#be123c" bg="rgba(190,18,60,0.08)" />
+          <StatTile label="Tax Paid" value={money(compositionData?.tax_paid)} color="#15803d" bg="rgba(21,128,61,0.08)" />
+          <StatTile label="ITC Available" value={money(compositionData?.itc_available)} color="#6b8499" bg="rgba(107,132,153,0.08)" />
+        </div>
+      ) : (
+        <div className="bp-stat-grid-2" style={{ gap: 12 }}>
+          <StatTile label="Output GST" value={money(summaryData?.output_gst)} color="#2563eb" bg="rgba(37,99,235,0.08)" />
+          <StatTile label="Input GST (ITC)" value={money(summaryData?.eligible_itc)} color="#0f766e" bg="rgba(15,118,110,0.08)" />
+          <StatTile label="GST Payable" value={money(summaryData?.gst_payable)} color="#be123c" bg="rgba(190,18,60,0.08)" />
+          <StatTile label="Excess ITC Available" value={money(summaryData?.excess_itc)} color="#15803d" bg="rgba(21,128,61,0.08)" />
+        </div>
+      )}
+    </DashCard>
+  );
+
+  const GstReconCard = () => (
+    <DashCard title={returnTitle('GST Reconciliation', profile)} icon={<ReconciliationIcon />} iconColor="#2563eb">
+      <div className="bp-stat-grid-2" style={{ gap: 12 }}>
+        {isComposition ? <>
+          <StatTile label="CMP-08 Filed" value={composition?.total_gstr2b_invoices} color="#2563eb" bg="rgba(37,99,235,0.08)" />
+          <StatTile label="CMP-08 Matched" value={composition?.matched_invoices} color="#15803d" bg="rgba(21,128,61,0.08)" />
+          <StatTile label="CMP-08 Unmatched" value={composition?.unmatched_invoices} color="#c2410c" bg="rgba(194,65,12,0.08)" />
+          <StatTile label="Match Rate" value={`${compMatchRate}%`} color="#3730a3" bg="rgba(55,48,163,0.08)" />
+        </> : <>
+          <StatTile label="GSTR-2B Invoices" value={gst.total_gstr2b_invoices} color="#2563eb" bg="rgba(37,99,235,0.08)" />
+          <StatTile label="Matched" value={gst.matched_invoices} color="#15803d" bg="rgba(21,128,61,0.08)" />
+          <StatTile label="Unmatched" value={gst.unmatched_invoices} color="#c2410c" bg="rgba(194,65,12,0.08)" />
+          <StatTile label="Match Rate" value={`${matchRate}%`} color="#3730a3" bg="rgba(55,48,163,0.08)" />
+        </>}
+      </div>
+      <ViewLink to="/portal/gstr-2b">View Reconciliation Details</ViewLink>
+    </DashCard>
+  );
+
+  const hasGstCards = (mode === 'regular' && gst) || (isComposition && composition);
+  const ROW = { display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', marginBottom: 20, alignItems: 'stretch' };
+
   return (
     <div style={{ maxWidth: 1240, margin: '0 auto' }}>
       {/* Welcome banner */}
       <div style={{ background: 'linear-gradient(135deg, var(--bp-navy) 0%, #1a365d 100%)', borderRadius: 16, padding: '24px 32px', color: '#fff', marginBottom: 24, boxShadow: '0 8px 24px rgba(13, 31, 60, 0.12)', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: '-20%', right: '-5%', width: 250, height: 250, background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 70%)', borderRadius: '50%' }} />
-        <svg width="150" height="150" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"
-          style={{ position: 'absolute', top: -18, right: 6, opacity: 0.08, pointerEvents: 'none' }}>
-          <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+        <svg width="150" height="150" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', top: -18, right: 6, opacity: 0.08, pointerEvents: 'none' }}>
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
         </svg>
         <h1 style={{ marginTop: 0, fontSize: 24, color: '#fff', fontWeight: 800, marginBottom: 4, position: 'relative', zIndex: 1 }}>
-          Welcome back, {data.profile?.business_name} <span style={{ color: '#90cdf4', fontWeight: 700 }}>({gstConfigLabel(profile)})</span>
+          Welcome back, {data.profile?.business_name}{' '}
+          <span style={{ color: '#90cdf4', fontWeight: 700 }}>[{dealerBadgeLabel(profile)}]</span>
         </h1>
         <p style={{ color: '#cbd5e1', fontSize: 13, marginTop: 8, maxWidth: 650, lineHeight: 1.5, position: 'relative', zIndex: 1 }}>
           Your dashboard provides a clear overview of key business insights, GST compliance, invoices and financial activity for the current Financial Year {fy}.
         </p>
       </div>
 
-      {mode === 'regular' && gst && (
-        <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', marginBottom: 20, alignItems: 'stretch' }}>
-          <DashCard title={returnTitle('GST Reconciliation', profile)} icon={<ReconciliationIcon />} iconColor="#2563eb">
-            <div className="bp-stat-grid-2" style={{ gap: 12 }}>
-              <StatTile label="GSTR-2B Invoices" value={gst.total_gstr2b_invoices} color="#2563eb" bg="rgba(37,99,235,0.08)" />
-              <StatTile label="Matched" value={gst.matched_invoices} color="#15803d" bg="rgba(21,128,61,0.08)" />
-              <StatTile label="Unmatched" value={gst.unmatched_invoices} color="#c2410c" bg="rgba(194,65,12,0.08)" />
-              <StatTile label="Match Rate" value={`${matchRate}%`} color="#3730a3" bg="rgba(55,48,163,0.08)" />
-            </div>
-            <ViewLink to="/portal/gstr-2b">View Reconciliation Details</ViewLink>
-          </DashCard>
-
-          <DashCard title={returnTitle('GST Summary', profile)} icon={<GstSummaryIcon />} iconColor="#0f766e">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-              {isQuarterly && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--bp-text)' }}>
-                  Quarter
-                  <select
-                    className="bp-select"
-                    style={{ padding: '4px 8px', fontSize: 11, fontWeight: 700 }}
-                    value={selectedQuarter}
-                    onChange={(e) => selectQuarter(e.target.value, fy)}
-                  >
-                    {quarterOptions.map((q) => <option key={q.value} value={q.value}>{q.label}</option>)}
-                  </select>
-                </label>
-              )}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--bp-text)' }}>
-                From
-                <input type="date" className="bp-input" style={{ padding: '4px 8px', fontSize: 11, maxWidth: 130 }} value={gstFrom} onChange={(e) => setGstFrom(e.target.value)} />
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--bp-text)' }}>
-                To
-                <input type="date" className="bp-input" style={{ padding: '4px 8px', fontSize: 11, maxWidth: 130 }} value={gstTo} onChange={(e) => setGstTo(e.target.value)} />
-              </label>
-              <button type="button" className="bp-btn bp-btn-primary" style={{ padding: '5px 14px', fontSize: 11 }} onClick={() => loadGstSummary(gstFrom, gstTo)}>
-                Apply
-              </button>
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--bp-muted)', fontWeight: 600, marginBottom: 16 }}>
-              Period: {gstFrom?.split('-').reverse().join('/')} – {gstTo?.split('-').reverse().join('/')}
-            </div>
-            <div className="bp-stat-grid-2" style={{ gap: 12 }}>
-              <StatTile label="Output GST" value={money(gstSummaryData.output_gst)} color="#2563eb" bg="rgba(37,99,235,0.08)" />
-              <StatTile label="Eligible ITC" value={money(gstSummaryData.eligible_itc)} color="#0f766e" bg="rgba(15,118,110,0.08)" />
-              <StatTile label="GST Payable" value={money(gstSummaryData.gst_payable)} color="#be123c" bg="rgba(190,18,60,0.08)" />
-              <StatTile label="Excess ITC Available" value={money(gstSummaryData.excess_itc)} color="#15803d" bg="rgba(21,128,61,0.08)" />
-            </div>
-          </DashCard>
-        </div>
-      )}
-
-      {isComposition && composition && (
-        <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', marginBottom: 20, alignItems: 'stretch' }}>
-          <DashCard title={returnTitle('GST Reconciliation', profile)} icon={<ReconciliationIcon />} iconColor="#2563eb">
-            <div className="bp-stat-grid-2" style={{ gap: 12 }}>
-              <StatTile label="CMP-08 Filed" value={composition.total_gstr2b_invoices} color="#2563eb" bg="rgba(37,99,235,0.08)" />
-              <StatTile label="CMP-08 Matched" value={composition.matched_invoices} color="#15803d" bg="rgba(21,128,61,0.08)" />
-              <StatTile label="CMP-08 Unmatched" value={composition.unmatched_invoices} color="#c2410c" bg="rgba(194,65,12,0.08)" />
-              <StatTile label="Match Rate" value={`${compMatchRate}%`} color="#3730a3" bg="rgba(55,48,163,0.08)" />
-            </div>
-            <ViewLink to="/portal/gstr-2b">View Reconciliation Details</ViewLink>
-          </DashCard>
-
-          <DashCard title={returnTitle('GST Summary', profile)} icon={<GstSummaryIcon />} iconColor="#0f766e">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--bp-text)' }}>
-                From
-                <input type="date" className="bp-input" style={{ padding: '4px 8px', fontSize: 11, maxWidth: 130 }} value={gstFrom} onChange={(e) => setGstFrom(e.target.value)} />
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: 'var(--bp-text)' }}>
-                To
-                <input type="date" className="bp-input" style={{ padding: '4px 8px', fontSize: 11, maxWidth: 130 }} value={gstTo} onChange={(e) => setGstTo(e.target.value)} />
-              </label>
-              <button type="button" className="bp-btn bp-btn-primary" style={{ padding: '5px 14px', fontSize: 11 }} onClick={() => loadGstSummary(gstFrom, gstTo)}>
-                Apply
-              </button>
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--bp-muted)', fontWeight: 600, marginBottom: 16 }}>
-              Period: {gstFrom?.split('-').reverse().join('/')} – {gstTo?.split('-').reverse().join('/')}
-            </div>
-            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-              <StatTile label="Turnover" value={money(compositionData.turnover)} color="#2563eb" bg="rgba(37,99,235,0.08)" />
-              <StatTile label="Tax Payable (Payable under Composition)" value={money(compositionData.tax_payable)} color="#be123c" bg="rgba(190,18,60,0.08)" />
-              <StatTile label="Tax Paid (through CMP-08)" value={money(compositionData.tax_paid)} color="#15803d" bg="rgba(21,128,61,0.08)" />
-              <StatTile label="ITC Availed" value={money(compositionData.itc_availed)} color="#6b8499" bg="rgba(107,132,153,0.08)" />
-              <StatTile label="ITC Available" value={money(compositionData.itc_available)} color="#6b8499" bg="rgba(107,132,153,0.08)" />
-            </div>
-          </DashCard>
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', marginBottom: 20, alignItems: 'stretch' }}>
-        <DashCard
-          title={freqTitle('Billing Overview', profile)}
-          icon={<BillingOverviewIcon />}
-          iconColor="#16a34a"
-          badge={isQuarterly ? <span style={{ fontSize: 11, color: 'var(--bp-muted)', fontWeight: 600 }}>({quarterOptions.find((q) => q.value === selectedQuarter)?.label || selectedQuarter})</span> : null}
-        >
-          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-            <StatTile label="Tax Invoices" count={billingOverviewData.tax_invoices ?? 0} value={shortMoney(billingOverviewData.tax_invoices_value)} color="#2563eb" bg="rgba(37,99,235,0.08)" />
-            <StatTile label="Bill of Supply" count={billingOverviewData.bill_of_supply ?? 0} value={shortMoney(billingOverviewData.bill_of_supply_value)} color="#0f766e" bg="rgba(15,118,110,0.08)" />
-            <StatTile label="Debit Notes" count={billingOverviewData.debit_notes ?? 0} value={shortMoney(billingOverviewData.debit_notes_value)} color="#7c3aed" bg="rgba(124,58,237,0.08)" />
-            <StatTile label="Credit Notes" count={billingOverviewData.credit_notes ?? 0} value={shortMoney(billingOverviewData.credit_notes_value)} color="#dc2626" bg="rgba(220,38,38,0.08)" />
-            <StatTile label="Cancelled Invoices" count={billingOverviewData.cancelled_invoices ?? 0} value="—" color="#dc2626" bg="rgba(220,38,38,0.08)" />
-          </div>
-          <ViewLink to="/portal/billing">View All Documents</ViewLink>
-        </DashCard>
-
-        <DashCard title={chartFreqTitle('Sales Overview', profile)} icon={<SalesOverviewIcon />} iconColor="#7c3aed" badge={<span style={{ fontSize: 11, color: 'var(--bp-muted)', fontWeight: 600 }}>({fy === currentFyLabel() ? 'Current FY' : fy})</span>}>
+      {/* ROW 1: Sales Overview | GST Summary */}
+      <div style={ROW}>
+        <DashCard title={chartFreqTitle('Sales Overview', profile)} icon={<SalesOverviewIcon />} iconColor="#7c3aed"
+          badge={<span style={{ fontSize: 11, color: 'var(--bp-muted)', fontWeight: 600 }}>({fy === currentFyLabel() ? 'Current FY' : fy})</span>}>
           <SalesBarChart data={billing.monthly_trend} />
           <ViewLink to="/portal/reports/gst-summary">View Detailed Report</ViewLink>
         </DashCard>
+        {hasGstCards && <GstSummaryCard summaryData={isComposition ? compositionData : gstSummaryData} />}
       </div>
 
-      <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', alignItems: 'stretch' }}>
-        {hasGst && (
-          <DashCard title="Compliance Status" icon={<ComplianceIcon />} iconColor="#ea580c">
-            <ComplianceStatus compliance={compliance} financialYear={fy} locked={!gstComplianceEnabled} />
-            <ViewLink to="/portal/gst-returns">View Full Compliance Report</ViewLink>
-          </DashCard>
-        )}
-
+      {/* ROW 2: GST Reconciliation | Billing Workspace */}
+      <div style={ROW}>
+        {hasGstCards && <GstReconCard />}
         <DashCard title="Billing Workspace" icon={<WorkspaceIcon />} iconColor="#0a3d82">
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
             <p style={{ color: 'var(--bp-muted)', fontSize: 13, margin: 0, lineHeight: 1.5 }}>
@@ -640,6 +619,35 @@ export function ClientDashboard() {
               </svg>
             </Link>
           </div>
+        </DashCard>
+      </div>
+
+      {/* ROW 3: Compliance Status | Billing Overview */}
+      <div style={ROW}>
+        {hasGst && (
+          <DashCard title="Compliance Status" icon={<ComplianceIcon />} iconColor="#ea580c">
+            <ComplianceStatus compliance={compliance} financialYear={fy} locked={!gstComplianceEnabled} />
+            <ViewLink to="/portal/gst-returns">View Full Compliance Report</ViewLink>
+          </DashCard>
+        )}
+
+        <DashCard
+          title={freqTitle('Billing Overview', profile)}
+          icon={<BillingOverviewIcon />}
+          iconColor="#16a34a"
+          badge={isQuarterly ? <span style={{ fontSize: 11, color: 'var(--bp-muted)', fontWeight: 600 }}>({quarterOptions.find((q) => q.value === selectedQuarter)?.label || selectedQuarter})</span> : null}
+        >
+          <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr' }}>
+            <StatTile label="Total Documents" value={totalDocs} sub="Documents" color="#4f46e5" bg="rgba(79,70,229,0.08)" icon={<TiTotalDocs />} />
+            <StatTile label="Tax Invoices" count={d.tax_invoices ?? 0} value={shortMoney(d.tax_invoices_value)} color="#2563eb" bg="rgba(37,99,235,0.08)" icon={<TiTaxInv />} />
+            <StatTile label="Bill of Supply" count={d.bill_of_supply ?? 0} value={shortMoney(d.bill_of_supply_value)} color="#0f766e" bg="rgba(15,118,110,0.08)" icon={<TiBillSupply />} />
+            <StatTile label="Debit Notes" count={d.debit_notes ?? 0} value={shortMoney(d.debit_notes_value)} color="#d97706" bg="rgba(217,119,6,0.08)" icon={<TiDebitNote />} />
+            <StatTile label="Credit Notes" count={d.credit_notes ?? 0} value={shortMoney(d.credit_notes_value)} color="#dc2626" bg="rgba(220,38,38,0.08)" icon={<TiCreditNote />} />
+            <StatTile label="Cancelled Invoices" count={d.cancelled_invoices ?? 0} value="—" color="#94a3b8" bg="rgba(148,163,184,0.08)" icon={<TiCancelled />} />
+            <StatTile label="Quotations" count={d.quotations ?? 0} value={shortMoney(d.quotations_value)} color="#ea580c" bg="rgba(234,88,12,0.08)" icon={<TiQuotation />} />
+            <StatTile label="Delivery Challan" count={d.delivery_challans ?? 0} value={shortMoney(d.delivery_challans_value)} color="#0d9488" bg="rgba(13,148,136,0.08)" icon={<TiChallan />} />
+          </div>
+          <ViewLink to="/portal/billing">View All Documents</ViewLink>
         </DashCard>
       </div>
     </div>

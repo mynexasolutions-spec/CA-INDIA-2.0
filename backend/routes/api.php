@@ -8,9 +8,13 @@ use App\Http\Controllers\Api\Admin\ClientProfileController;
 use App\Http\Controllers\Api\Admin\DashboardController as AdminDashboard;
 use App\Http\Controllers\Api\Admin\GstReturnController;
 use App\Http\Controllers\Api\Admin\Gstr2bController;
+use App\Http\Controllers\Api\Admin\Gstr3bController;
 use App\Http\Controllers\Api\Admin\OpsController;
 use App\Http\Controllers\Api\Client\GstReturnController as ClientGstReturnController;
 use App\Http\Controllers\Api\Client\Gstr2bController as ClientGstr2bController;
+use App\Http\Controllers\Api\Client\ClientCmp08Controller;
+use App\Http\Controllers\Api\Client\AmendmentRequestController;
+use App\Http\Controllers\Api\Client\OtherRequestController;
 use App\Http\Controllers\Api\Admin\ResourceController;
 use App\Http\Controllers\Api\Billing\DashboardController as BillingDashboard;
 use App\Http\Controllers\Api\Billing\DocumentController;
@@ -47,6 +51,8 @@ Route::get('/billing/share/{token}', [DocumentController::class, 'share']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
+Route::post('/auth/login/verify-otp', [AuthController::class, 'verifyLoginOtp'])->middleware('throttle:10,1');
+Route::post('/auth/login/resend-otp', [AuthController::class, 'resendLoginOtp'])->middleware('throttle:6,1');
 Route::post('/auth/otp/request', [AuthController::class, 'otpRequest'])->middleware('throttle:6,1');
 Route::post('/auth/otp/verify', [AuthController::class, 'otpVerify'])->middleware('throttle:10,1');
 Route::post('/auth/otp/reset-password', [AuthController::class, 'otpResetPassword'])->middleware('throttle:10,1');
@@ -68,6 +74,17 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/edit-requests', [ClientDocumentEditRequestController::class, 'index']);
             Route::get('/edit-requests/lookup', [ClientDocumentEditRequestController::class, 'lookup']);
             Route::post('/edit-requests', [ClientDocumentEditRequestController::class, 'store']);
+            Route::get('/amendment-requests', [AmendmentRequestController::class, 'index']);
+            Route::get('/amendment-requests/lookup', [AmendmentRequestController::class, 'lookup']);
+            Route::post('/amendment-requests', [AmendmentRequestController::class, 'store']);
+            Route::get('/amendment-requests/{id}', [AmendmentRequestController::class, 'show']);
+            Route::get('/other-requests', [OtherRequestController::class, 'index']);
+            Route::post('/other-requests', [OtherRequestController::class, 'store']);
+            Route::get('/other-requests/{id}', [OtherRequestController::class, 'show']);
+            Route::get('/gstr3b/requests', [\App\Http\Controllers\Api\Client\Gstr3bRequestController::class, 'index']);
+            Route::post('/gstr3b/requests', [\App\Http\Controllers\Api\Client\Gstr3bRequestController::class, 'store']);
+            Route::post('/gstr3b/requests/{id}/accept', [\App\Http\Controllers\Api\Client\Gstr3bRequestController::class, 'accept']);
+            Route::post('/gstr3b/requests/{id}/reject', [\App\Http\Controllers\Api\Client\Gstr3bRequestController::class, 'reject']);
             Route::post('/logo', [ClientDashboard::class, 'uploadLogo']);
             Route::post('/signature', [ClientDashboard::class, 'uploadSignature']);
             Route::post('/seal', [ClientDashboard::class, 'uploadSeal']);
@@ -87,7 +104,15 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::middleware('gst.subscribed')->group(function () {
                 Route::get('/gstr2b', [ClientGstr2bController::class, 'index']);
                 Route::get('/gstr2b/export', [ClientGstr2bController::class, 'export']);
+                Route::get('/gstr2b/periods', [ClientGstr2bController::class, 'periods']);
+                Route::get('/gstr2b/period/{period}/invoices', [ClientGstr2bController::class, 'periodInvoices']);
+                Route::get('/gstr2b/period/{period}/projected', [ClientGstr2bController::class, 'projectedIndex']);
+                Route::post('/gstr2b/period/{period}/projected', [ClientGstr2bController::class, 'projectedStore']);
+                Route::post('/gstr2b/period/{period}/projected/extract', [ClientGstr2bController::class, 'projectedExtract']);
+                Route::put('/gstr2b/period/{period}/projected/{id}', [ClientGstr2bController::class, 'projectedUpdate']);
+                Route::delete('/gstr2b/period/{period}/projected/{id}', [ClientGstr2bController::class, 'projectedDestroy']);
                 Route::patch('/gstr2b/invoices/{invoiceId}/match-status', [ClientGstr2bController::class, 'updateMatchStatus']);
+                Route::post('/gstr2b/invoices/bulk-match-status', [ClientGstr2bController::class, 'bulkMatchStatus']);
                 Route::get('/gst-returns', [ClientGstReturnController::class, 'index']);
                 Route::get('/gst-compliance', [ClientGstReturnController::class, 'compliance']);
 
@@ -97,12 +122,22 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('/gst-filing/requests/{id}', [\App\Http\Controllers\Api\Client\GstFilingController::class, 'show']);
                 // GST Returns workspace (GSTR-1 / GSTR-3B tabs) — Filing Periods table data source.
                 Route::get('/gst-filing/periods', [\App\Http\Controllers\Api\Client\GstFilingController::class, 'periods']);
+                // GSTR-1 outward supplies data — document type summary + HSN/SAC summary for a period.
+                Route::get('/gst-filing/gstr1-summary', [\App\Http\Controllers\Api\Client\GstFilingController::class, 'gstr1Summary']);
+                Route::get('/gst-filing/gstr3b-summary', [\App\Http\Controllers\Api\Client\GstFilingController::class, 'gstr3bSummary']);
+                Route::get('/gst-filing/reminders', [\App\Http\Controllers\Api\Client\GstFilingReminderController::class, 'reminders']);
+
+                Route::get('/cmp08/periods', [ClientCmp08Controller::class, 'periods']);
+                Route::get('/cmp08/period/{period}', [ClientCmp08Controller::class, 'periodData']);
+                Route::post('/cmp08/period/{period}/confirm', [ClientCmp08Controller::class, 'confirm']);
+                Route::get('/cmp08/period/{period}/download', [ClientCmp08Controller::class, 'download']);
             });
         });
 
         Route::prefix('billing')->group(function () {
             Route::get('/dashboard', [BillingDashboard::class, 'index']);
 
+            Route::get('/parties/gstin-lookup', [MasterController::class, 'gstinLookup']);
             Route::get('/parties', [MasterController::class, 'parties']);
             Route::post('/parties', [MasterController::class, 'storeParty']);
             Route::get('/parties/recent', [MasterController::class, 'recentParties']);
@@ -135,11 +170,13 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/documents/{id}/cancel', [DocumentController::class, 'cancel']);
             Route::get('/documents/{id}/amendments', [DocumentController::class, 'amendments']);
             Route::post('/documents/{id}/payment-status', [DocumentController::class, 'setPaymentStatus']);
+            Route::get('/documents/{id}/payment-log', [DocumentController::class, 'paymentLog']);
             Route::get('/documents/{id}/pdf', [DocumentController::class, 'pdf']);
             Route::post('/documents/{id}/email', [DocumentController::class, 'emailDocument']);
 
             Route::get('/reports', [ReportController::class, 'index']);
             Route::get('/reports/export', [ReportController::class, 'export']);
+            Route::get('/reports/drill-down', [ReportController::class, 'drillDown']);
         });
     });
 
@@ -147,11 +184,46 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/dashboard', [AdminDashboard::class, 'index']);
         Route::get('/clients/unlock-status', [ClientsUnlockController::class, 'status']);
         Route::post('/clients/unlock', [ClientsUnlockController::class, 'unlock']);
+        Route::post('/clients/unlock/otp', [ClientsUnlockController::class, 'sendOtp'])->middleware('throttle:6,1');
+        Route::get('/settings/security', [\App\Http\Controllers\Api\Admin\AdminSecurityController::class, 'show']);
+        Route::put('/settings/security', [\App\Http\Controllers\Api\Admin\AdminSecurityController::class, 'update']);
+        Route::post('/settings/secondary-password', [\App\Http\Controllers\Api\Admin\AdminSecurityController::class, 'setSecondaryPassword']);
         Route::post('/clients/lock', [ClientsUnlockController::class, 'lock']);
         Route::get('/clients', [ClientProfileController::class, 'index']);
         Route::post('/clients', [ClientProfileController::class, 'store']);
         Route::get('/gst-returns/dashboard', [GstReturnController::class, 'dashboard']);
         Route::get('/gst-returns/clients', [GstReturnController::class, 'index']);
+        Route::get('/gst-returns/{clientId}/periods', [GstReturnController::class, 'clientPeriods']);
+        Route::get('/gst-returns/{clientId}/review/{period}', [GstReturnController::class, 'reviewPeriod']);
+        // GSTR-3B routes
+        // Request Module routes
+        Route::get('/requests/clients', [\App\Http\Controllers\Api\Admin\AdminRequestController::class, 'clientList']);
+        Route::get('/requests/clients/{id}', [\App\Http\Controllers\Api\Admin\AdminRequestController::class, 'clientRequests']);
+        Route::post('/requests/{id}/complete', [\App\Http\Controllers\Api\Admin\AdminRequestController::class, 'complete']);
+        Route::post('/requests/{id}/reject', [\App\Http\Controllers\Api\Admin\AdminRequestController::class, 'reject']);
+        Route::get('/requests/{id}/attachment', [\App\Http\Controllers\Api\Admin\AdminRequestController::class, 'attachment']);
+
+        // CMP-08 routes
+        Route::get('/cmp08/clients', [\App\Http\Controllers\Api\Admin\Cmp08Controller::class, 'clientList']);
+        Route::get('/clients/{id}/cmp08/period/{period}', [\App\Http\Controllers\Api\Admin\Cmp08Controller::class, 'periodData']);
+        Route::post('/clients/{id}/cmp08/period/{period}', [\App\Http\Controllers\Api\Admin\Cmp08Controller::class, 'saveData']);
+        Route::post('/clients/{id}/cmp08/period/{period}/mark-filed', [\App\Http\Controllers\Api\Admin\Cmp08Controller::class, 'markAsFiled']);
+        Route::get('/clients/{id}/cmp08/period/{period}/request', [\App\Http\Controllers\Api\Admin\Cmp08Controller::class, 'getRequest']);
+        Route::post('/clients/{id}/cmp08/period/{period}/request', [\App\Http\Controllers\Api\Admin\Cmp08Controller::class, 'initiateRequest']);
+        Route::post('/clients/{id}/cmp08/period/{period}/request/reject', [\App\Http\Controllers\Api\Admin\Cmp08Controller::class, 'rejectRequest']);
+
+        Route::get('/clients/{id}/gstr3b/periods', [Gstr3bController::class, 'clientPeriods']);
+        Route::get('/clients/{id}/gstr3b/period/{period}', [Gstr3bController::class, 'periodData']);
+        Route::post('/clients/{id}/gstr3b/period/{period}/mark-filed', [Gstr3bController::class, 'markAsFiled']);
+        Route::get('/clients/{id}/gstr3b/period/{period}/tab-data', [Gstr3bController::class, 'getTabData']);
+        Route::post('/clients/{id}/gstr3b/period/{period}/tab-data', [Gstr3bController::class, 'saveTabData']);
+        Route::get('/clients/{id}/gstr3b/period/{period}/request', [Gstr3bController::class, 'getRequest']);
+        Route::post('/clients/{id}/gstr3b/period/{period}/request', [Gstr3bController::class, 'initiateRequest']);
+        Route::post('/clients/{id}/gstr3b/period/{period}/request/reject', [Gstr3bController::class, 'rejectRequest']);
+
+        Route::get('/gst-returns/{clientId}/b2b/{period}', [GstReturnController::class, 'b2bDocuments']);
+        Route::get('/gst-returns/{clientId}/b2c/{period}', [GstReturnController::class, 'b2cDocuments']);
+        Route::get('/gst-returns/{clientId}/b2c-summary/{period}', [GstReturnController::class, 'b2cStateSummary']);
         Route::post('/gst-returns/{clientId}', [GstReturnController::class, 'store']);
         Route::get('/clients/{id}', [ClientProfileController::class, 'show']);
         Route::put('/clients/{id}', [ClientProfileController::class, 'update']);
@@ -188,6 +260,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/gst-filing/requests', [\App\Http\Controllers\Api\Admin\GstFilingController::class, 'index']);
         Route::get('/gst-filing/requests/{id}', [\App\Http\Controllers\Api\Admin\GstFilingController::class, 'show']);
         Route::put('/gst-filing/requests/{id}/status', [\App\Http\Controllers\Api\Admin\GstFilingController::class, 'updateStatus']);
+        Route::get('/notifications', [\App\Http\Controllers\Api\Admin\AdminNotificationController::class, 'index']);
+        Route::post('/notifications/read-all', [\App\Http\Controllers\Api\Admin\AdminNotificationController::class, 'markAllRead']);
+        Route::post('/notifications/{id}/read', [\App\Http\Controllers\Api\Admin\AdminNotificationController::class, 'markRead']);
 
         Route::get('/change-requests', [AdminChangeRequestController::class, 'index']);
         Route::get('/change-requests/{id}', [AdminChangeRequestController::class, 'show']);
@@ -218,14 +293,35 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/clients/{id}/reset-password', [BillingMonitorController::class, 'resetClientPassword']);
         Route::get('/clients/{id}/login-history', [BillingMonitorController::class, 'loginHistory']);
         Route::get('/clients/{id}/gstr2b', [Gstr2bController::class, 'index']);
+        Route::get('/clients/{id}/gstr2b/periods', [Gstr2bController::class, 'periods']);
+        Route::get('/clients/{id}/gstr2b/period/{period}', [Gstr2bController::class, 'periodDetail']);
+        Route::post('/clients/{id}/gstr2b/period/{period}/adjustment', [Gstr2bController::class, 'saveAdjustment']);
+        Route::get('/clients/{id}/gstr2b/period/{period}/invoices', [Gstr2bController::class, 'invoiceList']);
+        Route::post('/clients/{id}/gstr2b/invoices/bulk-status', [Gstr2bController::class, 'bulkUpdateStatus']);
         Route::post('/clients/{id}/gstr2b', [Gstr2bController::class, 'upload']);
         Route::post('/clients/{id}/gstr2b/no-bills', [Gstr2bController::class, 'markNoBills']);
         Route::delete('/clients/{id}/gstr2b/{recordId}', [Gstr2bController::class, 'destroy']);
         Route::get('/clients/{id}/gstr2b/{recordId}/invoices', [Gstr2bController::class, 'invoices']);
         Route::post('/clients/{id}/gstr2b/{recordId}/invoices/bulk', [Gstr2bController::class, 'bulkStoreInvoices']);
         Route::patch('/clients/{id}/gstr2b/invoices/{invoiceId}/eligibility', [Gstr2bController::class, 'updateEligibility']);
-        Route::get('/staff', [ResourceController::class, 'staff']);
-        Route::post('/staff', [ResourceController::class, 'storeStaff']);
+        Route::delete('/clients/{id}/gstr2b/period/{period}/projected', [Gstr2bController::class, 'destroyProjected']);
+        // Staff/Sub-User management
+        Route::get('/staff', [\App\Http\Controllers\Api\Admin\StaffController::class, 'index']);
+        Route::post('/staff', [\App\Http\Controllers\Api\Admin\StaffController::class, 'store']);
+        Route::put('/staff/{id}', [\App\Http\Controllers\Api\Admin\StaffController::class, 'update']);
+        Route::post('/staff/{id}/reset-password', [\App\Http\Controllers\Api\Admin\StaffController::class, 'resetPassword']);
+        Route::delete('/staff/{id}', [\App\Http\Controllers\Api\Admin\StaffController::class, 'destroy']);
+        Route::get('/staff/{id}/assignments', [\App\Http\Controllers\Api\Admin\StaffController::class, 'getAssignments']);
+        Route::post('/staff/{id}/assignments', [\App\Http\Controllers\Api\Admin\StaffController::class, 'saveAssignments']);
+
+        // Company Deletion
+        Route::get('/company-deletion/clients', [\App\Http\Controllers\Api\Admin\CompanyDeletionController::class, 'clientList']);
+        Route::get('/company-deletion/summary', [\App\Http\Controllers\Api\Admin\CompanyDeletionController::class, 'summary']);
+        Route::post('/company-deletion/request-otp', [\App\Http\Controllers\Api\Admin\CompanyDeletionController::class, 'requestOtp']);
+        Route::post('/company-deletion/resend-otp', [\App\Http\Controllers\Api\Admin\CompanyDeletionController::class, 'resendOtp']);
+        Route::post('/company-deletion/verify-and-delete', [\App\Http\Controllers\Api\Admin\CompanyDeletionController::class, 'verifyAndDelete']);
+        Route::get('/company-deletion/history', [\App\Http\Controllers\Api\Admin\CompanyDeletionController::class, 'history']);
+
         Route::get('/activity', [ResourceController::class, 'activity']);
         Route::post('/client-documents/upload', [OpsController::class, 'uploadClientDocument']);
         Route::post('/compliance/assign', [OpsController::class, 'assignCompliance']);
@@ -239,16 +335,57 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/billing/invoices/{id}', [BillingMonitorController::class, 'updateDocument']);
         Route::delete('/billing/invoices/{id}', [BillingMonitorController::class, 'destroyDocument']);
         Route::get('/billing/reports', [BillingMonitorController::class, 'report']);
+        Route::get('/clients/{id}/reports', [BillingMonitorController::class, 'report']);
 
+        // A client's Report Dashboard as the Admin sees it: the SAME controllers the Client Portal
+        // uses (so the numbers, exports and drill-downs are identical), read-only, for one client.
+        Route::get('/clients/{clientId}/billing-reports', [\App\Http\Controllers\Api\Billing\ReportController::class, 'index']);
+        Route::get('/clients/{clientId}/billing-reports/export', [\App\Http\Controllers\Api\Billing\ReportController::class, 'export']);
+        Route::get('/clients/{clientId}/billing-reports/drill-down', [\App\Http\Controllers\Api\Billing\ReportController::class, 'drillDown']);
+        Route::get('/clients/{clientId}/billing-documents', [\App\Http\Controllers\Api\Billing\DocumentController::class, 'index']);
+        Route::get('/clients/{clientId}/billing-documents/{id}/payment-log', [\App\Http\Controllers\Api\Billing\DocumentController::class, 'paymentLog']);
+
+        // Legacy combined endpoints (kept for backward compat)
         Route::get('/master-config/hsn-sac', [MasterConfigController::class, 'hsnSacList']);
         Route::post('/master-config/hsn-sac', [MasterConfigController::class, 'hsnSacStore']);
         Route::put('/master-config/hsn-sac/{id}', [MasterConfigController::class, 'hsnSacUpdate']);
         Route::delete('/master-config/hsn-sac/{id}', [MasterConfigController::class, 'hsnSacDestroy']);
-
         Route::get('/master-config/tds-tcs', [MasterConfigController::class, 'tdsTcsList']);
         Route::post('/master-config/tds-tcs', [MasterConfigController::class, 'tdsTcsStore']);
         Route::put('/master-config/tds-tcs/{id}', [MasterConfigController::class, 'tdsTcsUpdate']);
         Route::delete('/master-config/tds-tcs/{id}', [MasterConfigController::class, 'tdsTcsDestroy']);
+
+        // New per-master endpoints
+        Route::post('/master-config/{master}/import', [MasterConfigController::class, 'importRows']);
+        Route::get('/master-config/hsn', [MasterConfigController::class, 'hsnList']);
+        Route::post('/master-config/hsn', [MasterConfigController::class, 'hsnStore']);
+        Route::put('/master-config/hsn/{id}', [MasterConfigController::class, 'hsnUpdate']);
+        Route::delete('/master-config/hsn/{id}', [MasterConfigController::class, 'hsnDestroy']);
+
+        Route::get('/master-config/sac', [MasterConfigController::class, 'sacList']);
+        Route::post('/master-config/sac', [MasterConfigController::class, 'sacStore']);
+        Route::put('/master-config/sac/{id}', [MasterConfigController::class, 'sacUpdate']);
+        Route::delete('/master-config/sac/{id}', [MasterConfigController::class, 'sacDestroy']);
+
+        Route::get('/master-config/gst-rate', [MasterConfigController::class, 'gstRateList']);
+        Route::post('/master-config/gst-rate', [MasterConfigController::class, 'gstRateStore']);
+        Route::put('/master-config/gst-rate/{id}', [MasterConfigController::class, 'gstRateUpdate']);
+        Route::delete('/master-config/gst-rate/{id}', [MasterConfigController::class, 'gstRateDestroy']);
+
+        Route::get('/master-config/uqc', [MasterConfigController::class, 'uqcList']);
+        Route::post('/master-config/uqc', [MasterConfigController::class, 'uqcStore']);
+        Route::put('/master-config/uqc/{id}', [MasterConfigController::class, 'uqcUpdate']);
+        Route::delete('/master-config/uqc/{id}', [MasterConfigController::class, 'uqcDestroy']);
+
+        Route::get('/master-config/tds', [MasterConfigController::class, 'tdsList']);
+        Route::post('/master-config/tds', [MasterConfigController::class, 'tdsStore']);
+        Route::put('/master-config/tds/{id}', [MasterConfigController::class, 'tdsUpdate']);
+        Route::delete('/master-config/tds/{id}', [MasterConfigController::class, 'tdsDestroy']);
+
+        Route::get('/master-config/tcs', [MasterConfigController::class, 'tcsList']);
+        Route::post('/master-config/tcs', [MasterConfigController::class, 'tcsStore']);
+        Route::put('/master-config/tcs/{id}', [MasterConfigController::class, 'tcsUpdate']);
+        Route::delete('/master-config/tcs/{id}', [MasterConfigController::class, 'tcsDestroy']);
 
         Route::get('/{resource}', [ResourceController::class, 'index']);
         Route::post('/{resource}', [ResourceController::class, 'store']);

@@ -4,7 +4,9 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
 import { AuthProvider } from './auth/AuthContext.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import AdminSelectEnhancer from './components/AdminSelectEnhancer.jsx';
 import './index.css';
+import './admin-select.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -12,6 +14,7 @@ createRoot(document.getElementById('root')).render(
       <BrowserRouter>
         <AuthProvider>
           <App />
+          <AdminSelectEnhancer />
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>

@@ -16,6 +16,47 @@
   @keyframes spin{to{transform:rotate(360deg);}}
   .spin{animation:spin 0.8s linear infinite;display:inline-block;}
 
+  /* ── GLOBAL THEME SCROLLBARS ─────────────────────────────────────── */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--navy-deep, #175888) #f1f5f9;
+  }
+
+  /* WebKit browsers (Chrome, Edge, Safari, Opera) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--navy-deep, #175888);
+    border-radius: 999px;
+    border: 2px solid #f1f5f9;
+    background-clip: padding-box;
+    transition: background 0.2s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--navy, #13486F);
+    border: 2px solid #f1f5f9;
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: #0f3d5c;
+    border: 2px solid #f1f5f9;
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   *{box-sizing:border-box;margin:0;padding:0;}
   html{scroll-behavior:smooth;}
   body{font-family:'Inter',sans-serif;color:var(--text);background:var(--white);line-height:1.6;overflow-x:hidden;}

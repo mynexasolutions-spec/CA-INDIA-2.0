@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { LoadingBlock } from '../../components/Spinner';
 import CancelDocumentModal from './CancelDocumentModal';
 import { billingDocEditPath, billingDocPath, docTypeLabel, formatDMY, formatDMYTime, reasonForTransportLabel } from './billingUtils';
@@ -31,6 +32,9 @@ function WhatsAppIcon() { return <svg {...ICON} width={17} height={17} fill="cur
 
 export default function InvoiceDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
+  const profile = user?.client_profile;
+  const isComposition = profile?.dealer_type === 'composition';
   const [doc, setDoc] = useState(null);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -170,14 +174,19 @@ export default function InvoiceDetail() {
                 try {
                   const inv = await api(`/billing/documents/${doc.id}/convert`, { method: 'POST', body: {} });
                   setMsg(`Converted to ${inv.number}`);
-                  window.location.href = `/portal/billing/invoices/${inv.id}`;
+                  const dest = isComposition
+                    ? `/portal/billing/bill-of-supply/${inv.id}`
+                    : `/portal/billing/invoices/${inv.id}`;
+                  window.location.href = dest;
                 } catch (e) {
                   setActionErr(e.message || 'Failed to convert document.');
                   setBusyAction('');
                 }
               }}
             >
-              {busyAction === 'convert' ? 'Converting…' : (<><RefreshCwIcon /> Convert to Tax Invoice/Bill of Supply</>)}
+              {busyAction === 'convert' ? 'Converting…' : (
+                <><RefreshCwIcon /> {isComposition ? 'Convert to Bill of Supply' : 'Convert to Tax Invoice'}</>
+              )}
             </button>
           )}
           <button

@@ -73,7 +73,7 @@ export default function AdminGstFilingRequests() {
                     <td style={{ textAlign: 'right', fontWeight: 600 }}>₹{Number(req.total_gst).toFixed(2)}</td>
                     <td>{getStatusBadge(req.status)}</td>
                     <td style={{ textAlign: 'center' }}>
-                      <Link 
+                      <Link
                         to={`/admin/gst-filing-requests/${req.id}`}
                         style={{ color: 'var(--bp-blue)', fontWeight: 600, textDecoration: 'none' }}
                       >

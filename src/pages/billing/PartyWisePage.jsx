@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, getAuthToken } from '../../api/client';
 import { LoadingBlock } from '../../components/Spinner';
 import { buildFyOptions, currentFyRange, money } from './billingUtils';
+import { useReportsEnv } from './ReportsContext';
 
 /* ── Icons ─────────────────────────────────────────────────── */
 function ExcelIcon() {
@@ -98,10 +99,13 @@ function numFmt(v, dec = 2) {
 
 export default function PartyWisePage({
   title = 'Party-wise Detail',
-  apiPath = '/billing/reports',
-  exportPath = '/api/billing/reports/export',
+  apiPath: apiPathProp,
+  exportPath: exportPathProp,
 }) {
   const navigate = useNavigate();
+  const env = useReportsEnv();
+  const apiPath = apiPathProp ?? env.reportsApi;
+  const exportPath = exportPathProp ?? env.exportUrl;
   const fyDefault = currentFyRange();
   const fyOptions = buildFyOptions();
 
@@ -178,7 +182,7 @@ export default function PartyWisePage({
     if (from) qs.set('from', from);
     if (to)   qs.set('to', to);
     if (!from && !to && fy) qs.set('fy', fy);
-    navigate(`/portal/reports/party-wise/${id}?${qs}`);
+    navigate(`${env.basePath}/party-wise/${id}?${qs}`);
   };
 
   // Normalize rows

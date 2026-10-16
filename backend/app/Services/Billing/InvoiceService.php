@@ -111,11 +111,15 @@ class InvoiceService
         abort_unless($quotation->type === 'quotation', 422, 'Only quotations can be converted.');
         abort_unless(! $quotation->converted_document_id, 422, 'Quotation already converted.');
         abort_unless(in_array($quotation->status, ['draft', 'issued'], true), 422, 'Quotation cannot be converted.');
-        BillingPolicy::assertDocumentType($profile, 'tax_invoice');
+
+        // Determine target type from GST registration type.
+        // Composition taxpayers can only create Bill of Supply; Regular only Tax Invoice.
+        $targetType = ($profile->dealer_type === 'composition') ? 'bill_of_supply' : 'tax_invoice';
+        BillingPolicy::assertDocumentType($profile, $targetType);
 
         $quotation->loadMissing('lineItems');
 
-        return DB::transaction(function () use ($quotation, $profile) {
+        return DB::transaction(function () use ($quotation, $profile, $targetType) {
             $lines = $quotation->lineItems->map(fn ($l) => [
                 'product_id' => $l->product_id,
                 'description' => $l->description,
@@ -129,7 +133,7 @@ class InvoiceService
             ])->all();
 
             $invoice = $this->create($profile, [
-                'type' => 'tax_invoice',
+                'type' => $targetType,
                 'customer_id' => $quotation->customer_id,
                 'document_date' => now()->toDateString(),
                 'due_date' => $quotation->due_date?->toDateString(),

@@ -11,6 +11,25 @@ class LookupService
     private const CACHE_TTL_DAYS = 30;
 
     /**
+     * Caches only SUCCESSFUL lookups. A timeout, an outage or an unknown code must not be remembered
+     * for 30 days — the next attempt should simply try again.
+     */
+    private function rememberSuccess(string $key, \Closure $lookup): array
+    {
+        $hit = Cache::get($key);
+        if (is_array($hit) && ($hit['success'] ?? false) === true) {
+            return $hit;
+        }
+
+        $result = $lookup();
+        if (($result['success'] ?? false) === true) {
+            Cache::put($key, $result, now()->addDays(self::CACHE_TTL_DAYS));
+        }
+
+        return $result;
+    }
+
+    /**
      * Look up Indian PIN code.
      * Uses api.postalpincode.in with caching and graceful fallback.
      */
@@ -27,7 +46,7 @@ class LookupService
 
         $cacheKey = "lookup_pin_{$cleanPin}";
 
-        return Cache::remember($cacheKey, now()->addDays(self::CACHE_TTL_DAYS), function () use ($cleanPin) {
+        return $this->rememberSuccess($cacheKey, function () use ($cleanPin) {
             try {
                 $response = Http::timeout(5)
                     ->withoutVerifying()
@@ -107,7 +126,7 @@ class LookupService
 
         $cacheKey = "lookup_ifsc_{$cleanIfsc}";
 
-        return Cache::remember($cacheKey, now()->addDays(self::CACHE_TTL_DAYS), function () use ($cleanIfsc) {
+        return $this->rememberSuccess($cacheKey, function () use ($cleanIfsc) {
             try {
                 $response = Http::timeout(5)
                     ->withoutVerifying()

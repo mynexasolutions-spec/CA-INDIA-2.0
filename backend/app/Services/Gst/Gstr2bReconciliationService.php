@@ -11,7 +11,7 @@ use Carbon\Carbon;
  * client's GSTR-2B reconciliation is "completed" for a given period is fully derived,
  * there is no explicit status column anywhere. A "YYYY-MM" month is reconciled iff a
  * ClientGstr2bRecord (an uploaded GSTR-2B statement) exists for it AND none of that
- * month's ClientGstr2bInvoice rows are still match_status = 'unmatched'.
+ * month's ClientGstr2bInvoice rows are still Unmatched or Pending (i.e. not Matched).
  *
  * Deliberately self-contained (including its own FY period-grid builder in
  * GstFilingController::periods()) rather than extracted from/sharing code with
@@ -32,7 +32,7 @@ class Gstr2bReconciliationService
 
         $hasUnmatched = ClientGstr2bInvoice::where('client_profile_id', $clientProfileId)
             ->where('tax_period', $monthPeriod)
-            ->where('match_status', ClientGstr2bInvoice::MATCH_STATUS_UNMATCHED)
+            ->notMatched()
             ->exists();
 
         return ! $hasUnmatched;

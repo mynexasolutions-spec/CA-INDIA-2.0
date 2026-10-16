@@ -198,6 +198,18 @@ class GstFilingController extends Controller
         self::assertPeriodMatchesFrequency($profile, $request->filing_period, $request->return_type);
         self::assertReconciliationComplete($clientProfileId, $request->return_type, $request->filing_period);
 
+        // GSTR-3B (monthly): the Admin may already have initiated a request for this period.
+        // Same for CMP-08 (a quarter such as "2026-Q1"): the request flow is shared by both returns.
+        $reqReturn = match (true) {
+            $request->return_type === 'GSTR-3B' && preg_match('/^\d{4}-\d{2}$/', $request->filing_period) === 1 => \App\Models\ClientGstr3bRequest::RETURN_GSTR3B,
+            $request->return_type === 'CMP-08' && preg_match('/^\d{4}-Q[1-4]$/', $request->filing_period) === 1 => \App\Models\ClientGstr3bRequest::RETURN_CMP08,
+            default => null,
+        };
+        $open3b = $reqReturn ? \App\Models\ClientGstr3bRequest::activeFor($clientProfileId, $request->filing_period, $reqReturn) : null;
+        if ($open3b && $open3b->awaitingClient()) {
+            return response()->json(['message' => 'Your administrator has sent you a ' . $request->return_type . ' request for this period. Please accept or reject it first.'], 422);
+        }
+
         // Check if there's already an active request for this period + return type — scoped
         // to return_type too, since GSTR-1 and GSTR-3B (or CMP-08 and GSTR-3B's own quarter
         // periods) can share the exact same period string without being the same request.
@@ -257,9 +269,126 @@ class GstFilingController extends Controller
         // Attach documents to pivot table
         $filingRequest->documents()->attach($bills->pluck('id'));
 
+        // A GSTR-3B request raised by the client is recorded as "Submitted" / Initiated By "Client", so
+        // the Admin's GSTR-3B screen sees it. (An already Accepted Admin request just carries on.)
+        if ($reqReturn && ! $open3b) {
+            \App\Models\ClientGstr3bRequest::create([
+                'client_profile_id'   => $clientProfileId,
+                'return_type'         => $reqReturn,
+                'tax_period'          => $request->filing_period,
+                'status'              => \App\Models\ClientGstr3bRequest::SUBMITTED,
+                'initiated_by'        => 'client',
+                'initiated_by_user_id'=> $request->user()->id,
+            ]);
+        }
+
+        // Notify all admin/super_admin users about the new filing request
+        $businessName = $profile->business_name ?? 'A client';
+        \App\Models\User::whereIn('role', ['super_admin', 'admin'])->each(function ($admin) use ($businessName, $request) {
+            \App\Models\NotificationItem::create([
+                'user_id' => $admin->id,
+                'title'   => 'GST Filing Request Submitted',
+                'body'    => $businessName . ' submitted a ' . $request->return_type . ' filing request for ' . $request->filing_period . '.',
+                'type'    => 'gst_filing_request',
+            ]);
+        });
+
         return response()->json([
             'message' => 'GST filing confirmation has been sent to CA for review and filing process.',
             'request' => $filingRequest
+        ]);
+    }
+
+    /**
+     * GSTR-1 outward supplies summary for a specific filing period.
+     * Returns document-type summary and HSN/SAC aggregation so the GSTR-1 page can
+     * render the Summary tab without a separate billing-module call.
+     * Uses document_date for period assignment (GSTR-1 is date-of-invoice based).
+     */
+    public function gstr1Summary(Request $request)
+    {
+        $request->validate(['filing_period' => 'required|string']);
+
+        $profile = $request->user()->clientProfile;
+        $period  = $request->filing_period;
+        [$periodStart, $periodEnd] = self::periodBounds($period);
+
+        $types = ['tax_invoice', 'bill_of_supply', 'debit_note', 'credit_note'];
+        $typeLabels = [
+            'tax_invoice'    => 'Tax Invoice',
+            'bill_of_supply' => 'Bill of Supply',
+            'debit_note'     => 'Debit Note',
+            'credit_note'    => 'Credit Note',
+        ];
+
+        $docs = CommercialDocument::with(['lineItems', 'customer'])
+            ->where('client_profile_id', $profile->id)
+            ->whereIn('type', $types)
+            ->whereIn('status', ['issued', 'paid', 'partial'])
+            ->whereDate('document_date', '>=', $periodStart)
+            ->whereDate('document_date', '<=', $periodEnd)
+            ->get();
+
+        // Document type summary
+        $docTypeSummary = [];
+        $totals = ['count' => 0, 'taxable' => 0, 'igst' => 0, 'cgst' => 0, 'sgst' => 0, 'total' => 0];
+        foreach ($types as $t) {
+            $filtered = $docs->where('type', $t);
+            $sign = $t === 'credit_note' ? -1 : 1;
+            $row = [
+                'type'          => $t,
+                'label'         => $typeLabels[$t],
+                'count'         => $filtered->count(),
+                'taxable_value' => round($filtered->sum('taxable_amount') * $sign, 2),
+                'igst'          => round($filtered->sum('igst_amount') * $sign, 2),
+                'cgst'          => round($filtered->sum('cgst_amount') * $sign, 2),
+                'sgst'          => round($filtered->sum('sgst_amount') * $sign, 2),
+                'total'         => round($filtered->sum('grand_total') * $sign, 2),
+            ];
+            $docTypeSummary[] = $row;
+            $totals['count']   += $row['count'];
+            $totals['taxable'] += $row['taxable_value'];
+            $totals['igst']    += $row['igst'];
+            $totals['cgst']    += $row['cgst'];
+            $totals['sgst']    += $row['sgst'];
+            $totals['total']   += $row['total'];
+        }
+
+        // HSN/SAC summary — aggregate line items, grouped by hsn_sac + gst_rate
+        $hsnGroups = [];
+        foreach ($docs as $doc) {
+            $sign = $doc->type === 'credit_note' ? -1 : 1;
+            foreach ($doc->lineItems as $item) {
+                $key = ($item->hsn_sac ?: '') . '|' . $item->gst_rate;
+                if (!isset($hsnGroups[$key])) {
+                    $hsnGroups[$key] = [
+                        'hsn_sac'       => $item->hsn_sac ?: '',
+                        'description'   => $item->description ?: '',
+                        'gst_rate'      => (float) $item->gst_rate,
+                        'qty'           => 0,
+                        'uqc'           => $item->unit ?: 'NOS',
+                        'taxable_value' => 0,
+                        'igst'          => 0,
+                        'cgst'          => 0,
+                        'sgst'          => 0,
+                        'total'         => 0,
+                    ];
+                }
+                $hsnGroups[$key]['qty']           += (float) $item->qty * $sign;
+                $hsnGroups[$key]['taxable_value'] += (float) $item->taxable_amount * $sign;
+                $hsnGroups[$key]['igst']          += (float) $item->igst_amount * $sign;
+                $hsnGroups[$key]['cgst']          += (float) $item->cgst_amount * $sign;
+                $hsnGroups[$key]['sgst']          += (float) $item->sgst_amount * $sign;
+                $hsnGroups[$key]['total']         += (float) $item->total_amount * $sign;
+            }
+        }
+        $hsnSummary = array_values($hsnGroups);
+
+        return response()->json([
+            'period'           => $period,
+            'doc_type_summary' => $docTypeSummary,
+            'doc_type_totals'  => $totals,
+            'hsn_summary'      => $hsnSummary,
         ]);
     }
 
@@ -268,7 +397,7 @@ class GstFilingController extends Controller
         $requests = GstFilingRequest::where('client_profile_id', $request->user()->clientProfile->id)
             ->orderBy('created_at', 'desc')
             ->get();
-            
+
         return response()->json($requests);
     }
 
@@ -277,6 +406,80 @@ class GstFilingController extends Controller
         $filingRequest = GstFilingRequest::with('documents')->where('client_profile_id', $request->user()->clientProfile->id)->findOrFail($id);
 
         return response()->json($filingRequest);
+    }
+
+    public function gstr3bSummary(Request $request)
+    {
+        $request->validate(['tax_period' => 'required|string']);
+        $profile = $request->user()->clientProfile;
+        $period  = $request->tax_period;
+
+        [$yr, $mo] = explode('-', $period);
+        $start = Carbon::create((int)$yr, (int)$mo, 1)->startOfMonth();
+        $end   = $start->copy()->endOfMonth();
+
+        // Outward supply from commercial documents in the period
+        $docs = CommercialDocument::where('client_profile_id', $profile->id)
+            ->whereBetween('document_date', [$start, $end])
+            ->whereNull('cancelled_at')
+            ->selectRaw('
+                COALESCE(SUM(taxable_amount),0) as taxable,
+                COALESCE(SUM(igst_amount),0) as igst,
+                COALESCE(SUM(cgst_amount),0) as cgst,
+                COALESCE(SUM(sgst_amount),0) as sgst
+            ')->first();
+
+        $outTaxable = round($docs->taxable ?? 0, 2);
+        $outIgst    = round($docs->igst    ?? 0, 2);
+        $outCgst    = round($docs->cgst    ?? 0, 2);
+        $outSgst    = round($docs->sgst    ?? 0, 2);
+
+        // ITC from matched eligible GSTR-2B invoices
+        $itcRow = \App\Models\ClientGstr2bInvoice::where('client_profile_id', $profile->id)
+            ->where('tax_period', $period)
+            ->where('itc_eligibility', 'eligible')
+            ->where('match_status', 'matched')
+            ->selectRaw('
+                COALESCE(SUM(igst),0) as igst,
+                COALESCE(SUM(cgst),0) as cgst,
+                COALESCE(SUM(sgst),0) as sgst
+            ')->first();
+
+        $itcIgst = round($itcRow->igst ?? 0, 2);
+        $itcCgst = round($itcRow->cgst ?? 0, 2);
+        $itcSgst = round($itcRow->sgst ?? 0, 2);
+
+        $liabIgst = max(0, $outIgst - $itcIgst);
+        $liabCgst = max(0, $outCgst - $itcCgst);
+        $liabSgst = max(0, $outSgst - $itcSgst);
+
+        $totalOutput = round($outIgst + $outCgst + $outSgst, 2);
+        $totalItc    = round($itcIgst + $itcCgst + $itcSgst, 2);
+        $totalLiab   = round($liabIgst + $liabCgst + $liabSgst, 2);
+
+        return response()->json([
+            'period'       => $period,
+            'period_label' => $start->format('M Y'),
+            'summary' => [
+                'total_outward_taxable' => $outTaxable,
+                'total_output_tax'      => $totalOutput,
+                'total_eligible_itc'    => $totalItc,
+                'total_tax_liability'   => $totalLiab,
+                'net_tax_payable'       => round($totalLiab - $totalItc, 2),
+            ],
+            'tax_payment_breakup' => [
+                ['label'=>'IGST',       'output'=>$outIgst, 'itc'=>$itcIgst, 'interest'=>0, 'late_fee'=>0, 'liability'=>$liabIgst],
+                ['label'=>'CGST',       'output'=>$outCgst, 'itc'=>$itcCgst, 'interest'=>0, 'late_fee'=>0, 'liability'=>$liabCgst],
+                ['label'=>'SGST/UTGST', 'output'=>$outSgst, 'itc'=>$itcSgst, 'interest'=>0, 'late_fee'=>0, 'liability'=>$liabSgst],
+                ['label'=>'Total',      'output'=>$totalOutput, 'itc'=>$totalItc, 'interest'=>0, 'late_fee'=>0, 'liability'=>$totalLiab, 'is_total'=>true],
+            ],
+            'itc_balance' => [
+                ['label'=>'Total Tax Liability',               'igst'=>$outIgst, 'cgst'=>$outCgst, 'sgst'=>$outSgst, 'total'=>$totalOutput],
+                ['label'=>'Less: ITC',                         'igst'=>$itcIgst, 'cgst'=>$itcCgst, 'sgst'=>$itcSgst, 'total'=>$totalItc],
+                ['label'=>'Less: Tax Paid through Cash Ledger','igst'=>$liabIgst,'cgst'=>$liabCgst,'sgst'=>$liabSgst,'total'=>$totalLiab],
+                ['label'=>'Balance ITC (Available)',           'igst'=>0, 'cgst'=>round($itcCgst-$outCgst,2), 'sgst'=>round($itcSgst-$outSgst,2), 'total'=>round($totalItc-$totalOutput,2), 'is_total'=>true],
+            ],
+        ]);
     }
 
     /**

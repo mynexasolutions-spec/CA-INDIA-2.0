@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
+import { useAdminFy } from '../../context/AdminFyContext';
 import '../billing/admin-overview.css';
 
 // SVG Icons for Top Metric Cards
@@ -268,18 +269,22 @@ function getUpcomingDueDatesFallback() {
 export default function AdminOverview() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const adminFy = useAdminFy();
+  const from = adminFy?.range?.from;
+  const to = adminFy?.range?.to;
+  const registerRefresh = adminFy?.registerRefresh;
 
+  // The header's Financial Year limits the request counts; "Refresh Data" reloads this page.
   useEffect(() => {
-    api('/admin/dashboard')
-      .then((res) => {
-        setData(res);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        setLoading(false);
-      });
-  }, []);
+    const qs = from && to ? `?from=${from}&to=${to}` : '';
+    const load = () => api(`/admin/dashboard${qs}`)
+      .then((res) => setData(res))
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
+    load();
+
+    return registerRefresh ? registerRefresh(load) : undefined;
+  }, [from, to, registerRefresh]);
 
   if (loading || !data) {
     return (
@@ -336,7 +341,7 @@ export default function AdminOverview() {
           </div>
           <div className="ao-card-footer">
             <Link to="/admin/clients" className="ao-card-link">
-              View All Clients →
+              View All Clients
             </Link>
           </div>
         </div>
@@ -354,7 +359,7 @@ export default function AdminOverview() {
           </div>
           <div className="ao-card-footer">
             <Link to="/admin/clients" className="ao-card-link">
-              View Active Clients →
+              View Active Clients
             </Link>
           </div>
         </div>
@@ -372,7 +377,7 @@ export default function AdminOverview() {
           </div>
           <div className="ao-card-footer">
             <Link to="/admin/clients" className="ao-card-link">
-              View Inactive Clients →
+              View Inactive Clients
             </Link>
           </div>
         </div>
@@ -393,7 +398,7 @@ export default function AdminOverview() {
               {o.client_requests_pending ?? 0} Pending
             </span>
             <Link to="/admin/pending-approval" className="ao-card-link">
-              View Requests →
+              View Requests
             </Link>
           </div>
         </div>
@@ -414,7 +419,7 @@ export default function AdminOverview() {
               {o.gst_filing_requests_pending ?? 0} Pending
             </span>
             <Link to="/admin/gst-filing-requests" className="ao-card-link">
-              View GST Requests →
+              View GST Requests
             </Link>
           </div>
         </div>
@@ -432,7 +437,7 @@ export default function AdminOverview() {
               <span className="ao-info-icon" title="Summary of GST returns in the current filing period">i</span>
             </div>
             <Link to="/admin/gst-returns" className="ao-view-all-link">
-              View All →
+              View All
             </Link>
           </div>
           <div className="ao-strip-items">
@@ -486,7 +491,7 @@ export default function AdminOverview() {
               <span className="ao-info-icon" title="Client GST filing requests overview">i</span>
             </div>
             <Link to="/admin/gst-filing-requests" className="ao-view-all-link">
-              View All →
+              View All
             </Link>
           </div>
           <div className="ao-strip-items">
@@ -542,10 +547,9 @@ export default function AdminOverview() {
           <div className="ao-table-head">
             <div className="ao-table-title">
               GST Return Status
-              <span className="ao-info-icon" title="Pending and overdue returns only. Filed returns disappear automatically per spec.">i</span>
             </div>
             <Link to="/admin/gst-returns" className="ao-view-all-link">
-              View All →
+              View All
             </Link>
           </div>
           <div className="ao-table-responsive">
@@ -570,13 +574,12 @@ export default function AdminOverview() {
                       <td className="ao-col-due">{row.due_date}</td>
                       <td className="ao-col-status">
                         <span
-                          className={`ao-badge ${
-                            row.status === 'Overdue'
+                          className={`ao-badge ${row.status === 'Overdue'
                               ? 'ao-badge-overdue'
                               : row.status === 'Filed'
-                              ? 'ao-badge-filed'
-                              : 'ao-badge-pending'
-                          }`}
+                                ? 'ao-badge-filed'
+                                : 'ao-badge-pending'
+                            }`}
                         >
                           {row.status}
                         </span>
@@ -607,7 +610,7 @@ export default function AdminOverview() {
               GST Filing Requests
             </div>
             <Link to="/admin/gst-filing-requests" className="ao-view-all-link">
-              View All →
+              View All
             </Link>
           </div>
           <div className="ao-table-responsive">
@@ -631,24 +634,22 @@ export default function AdminOverview() {
                       <td className="ao-col-due">{req.due_date}</td>
                       <td className="ao-col-conf">
                         <span
-                          className={`ao-badge ${
-                            req.confirmation_status === 'Received'
+                          className={`ao-badge ${req.confirmation_status === 'Received'
                               ? 'ao-badge-received'
                               : 'ao-badge-overdue'
-                          }`}
+                            }`}
                         >
                           {req.confirmation_status}
                         </span>
                       </td>
                       <td className="ao-col-filing">
                         <span
-                          className={`ao-badge ${
-                            req.filing_status === 'Filed'
+                          className={`ao-badge ${req.filing_status === 'Filed'
                               ? 'ao-badge-filed'
                               : req.filing_status === 'Pending'
-                              ? 'ao-badge-pending'
-                              : 'ao-badge-notstarted'
-                          }`}
+                                ? 'ao-badge-pending'
+                                : 'ao-badge-notstarted'
+                            }`}
                         >
                           {req.filing_status}
                         </span>
@@ -679,7 +680,7 @@ export default function AdminOverview() {
               Client Request Overview
             </div>
             <Link to="/admin/pending-approval" className="ao-view-all-link">
-              View All →
+              View All
             </Link>
           </div>
           <div className="ao-table-responsive">
@@ -705,22 +706,22 @@ export default function AdminOverview() {
                             row.key === 'profile_update'
                               ? '#dbeafe'
                               : row.key === 'document_change'
-                              ? '#cffafe'
-                              : row.key === 'bank_details'
-                              ? '#ffedd5'
-                              : row.key === 'invoice_settings'
-                              ? '#dcfce7'
-                              : '#f3e8ff',
+                                ? '#cffafe'
+                                : row.key === 'bank_details'
+                                  ? '#ffedd5'
+                                  : row.key === 'invoice_settings'
+                                    ? '#dcfce7'
+                                    : '#f3e8ff',
                           color:
                             row.key === 'profile_update'
                               ? '#1d4ed8'
                               : row.key === 'document_change'
-                              ? '#0e7490'
-                              : row.key === 'bank_details'
-                              ? '#c2410c'
-                              : row.key === 'invoice_settings'
-                              ? '#15803d'
-                              : '#7e22ce',
+                                ? '#0e7490'
+                                : row.key === 'bank_details'
+                                  ? '#c2410c'
+                                  : row.key === 'invoice_settings'
+                                    ? '#15803d'
+                                    : '#7e22ce',
                         }}
                       >
                         {row.key === 'profile_update' && <ReqUserIcon />}
@@ -781,7 +782,7 @@ export default function AdminOverview() {
               Upcoming Due Dates
             </div>
             <Link to="/admin/gst-returns" className="ao-view-all-link">
-              View All →
+              View All
             </Link>
           </div>
           <div className="ao-table-responsive">
@@ -805,11 +806,10 @@ export default function AdminOverview() {
                       </td>
                       <td>
                         <span
-                          className={`ao-badge ${
-                            row.status_type === 'overdue' || row.status === 'Overdue'
+                          className={`ao-badge ${row.status_type === 'overdue' || row.status === 'Overdue'
                               ? 'ao-badge-overdue'
                               : 'ao-badge-upcoming'
-                          }`}
+                            }`}
                         >
                           {row.status}
                         </span>
