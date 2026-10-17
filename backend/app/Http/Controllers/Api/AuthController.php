@@ -104,7 +104,7 @@ class AuthController extends Controller
             return response()->json([
                 'two_factor' => true,
                 'challenge'  => $challenge,
-                'email'      => EmailOtp::mask($user->email),
+                'email'      => EmailOtp::mask($user->otpEmail()),
                 'expires_in' => EmailOtp::TTL_MINUTES * 60,
                 '_dev_otp'   => $dev,
             ]);
@@ -144,7 +144,7 @@ class AuthController extends Controller
 
         $dev = EmailOtp::send("login_{$data['challenge']}", $user, 'admin login', ['portal' => $pending['portal'] ?? 'admin']);
 
-        return response()->json(['sent' => true, 'email' => EmailOtp::mask($user->email), '_dev_otp' => $dev]);
+        return response()->json(['sent' => true, 'email' => EmailOtp::mask($user->otpEmail()), '_dev_otp' => $dev]);
     }
 
     private function startSession(Request $request, User $user, string $portal)
@@ -190,7 +190,7 @@ class AuthController extends Controller
             );
             try {
                 Mail::raw("Reset your password using this token on the portal:\n\n$token\n\nOr contact the firm for assistance.", function ($m) use ($user) {
-                    $m->to($user->email)->subject('Password reset - A B KHAN & ASSOCIATES');
+                    $m->to($user->otpEmail())->subject('Password reset - A B KHAN & ASSOCIATES');
                 });
             } catch (\Throwable $e) {}
         }
@@ -225,11 +225,11 @@ class AuthController extends Controller
     public function otpRequest(Request $request)
     {
         $data = $request->validate(['email' => 'required|email']);
-        $user = User::where('email', $data['email'])->first();
+        $user = $this->findUserByIdentifier($data['email']);
         if ($user) {
             $otp = (string) random_int(100000, 999999);
             DB::table('password_reset_otps')->updateOrInsert(
-                ['email' => $user->email],
+                ['email' => $data['email']],
                 [
                     'otp_hash' => Hash::make($otp),
                     'attempts' => 0,
@@ -246,7 +246,7 @@ class AuthController extends Controller
                     'This code is valid for '.self::OTP_TTL_MINUTES." minutes.\n\n".
                     "If you did not request this, you can safely ignore this email.",
                     function ($m) use ($user) {
-                        $m->to($user->email)->subject('Your password reset OTP - A B KHAN & ASSOCIATES');
+                        $m->to($user->otpEmail())->subject('Your password reset OTP - A B KHAN & ASSOCIATES');
                     }
                 );
             } catch (\Throwable $e) {
@@ -313,7 +313,8 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['reset_token' => ['This session has expired. Please start the reset process again.']]);
         }
 
-        $user = User::where('email', $data['email'])->firstOrFail();
+        $user = $this->findUserByIdentifier($data['email']);
+        abort_unless($user, 404);
         $user->update([
             'password' => Hash::make($data['password']),
             'password_updated_at' => now(),

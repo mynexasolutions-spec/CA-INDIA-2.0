@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import ForgotPasswordModal from '../../components/ForgotPasswordModal';
 import PasswordField from '../../components/PasswordField';
 import Seo from '../../components/seo/Seo';
+import { OTP_RESEND_SECONDS, useCountdown } from '../../hooks/useCountdown';
 
 function Icon({ children, size = 20 }) {
   return (
@@ -123,6 +124,7 @@ export default function LoginPage() {
   const [forgotOpen, setForgotOpen] = useState(false);
   const [twoFactor, setTwoFactor] = useState(null); // { challenge, email, devOtp } while the emailed code is awaited
   const [otp, setOtp] = useState('');
+  const resend = useCountdown();
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -134,6 +136,7 @@ export default function LoginPage() {
       if (result?.twoFactor) {
         setTwoFactor(result);
         setOtp('');
+        resend.start(OTP_RESEND_SECONDS);
         return;
       }
       if (['super_admin', 'admin', 'staff'].includes(result.role)) navigate('/admin');
@@ -160,12 +163,14 @@ export default function LoginPage() {
   };
 
   const onResendOtp = async () => {
+    if (resend.left > 0) return;
     setError('');
     setInfo('');
     try {
       const r = await api('/auth/login/resend-otp', { method: 'POST', body: { challenge: twoFactor.challenge } });
       setTwoFactor((t) => ({ ...t, devOtp: r._dev_otp ?? null }));
       setInfo('A new code has been sent to your email.');
+      resend.start(OTP_RESEND_SECONDS);
     } catch (err) {
       setError(err.message || 'Could not resend the code');
     }
@@ -257,7 +262,7 @@ export default function LoginPage() {
                   {busy ? 'Please wait…' : 'Verify & Sign In'}
                 </button>
                 <p style={{ textAlign: 'center', marginTop: 12, fontSize: 13 }}>
-                  <button type="button" className="btn-link" onClick={onResendOtp} style={{ background: 'none', border: 'none', color: '#1d4ed8', cursor: 'pointer', fontWeight: 600 }}>Resend code</button>
+                  <button type="button" className="btn-link" onClick={onResendOtp} disabled={resend.left > 0} style={{ background: 'none', border: 'none', color: resend.left > 0 ? '#94a3b8' : '#1d4ed8', cursor: resend.left > 0 ? 'not-allowed' : 'pointer', fontWeight: 600 }}>{resend.left > 0 ? `Resend code (${resend.label})` : 'Resend code'}</button>
                   {' · '}
                   <button type="button" onClick={() => { setTwoFactor(null); setOtp(''); setError(''); setInfo(''); }} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>Back</button>
                 </p>

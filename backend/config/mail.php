@@ -49,6 +49,12 @@ return [
             'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
         ],
 
+        'brevo' => [
+            'transport' => 'brevo',
+            'key' => env('BREVO_API_KEY'),
+            'ca_bundle' => env('BREVO_CA_BUNDLE'),
+        ],
+
         'ses' => [
             'transport' => 'ses',
         ],
@@ -109,6 +115,10 @@ return [
     | used globally for all emails that are sent by your application.
     |
     */
+
+    // Inbox that receives the super admin's verification codes (login 2FA, Clients unlock, company
+    // deletion). Change ADMIN_OTP_EMAIL in .env, then run `php artisan config:clear`.
+    'admin_otp_email' => env('ADMIN_OTP_EMAIL'),
 
     'from' => [
         'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),

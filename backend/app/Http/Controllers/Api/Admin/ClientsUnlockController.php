@@ -44,7 +44,7 @@ class ClientsUnlockController extends Controller
 
         $dev = EmailOtp::send("clients_unlock_{$user->id}", $user, 'opening the Clients module');
 
-        return response()->json(['sent' => true, 'email' => EmailOtp::mask($user->email), '_dev_otp' => $dev]);
+        return response()->json(['sent' => true, 'email' => EmailOtp::mask($user->otpEmail()), '_dev_otp' => $dev]);
     }
 
     /**

@@ -127,7 +127,7 @@ class CompanyDeletionController extends Controller
 
         return response()->json([
             'token'      => $token,
-            'sent_to'    => $request->user()->email,
+            'sent_to'    => EmailOtp::mask($request->user()->otpEmail()),
             'expires_in' => EmailOtp::TTL_MINUTES * 60,
             'names'      => $profiles->map(fn ($p) => $this->companyName($p))->values(),
             '_dev_otp'   => $dev,

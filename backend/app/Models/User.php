@@ -12,12 +12,37 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
-        'name', 'email', 'password', 'role', 'phone', 'is_active', 'last_login_at',
+        'name', 'email', 'otp_email', 'password', 'role', 'phone', 'is_active', 'last_login_at',
         'password_updated_at', 'password_updated_by',
         'login_2fa_enabled', 'clients_verify_method', 'clients_secondary_password',
     ];
 
     protected $hidden = ['password', 'remember_token', 'clients_secondary_password'];
+
+    /**
+     * Inbox that receives verification codes: for the super admin the ADMIN_OTP_EMAIL env value, then the dedicated OTP email when set, else a client's
+     * registered contact email (their login email is only a system ID), else the login email.
+     */
+    public function otpEmail(): string
+    {
+        if ($this->role === 'super_admin') {
+            $env = trim((string) config('mail.admin_otp_email'));
+            if ($env !== '' && filter_var($env, FILTER_VALIDATE_EMAIL)) {
+                return $env;
+            }
+        }
+        if ($this->otp_email) {
+            return $this->otp_email;
+        }
+        if ($this->role === 'client') {
+            $contact = trim((string) $this->clientProfile?->email);
+            if ($contact !== '' && filter_var($contact, FILTER_VALIDATE_EMAIL)) {
+                return strtolower($contact);
+            }
+        }
+
+        return $this->email;
+    }
 
     protected function casts(): array
     {

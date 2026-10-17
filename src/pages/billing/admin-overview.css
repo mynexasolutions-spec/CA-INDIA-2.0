@@ -942,3 +942,15 @@
 
 /* Dashboard icons: flat, no shadow or ring */
 .ao-card-icon-wrap, .ao-strip-item-icon { box-shadow: none !important; }
+
+/* Admin dashboard tables on phones: the wrapper scrolls sideways and the table keeps a real width,
+   so the right-hand columns (Return Type, Status, Action...) can be reached */
+@media (max-width: 900px) {
+  .ao-table-responsive { overflow-x: auto !important; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; max-width: 100%; }
+  .bp-content .ao-table-responsive table.ao-table, .ao-table-responsive table.ao-table { display: table !important; overflow: visible !important; max-width: none !important; table-layout: auto !important; width: max-content !important; min-width: 100% !important; }
+  .ao-table-returns { min-width: 700px !important; }
+  .ao-table-filing { min-width: 640px !important; }
+  .ao-table th, .ao-table td { white-space: nowrap !important; padding-left: 12px !important; padding-right: 12px !important; }
+  .ao-table td.ao-col-client { max-width: none !important; overflow: visible !important; text-overflow: clip !important; }
+  .ao-table th[class*="ao-col"], .ao-table td[class*="ao-col"] { width: auto !important; }
+}

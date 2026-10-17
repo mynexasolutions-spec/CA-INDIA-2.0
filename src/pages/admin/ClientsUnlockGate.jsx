@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { api } from '../../api/client';
 import PasswordField from '../../components/PasswordField';
+import { OTP_RESEND_SECONDS, useCountdown } from '../../hooks/useCountdown';
 
 const CSS = `
 .cua-wrap { display: flex; justify-content: center; padding: 36px 12px 52px; background: radial-gradient(600px 240px at 50% 0%, rgba(29,95,224,0.08), transparent 70%); }
@@ -41,6 +42,7 @@ export default function ClientsUnlockGate() {
   const [devOtp, setDevOtp] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const resend = useCountdown();
 
   const check = () => {
     setChecking(true);
@@ -64,6 +66,7 @@ export default function ClientsUnlockGate() {
       setSentTo(d.email || '');
       setDevOtp(d._dev_otp ?? null);
       setOtp('');
+      resend.start(OTP_RESEND_SECONDS);
     } catch (ex) {
       setErr(ex.message || 'Could not send the code');
     } finally {
@@ -131,7 +134,7 @@ export default function ClientsUnlockGate() {
                 <button type="submit" className="bp-btn bp-btn-primary" disabled={busy || otp.length !== 6}>
                   {busy ? 'Verifying…' : 'Unlock Clients'}
                 </button>
-                <button type="button" className="bp-btn bp-btn-outline" onClick={sendOtp} disabled={busy}>Resend code</button>
+                <button type="button" className="bp-btn bp-btn-outline" onClick={sendOtp} disabled={busy || resend.left > 0}>{resend.left > 0 ? `Resend code (${resend.label})` : 'Resend code'}</button>
               </form>
             )}
           </>
