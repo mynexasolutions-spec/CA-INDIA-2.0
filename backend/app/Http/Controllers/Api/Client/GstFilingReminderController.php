@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Client;
 use App\Http\Controllers\Controller;
 use App\Models\GstFilingRequest;
 use App\Services\Billing\BillingPolicy;
+use App\Services\Billing\GstDueDate;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -25,7 +26,7 @@ class GstFilingReminderController extends Controller
             foreach ($this->lastNQuarters($today, 2) as $p) {
                 $due = $this->quarterDueDate($p, 18);
                 if ($this->inWindow($today, $due) && !$this->hasRequest($profile->id, 'CMP-08', $p['code'])) {
-                    $reminders[] = $this->item('CMP-08', $p, $due, $today, 'Quarterly');
+                    $reminders[] = $this->item($profile, 'CMP-08', $p, $due, $today);
                 }
             }
         } else {
@@ -40,14 +41,14 @@ class GstFilingReminderController extends Controller
                     $due = Carbon::createFromDate($p['year'], $p['month'], 1)
                         ->addMonthNoOverflow()->setDay($dueDay);
                     if ($this->inWindow($today, $due) && !$this->hasRequest($profile->id, 'GSTR-1', $p['code'])) {
-                        $reminders[] = $this->item('GSTR-1', $p, $due, $today, 'Monthly');
+                        $reminders[] = $this->item($profile, 'GSTR-1', $p, $due, $today);
                     }
                 }
             } else {
                 foreach ($this->lastNQuarters($today, 2) as $p) {
                     $due = $this->quarterDueDate($p, 13);
                     if ($this->inWindow($today, $due) && !$this->hasRequest($profile->id, 'GSTR-1', $p['code'])) {
-                        $reminders[] = $this->item('GSTR-1', $p, $due, $today, 'Quarterly');
+                        $reminders[] = $this->item($profile, 'GSTR-1', $p, $due, $today);
                     }
                 }
             }
@@ -58,14 +59,14 @@ class GstFilingReminderController extends Controller
                     $due = Carbon::createFromDate($p['year'], $p['month'], 1)
                         ->addMonthNoOverflow()->setDay(20);
                     if ($this->inWindow($today, $due) && !$this->hasRequest($profile->id, 'GSTR-3B', $p['code'])) {
-                        $reminders[] = $this->item('GSTR-3B', $p, $due, $today, 'Monthly');
+                        $reminders[] = $this->item($profile, 'GSTR-3B', $p, $due, $today);
                     }
                 }
             } else {
                 foreach ($this->lastNQuarters($today, 2) as $p) {
                     $due = $this->quarterDueDate($p, 22);
                     if ($this->inWindow($today, $due) && !$this->hasRequest($profile->id, 'GSTR-3B', $p['code'])) {
-                        $reminders[] = $this->item('GSTR-3B', $p, $due, $today, 'Quarterly');
+                        $reminders[] = $this->item($profile, 'GSTR-3B', $p, $due, $today);
                     }
                 }
             }
@@ -76,20 +77,21 @@ class GstFilingReminderController extends Controller
         return response()->json(['reminders' => array_values($reminders)]);
     }
 
-    private function item(string $type, array $period, Carbon $due, Carbon $today, string $freq): array
+    private function item(\App\Models\ClientProfile $profile, string $type, array $period, Carbon $due, Carbon $today): array
     {
         $days   = (int) $today->diffInDays($due, false);
         $status = $days < 0 ? 'overdue' : ($days <= 7 ? 'due_soon' : 'upcoming');
 
         return [
             'return_type'      => $type,
-            'period_label'     => $period['label'],
+            'period_label'     => GstDueDate::periodLabel($period['code']),
             'period_code'      => $period['code'],
-            'filing_frequency' => $freq,
-            'due_date'         => $due->format('d M Y'),
+            'filing_frequency' => GstDueDate::frequencyLabel($profile, $type),
+            'due_date'         => $due->format('d F Y'),
             'due_date_raw'     => $due->format('Y-m-d'),
             'days_left'        => $days,
             'status'           => $status,
+            'filing_url'       => '/portal/gst-filing?return=' . urlencode($type) . '&period=' . urlencode($period['code']),
         ];
     }
 

@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\ClientAmendmentRequest;
+use App\Models\ClientChangeRequest;
+use App\Models\DocumentEditRequest;
 use App\Models\ClientOtherRequest;
 use App\Models\ClientProfile;
 use App\Models\NotificationItem;
@@ -15,6 +17,8 @@ use Illuminate\Support\Facades\Storage;
  *   Other Requests form  (client_other_requests)      -> Profile Update / Document Change /
  *                                                        Bank Details / Invoice Setting / Other
  *   Invoice Amendment    (client_amendment_requests)  -> Invoice Amendment
+ *   Settings approvals   (client_change_requests)     -> Bank Details / Invoice Setting
+ *   Edit Request         (document_edit_requests)     -> Document Change
  *
  * Both are shown with one set of fields and ONE status vocabulary: Pending / Completed / Rejected.
  * Completing / rejecting writes back the status each source (and the Client Portal) already
@@ -40,6 +44,20 @@ class ClientRequestFeed
         'invoice_setting'   => 'Invoice Setting',
         'invoice_amendment' => 'Invoice Amendment',
         'other'             => 'Other Request',
+    ];
+
+    /** Settings tab -> Request category. Branding, invoice settings, numbering and layout are all "Invoice Setting". */
+    private const SECTION_TYPE_MAP = [
+        'bank'             => 'bank_details',
+        'branding'         => 'invoice_setting',
+        'invoice_settings' => 'invoice_setting',
+        'numbering'        => 'invoice_setting',
+        'layout'           => 'invoice_setting',
+    ];
+
+    private const SECTION_LABELS = [
+        'bank' => 'Bank Details', 'branding' => 'Invoice Branding', 'invoice_settings' => 'Invoice Settings',
+        'numbering' => 'Document Numbering & Prefix', 'layout' => 'Layouts',
     ];
 
     private const DOC_LABELS = [
@@ -69,7 +87,13 @@ class ClientRequestFeed
         $amend = ClientAmendmentRequest::where('client_profile_id', $client->id)->get()
             ->map(fn (ClientAmendmentRequest $r) => self::fromAmendment($r, $who));
 
-        return $other->concat($amend)
+        $changes = ClientChangeRequest::where('client_profile_id', $client->id)
+            ->where('status', '!=', ClientChangeRequest::STATUS_DRAFT)->get()
+            ->map(fn (ClientChangeRequest $r) => self::fromChange($r, $who, $client));
+        $edits = DocumentEditRequest::where('client_profile_id', $client->id)->get()
+            ->map(fn (DocumentEditRequest $r) => self::fromEdit($r, $who));
+
+        return $other->concat($amend)->concat($changes)->concat($edits)
             ->sortByDesc(fn ($r) => $r['submitted_at'].'|'.str_pad((string) $r['sort_id'], 10, '0', STR_PAD_LEFT))
             ->values();
     }
@@ -91,6 +115,8 @@ class ClientRequestFeed
 
         $add(ClientOtherRequest::selectRaw('client_profile_id, status, COUNT(*) as n')->groupBy('client_profile_id', 'status')->get());
         $add(ClientAmendmentRequest::selectRaw('client_profile_id, status, COUNT(*) as n')->groupBy('client_profile_id', 'status')->get());
+        $add(ClientChangeRequest::where('status', '!=', ClientChangeRequest::STATUS_DRAFT)->selectRaw('client_profile_id, status, COUNT(*) as n')->groupBy('client_profile_id', 'status')->get());
+        $add(DocumentEditRequest::selectRaw('client_profile_id, status, COUNT(*) as n')->groupBy('client_profile_id', 'status')->get());
 
         return $counts;
     }
@@ -120,6 +146,12 @@ class ClientRequestFeed
         }
         foreach ($range(ClientAmendmentRequest::query())->selectRaw('status, COUNT(*) as n')->groupBy('status')->get() as $r) {
             $add('invoice_amendment', $r->status, (int) $r->n);
+        }
+        foreach ($range(ClientChangeRequest::where('status', '!=', ClientChangeRequest::STATUS_DRAFT))->selectRaw('section, status, COUNT(*) as n')->groupBy('section', 'status')->get() as $r) {
+            $add(self::SECTION_TYPE_MAP[$r->section] ?? 'other', $r->status, (int) $r->n);
+        }
+        foreach ($range(DocumentEditRequest::query())->selectRaw('status, COUNT(*) as n')->groupBy('status')->get() as $r) {
+            $add('document_change', $r->status, (int) $r->n);
         }
 
         return $out;
@@ -200,6 +232,76 @@ class ClientRequestFeed
         ];
     }
 
+    private static function fromChange(ClientChangeRequest $r, string $who, ClientProfile $client): array
+    {
+        $type = self::SECTION_TYPE_MAP[$r->section] ?? 'other';
+        $status = self::normaliseStatus($r->status);
+        $label = self::SECTION_LABELS[$r->section] ?? ucfirst((string) $r->section);
+
+        $details = [];
+        foreach ((array) ($r->payload ?? []) as $field => $value) {
+            if (! is_scalar($value) && $value !== null) {
+                continue;
+            }
+            $existing = $client->{$field} ?? null;
+            $details[] = [
+                'field_name'      => ucwords(str_replace('_', ' ', (string) $field)),
+                'existing_value'  => is_scalar($existing) && $existing !== '' ? (string) $existing : '—',
+                'requested_value' => $value === null || $value === '' ? '—' : (string) $value,
+            ];
+        }
+        foreach (ClientChangeRequest::ASSET_FIELDS as $key => $col) {
+            if ($r->{$col}) {
+                $details[] = ['field_name' => ucwords(str_replace('_', ' ', $key)), 'existing_value' => '—', 'requested_value' => 'New file uploaded'];
+            }
+        }
+
+        return [
+            'id'               => "change-{$r->id}",
+            'sort_id'          => $r->id,
+            'request_id'       => 'CHG-'.($r->created_at?->format('Y') ?? date('Y')).'-'.str_pad((string) $r->id, 3, '0', STR_PAD_LEFT),
+            'request_type'     => $type,
+            'type_label'       => self::TYPE_LABELS[$type],
+            'subject'          => "{$label} change request",
+            'description'      => "The client submitted {$label} changes for approval.",
+            'update_details'   => $details,
+            'attachments'      => [],
+            'client_remarks'   => null,
+            'status'           => $status,
+            'rejection_reason' => $status === 'rejected' ? $r->admin_note : null,
+            'submitted_at'     => $r->created_at?->toIso8601String(),
+            'submitted_on'     => $r->created_at?->format('d M Y, h:i A'),
+            'requested_by'     => $who,
+        ];
+    }
+
+    private static function fromEdit(DocumentEditRequest $r, string $who): array
+    {
+        $status = self::normaliseStatus($r->status);
+        $docLabel = self::DOC_LABELS[$r->document_type] ?? ucfirst(str_replace('_', ' ', (string) $r->document_type));
+
+        return [
+            'id'               => "edit-{$r->id}",
+            'sort_id'          => $r->id,
+            'request_id'       => 'EDT-'.($r->created_at?->format('Y') ?? date('Y')).'-'.str_pad((string) $r->id, 3, '0', STR_PAD_LEFT),
+            'request_type'     => 'document_change',
+            'type_label'       => self::TYPE_LABELS['document_change'],
+            'subject'          => "Edit request – {$docLabel} {$r->bill_number}",
+            'description'      => $r->reason,
+            'update_details'   => [
+                ['field_name' => 'Document', 'existing_value' => trim("{$docLabel} {$r->bill_number}"), 'requested_value' => '—'],
+                ['field_name' => 'Reason for Edit', 'existing_value' => '—', 'requested_value' => (string) $r->reason],
+            ],
+            'attachments'      => [],
+            'client_remarks'   => $r->remarks,
+            'status'           => $status,
+            'rejection_reason' => $status === 'rejected' ? $r->admin_note : null,
+            'submitted_at'     => $r->created_at?->toIso8601String(),
+            'submitted_on'     => $r->created_at?->format('d M Y, h:i A'),
+            'requested_by'     => $who,
+        ];
+    }
+
     private static function humanSize(int $bytes): string
     {
         return $bytes >= 1048576 ? round($bytes / 1048576, 1).' MB' : max(1, (int) round($bytes / 1024)).' KB';
@@ -207,35 +309,62 @@ class ClientRequestFeed
 
     // ── acting on one request ───────────────────────────────────────────────────────
 
-    /** @return array{0: 'other'|'amendment', 1: \Illuminate\Database\Eloquent\Model} */
+    /** @return array{0: 'other'|'amendment'|'change'|'edit', 1: \Illuminate\Database\Eloquent\Model} */
     public static function find(string $key): array
     {
-        abort_unless(preg_match('/^(other|amendment)-(\d+)$/', $key, $m), 404, 'Request not found.');
+        abort_unless(preg_match('/^(other|amendment|change|edit)-(\d+)$/', $key, $m), 404, 'Request not found.');
 
-        $model = $m[1] === 'other'
-            ? ClientOtherRequest::with('clientProfile')->findOrFail((int) $m[2])
-            : ClientAmendmentRequest::with('clientProfile')->findOrFail((int) $m[2]);
+        $id = (int) $m[2];
+        $model = match ($m[1]) {
+            'other'     => ClientOtherRequest::with('clientProfile')->findOrFail($id),
+            'amendment' => ClientAmendmentRequest::with('clientProfile')->findOrFail($id),
+            'change'    => ClientChangeRequest::with('clientProfile')->where('status', '!=', ClientChangeRequest::STATUS_DRAFT)->findOrFail($id),
+            'edit'      => DocumentEditRequest::with('clientProfile')->findOrFail($id),
+        };
 
         return [$m[1], $model];
     }
 
-    public static function complete(string $key): array
+    /**
+     * Settings approvals and Edit Requests keep their own approve/reject rules (a Bank change updates
+     * the master profile, an approved Edit Request unlocks the document), so they are delegated to
+     * those controllers instead of being re-implemented here.
+     */
+    private static function delegate(string $source, int $id, string $action, \Illuminate\Http\Request $request, ?string $note)
+    {
+        $request->merge(['admin_note' => $note]);
+        $controller = $source === 'change'
+            ? app(\App\Http\Controllers\Api\Admin\ChangeRequestController::class)
+            : app(\App\Http\Controllers\Api\Admin\DocumentEditRequestController::class);
+
+        return $controller->{$action}($request, $id);
+    }
+
+    public static function complete(string $key, ?\Illuminate\Http\Request $request = null): array
     {
         [$source, $req] = self::find($key);
         abort_unless(self::normaliseStatus($req->status) === 'pending', 422, 'Only pending requests can be completed.');
 
-        $req->update(['status' => $source === 'other' ? 'resolved' : 'approved']);
+        if (in_array($source, ['change', 'edit'], true)) {
+            self::delegate($source, $req->id, 'approve', $request ?? request(), null);
+        } else {
+            $req->update(['status' => $source === 'other' ? 'resolved' : 'approved']);
+        }
         self::notify($source, $req, 'Request Completed', 'has been completed.');
 
         return [$source, $req->fresh()];
     }
 
-    public static function reject(string $key, string $reason): array
+    public static function reject(string $key, string $reason, ?\Illuminate\Http\Request $request = null): array
     {
         [$source, $req] = self::find($key);
         abort_unless(self::normaliseStatus($req->status) === 'pending', 422, 'Only pending requests can be rejected.');
 
-        $req->update(['status' => 'rejected', 'admin_remarks' => trim($reason)]);
+        if (in_array($source, ['change', 'edit'], true)) {
+            self::delegate($source, $req->id, 'reject', $request ?? request(), trim($reason));
+        } else {
+            $req->update(['status' => 'rejected', 'admin_remarks' => trim($reason)]);
+        }
         self::notify($source, $req, 'Request Rejected', 'was rejected. Reason: '.trim($reason));
 
         return [$source, $req->fresh()];
@@ -258,7 +387,11 @@ class ClientRequestFeed
             return;
         }
 
-        $label = $source === 'other' ? $req->requestId() : ($req->bill_number ?: 'amendment');
+        $label = match ($source) {
+            'other'  => $req->requestId(),
+            'change' => 'for '.(self::SECTION_LABELS[$req->section] ?? 'settings'),
+            default  => $req->bill_number ?: 'amendment',
+        };
         NotificationItem::create([
             'user_id' => $userId,
             'title'   => $title,

@@ -283,13 +283,16 @@ class GstFilingController extends Controller
         }
 
         // Notify all admin/super_admin users about the new filing request
-        $businessName = $profile->business_name ?? 'A client';
-        \App\Models\User::whereIn('role', ['super_admin', 'admin'])->each(function ($admin) use ($businessName, $request) {
+        $businessName = $profile->business_name ?: ($profile->client_name ?: 'A client');
+        $periodLabel  = \App\Services\Billing\GstDueDate::periodLabel((string) $request->filing_period);
+        $submittedOn  = now()->format('j F Y');
+        \App\Models\User::whereIn('role', ['super_admin', 'admin'])->each(function ($admin) use ($businessName, $request, $periodLabel, $submittedOn, $filingRequest) {
             \App\Models\NotificationItem::create([
                 'user_id' => $admin->id,
-                'title'   => 'GST Filing Request Submitted',
-                'body'    => $businessName . ' submitted a ' . $request->return_type . ' filing request for ' . $request->filing_period . '.',
+                'title'   => 'New GST Filing Request',
+                'body'    => "Client: {$businessName}\nReturn: {$request->return_type}\nReturn Period: {$periodLabel}\nSubmitted On: {$submittedOn}",
                 'type'    => 'gst_filing_request',
+                'link'    => '/admin/gst-filing-requests/' . $filingRequest->id,
             ]);
         });
 

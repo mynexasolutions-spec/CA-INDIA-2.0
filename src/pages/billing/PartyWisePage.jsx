@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, getAuthToken } from '../../api/client';
 import { LoadingBlock } from '../../components/Spinner';
-import { buildFyOptions, currentFyRange, money } from './billingUtils';
+import { buildFyOptions, currentFyRange, moneyFixed as money } from './billingUtils';
 import { useReportsEnv } from './ReportsContext';
 
 /* ── Icons ─────────────────────────────────────────────────── */
@@ -216,12 +216,17 @@ export default function PartyWisePage({
     <div style={{ maxWidth: '100%' }}>
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--bp-navy)' }}>{title}</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--bp-muted)' }}>
-            Summary of invoices, taxable value and total billing party-wise for the selected period.
-          </p>
+      <div className="gs-head gl-head" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div className="gl-head-ic" style={{ width: 44, height: 44, background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--bp-navy)' }}>{title}</h2>
+            <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--bp-muted)' }}>
+              Summary of invoices, taxable value and total billing party-wise for the selected period.
+            </p>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
           <button type="button" onClick={() => download('xlsx')}
@@ -236,7 +241,7 @@ export default function PartyWisePage({
       </div>
 
       {/* ── Filter Bar ─────────────────────────────────────── */}
-      <div className="bp-card" style={{ marginBottom: 20, padding: '14px 18px' }}>
+      <div className="bp-card gs-filter" style={{ marginBottom: 20, padding: '14px 18px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
           {[
             { id: 'current', label: 'Current Month', action: applyCurrentMonth },
@@ -298,10 +303,10 @@ export default function PartyWisePage({
       </div>
 
       {/* ── KPI Cards ──────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
+      <div className="gl-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
         {/* Total Parties */}
-        <div style={{ padding: '16px 20px', background: 'linear-gradient(145deg,#eff6ff,#dbeafe)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #2563eb44' }}>
+        <div className="gl-kpi" style={{ padding: '16px 20px', background: 'linear-gradient(145deg,#eff6ff,#dbeafe)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div className="gl-kpi-ic" style={{ width: 52, height: 52, borderRadius: 14, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #2563eb44' }}>
             <PartiesIcon />
           </div>
           <div>
@@ -312,8 +317,8 @@ export default function PartyWisePage({
         </div>
 
         {/* Total Documents */}
-        <div style={{ padding: '16px 20px', background: 'linear-gradient(145deg,#f0fdf4,#dcfce7)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #16a34a44' }}>
+        <div className="gl-kpi" style={{ padding: '16px 20px', background: 'linear-gradient(145deg,#f0fdf4,#dcfce7)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div className="gl-kpi-ic" style={{ width: 52, height: 52, borderRadius: 14, background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #16a34a44' }}>
             <DocsIcon />
           </div>
           <div>
@@ -324,8 +329,8 @@ export default function PartyWisePage({
         </div>
 
         {/* Total Taxable Value */}
-        <div style={{ padding: '16px 20px', background: 'linear-gradient(145deg,#fff7ed,#fed7aa)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, background: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #ea580c44' }}>
+        <div className="gl-kpi" style={{ padding: '16px 20px', background: 'linear-gradient(145deg,#fff7ed,#fed7aa)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div className="gl-kpi-ic" style={{ width: 52, height: 52, borderRadius: 14, background: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #ea580c44' }}>
             <RupeeCircleIcon />
           </div>
           <div>
@@ -336,8 +341,8 @@ export default function PartyWisePage({
         </div>
 
         {/* Total Billing (Gross) */}
-        <div style={{ padding: '16px 20px', background: 'linear-gradient(145deg,#faf5ff,#e9d5ff)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 52, height: 52, borderRadius: 14, background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #7c3aed44' }}>
+        <div className="gl-kpi" style={{ padding: '16px 20px', background: 'linear-gradient(145deg,#faf5ff,#e9d5ff)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div className="gl-kpi-ic" style={{ width: 52, height: 52, borderRadius: 14, background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #7c3aed44' }}>
             <WalletIcon />
           </div>
           <div>
@@ -349,7 +354,7 @@ export default function PartyWisePage({
       </div>
 
       {/* ── Table section ──────────────────────────────────── */}
-      <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="bp-card pw-table" style={{ padding: 0, overflow: 'hidden' }}>
         {/* Table toolbar */}
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--bp-border)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 16, fontWeight: 800, color: '#2563eb', flex: 1 }}>Party-wise Summary</span>

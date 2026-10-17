@@ -136,7 +136,7 @@ class AdminRequestController extends Controller
     /** Mark a request as completed */
     public function complete(Request $request, string $requestId)
     {
-        ClientRequestFeed::complete($requestId);
+        ClientRequestFeed::complete($requestId, $request);
 
         return response()->json(['message' => 'Request marked as completed.']);
     }
@@ -149,7 +149,7 @@ class AdminRequestController extends Controller
             'reason.regex'    => 'Please enter a reason for rejection.',
         ]);
 
-        ClientRequestFeed::reject($requestId, $data['reason']);
+        ClientRequestFeed::reject($requestId, $data['reason'], $request);
 
         return response()->json(['message' => 'Request rejected.']);
     }

@@ -655,9 +655,9 @@
             <td>{{ $item['hsn_sac'] }}</td>
             <td style="font-weight: bold;">{{ $item['qty'] }}</td>
             <td>{{ $item['uqc'] }}</td>
-            <td>{{ number_format($item['rate'], 0) }}</td>
+            <td>{{ number_format($item['rate'], 2) }}</td>
             <td>{{ $item['gst_pct'] }}</td>
-            <td style="font-weight: bold; color: #0F172A;">{{ number_format($item['taxable_value'], 0) }}</td>
+            <td style="font-weight: bold; color: #0F172A;">{{ number_format($item['taxable_value'], 2) }}</td>
           </tr>
         @endforeach
       </tbody>
@@ -731,11 +731,11 @@
           <table class="sum-tbl">
             <tr>
               <td class="lab">Total Taxable Value</td>
-              <td class="val">₹ {{ number_format($data['summary']['taxable_value'], 0) }}</td>
+              <td class="val">₹ {{ number_format($data['summary']['taxable_value'], 2) }}</td>
             </tr>
             <tr>
               <td class="lab">IGST ({{ $data['summary']['igst_rate'] ?? '18%' }})</td>
-              <td class="val">₹ {{ number_format($data['summary']['igst_amount'], 0) }}</td>
+              <td class="val">₹ {{ number_format($data['summary']['igst_amount'], 2) }}</td>
             </tr>
             <tr>
               <td class="lab">Round Off</td>

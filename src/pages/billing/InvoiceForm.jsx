@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { billingDocPath, CURRENCIES, docTypeLabel, documentDateLabel, formatDMY, money, normalizeGstRate, REASON_FOR_TRANSPORT_OPTIONS } from './billingUtils';
+import { billingDocPath, CURRENCIES, docTypeLabel, documentDateLabel, formatDMY, localISODate, money, normalizeGstRate, REASON_FOR_TRANSPORT_OPTIONS } from './billingUtils';
 import { useAuth } from '../../auth/AuthContext';
 import { docTypeLock, isDocTypeDisabled, showGstFields, showHsnFields, showRcmCheckbox } from './billingProfile';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -146,7 +146,7 @@ export default function InvoiceForm({
   const [partyId, setPartyId] = useState('');
   const [party, setParty] = useState(null);
   const [inter, setInter] = useState(false);
-  const [documentDate, setDocumentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [documentDate, setDocumentDate] = useState(localISODate());
   const [dueDate, setDueDate] = useState('');
   const [placeOfSupply, setPlaceOfSupply] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('');
@@ -964,7 +964,7 @@ export default function InvoiceForm({
           </table>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
+        <div className="bp-add-item-row" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14 }}>
           <button
             type="button"
             className="bp-btn bp-btn-outline"

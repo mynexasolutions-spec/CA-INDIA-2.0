@@ -96,9 +96,12 @@ export default function ReportsDashboard() {
     const m = now.getMonth() + 1;
     const mStr = String(m).padStart(2, '0');
     const last = new Date(y, m, 0).getDate();
-    setFrom(`${y}-${mStr}-01`);
-    setTo(`${y}-${mStr}-${String(last).padStart(2, '0')}`);
+    const f = `${y}-${mStr}-01`;
+    const t = `${y}-${mStr}-${String(last).padStart(2, '0')}`;
+    setFrom(f);
+    setTo(t);
     setActiveQuick('current');
+    run(f, t); // quick filters apply immediately
   };
 
   const applyPreviousMonth = () => {
@@ -108,9 +111,12 @@ export default function ReportsDashboard() {
     const m = now.getMonth() + 1;
     const mStr = String(m).padStart(2, '0');
     const last = new Date(y, m, 0).getDate();
-    setFrom(`${y}-${mStr}-01`);
-    setTo(`${y}-${mStr}-${String(last).padStart(2, '0')}`);
+    const f = `${y}-${mStr}-01`;
+    const t = `${y}-${mStr}-${String(last).padStart(2, '0')}`;
+    setFrom(f);
+    setTo(t);
     setActiveQuick('prev');
+    run(f, t);
   };
 
   const applyCurrentFy = () => {
@@ -118,6 +124,7 @@ export default function ReportsDashboard() {
     setFrom(next.from);
     setTo(next.to);
     setActiveQuick('fy');
+    run(next.from, next.to);
   };
 
   const handleClear = () => {
@@ -219,19 +226,26 @@ export default function ReportsDashboard() {
     <div style={{ fontFamily: "'Inter',system-ui,sans-serif", padding: '4px 0 32px', color: '#1e293b' }}>
 
       {/* Breadcrumb & Header Row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+      <div className="rp-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
             <Link to={env.rootCrumbTo} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>Reports</Link>
             <span>&gt;</span>
             <span style={{ color: '#64748b' }}>Report Dashboard</span>
           </div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.3px' }}>
-            Reports
-          </h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-            Business, GST &amp; receivables reports – all in one place.
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <span className="bp-parties-head-icon" aria-hidden="true">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /><line x1="3" y1="20" x2="21" y2="20" /></svg>
+            </span>
+            <div>
+              <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.3px' }}>
+                Reports
+              </h1>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+                Business, GST &amp; receivables reports – all in one place.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Top-Right Last Updated Card */}
@@ -258,9 +272,9 @@ export default function ReportsDashboard() {
       </div>
 
       {/* Top 4 KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 18 }}>
+      <div className="rp-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 230px), 1fr))', gap: 14, marginBottom: 18 }}>
         {/* Card 1: Total Sales (Gross) */}
-        <div style={{
+        <div className="rp-kpi" style={{
           background: '#eff6ff',
           border: '1.5px solid #bfdbfe',
           borderRadius: 12,
@@ -269,7 +283,7 @@ export default function ReportsDashboard() {
           alignItems: 'center',
           gap: 14,
         }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div className="rp-kpi-ic" style={{ width: 44, height: 44, borderRadius: 10, background: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
@@ -279,18 +293,18 @@ export default function ReportsDashboard() {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Total Sales (Gross)</span>
+              <span className="rp-kpi-label" style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Total Sales (Gross)</span>
               <TrendChip cur={totalGross} prev={prev?.gross} />
             </div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#1d4ed8', lineHeight: 1.1 }}>
-              {loading ? '…' : `₹${Number(totalGross).toLocaleString('en-IN')}`}
+              {loading ? '…' : `₹${Number(totalGross).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>Total gross value of all documents</div>
           </div>
         </div>
 
         {/* Card 2: Taxable Value */}
-        <div style={{
+        <div className="rp-kpi" style={{
           background: '#f0fdf4',
           border: '1.5px solid #bbf7d0',
           borderRadius: 12,
@@ -299,7 +313,7 @@ export default function ReportsDashboard() {
           alignItems: 'center',
           gap: 14,
         }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div className="rp-kpi-ic" style={{ width: 44, height: 44, borderRadius: 10, background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="4" y="2" width="16" height="20" rx="2" />
               <line x1="8" y1="6" x2="16" y2="6" />
@@ -309,18 +323,18 @@ export default function ReportsDashboard() {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Taxable Value</span>
+              <span className="rp-kpi-label" style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Taxable Value</span>
               <TrendChip cur={totalTaxable} prev={prev?.taxable} />
             </div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a', lineHeight: 1.1 }}>
-              {loading ? '…' : `₹${Number(totalTaxable).toLocaleString('en-IN')}`}
+              {loading ? '…' : `₹${Number(totalTaxable).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>Total taxable value</div>
           </div>
         </div>
 
         {/* Card 3: GST Collected */}
-        <div style={{
+        <div className="rp-kpi" style={{
           background: '#fff7ed',
           border: '1.5px solid #fed7aa',
           borderRadius: 12,
@@ -329,23 +343,23 @@ export default function ReportsDashboard() {
           alignItems: 'center',
           gap: 14,
         }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div className="rp-kpi-ic" style={{ width: 44, height: 44, borderRadius: 10, background: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <span style={{ color: '#fff', fontSize: 20, fontWeight: 800 }}>₹</span>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>GST Collected</span>
+              <span className="rp-kpi-label" style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>GST Collected</span>
               <TrendChip cur={gstCollected} prev={prev?.gst} up={['#ea580c', '#ffedd5']} />
             </div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#ea580c', lineHeight: 1.1 }}>
-              {loading ? '…' : `₹${Number(gstCollected).toLocaleString('en-IN')}`}
+              {loading ? '…' : `₹${Number(gstCollected).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>Total GST (CGST + SGST + IGST) vs. previous period</div>
           </div>
         </div>
 
         {/* Card 4: Outstanding */}
-        <div style={{
+        <div className="rp-kpi" style={{
           background: '#faf5ff',
           border: '1.5px solid #e9d5ff',
           borderRadius: 12,
@@ -354,7 +368,7 @@ export default function ReportsDashboard() {
           alignItems: 'center',
           gap: 14,
         }}>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div className="rp-kpi-ic" style={{ width: 44, height: 44, borderRadius: 10, background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="6" width="20" height="12" rx="2" />
               <path d="M16 12h.01" />
@@ -362,11 +376,11 @@ export default function ReportsDashboard() {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Outstanding</span>
+              <span className="rp-kpi-label" style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Outstanding</span>
               <TrendChip cur={outstandingTotal} prev={prev?.outstanding} up={['#7c3aed', '#f3e8ff']} />
             </div>
             <div style={{ fontSize: 20, fontWeight: 800, color: '#7c3aed', lineHeight: 1.1 }}>
-              {loading ? '…' : `₹${Number(outstandingTotal).toLocaleString('en-IN')}`}
+              {loading ? '…' : `₹${Number(outstandingTotal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             </div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>Total unpaid amount vs. previous period</div>
           </div>
@@ -374,7 +388,7 @@ export default function ReportsDashboard() {
       </div>
 
       {/* Filter Bar */}
-      <div style={{
+      <div className="rp-filter" style={{
         background: '#fff',
         border: '1.5px solid #bfdbfe',
         borderRadius: 10,
@@ -452,7 +466,7 @@ export default function ReportsDashboard() {
           <button
             type="button"
             disabled={loading}
-            onClick={run}
+            onClick={() => run(from, to)}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -507,13 +521,15 @@ export default function ReportsDashboard() {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 10,
         marginBottom: 14,
       }}>
         <div style={{ fontWeight: 800, fontSize: 13, color: '#0f172a', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
           REPORTS
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ position: 'relative' }}>
+        <div className="rp-tools" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="rp-search" style={{ position: 'relative' }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }}>
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
@@ -536,7 +552,7 @@ export default function ReportsDashboard() {
           </div>
 
           {/* Grid / List toggle */}
-          <div style={{ display: 'inline-flex', border: '1.5px solid #bfdbfe', borderRadius: 7, overflow: 'hidden' }}>
+          <div className="rp-toggle" style={{ display: 'inline-flex', border: '1.5px solid #bfdbfe', borderRadius: 7, overflow: 'hidden' }}>
             <button
               onClick={() => setViewMode('grid')}
               style={{
@@ -574,13 +590,14 @@ export default function ReportsDashboard() {
       {/* Report Cards Grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: viewMode === 'grid' ? 'repeat(3, 1fr)' : '1fr',
+        gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))' : '1fr',
         gap: 16,
         marginBottom: 36,
       }}>
         {filteredCards.map(card => (
           <div
             key={card.key}
+            className="rp-card"
             onClick={() => navigate(card.to)}
             style={{
               background: card.bg,
@@ -607,7 +624,7 @@ export default function ReportsDashboard() {
           >
             <div>
               {/* Top Icon */}
-              <div style={{
+              <div className="rp-card-ic" style={{
                 width: 48,
                 height: 48,
                 borderRadius: '50%',
@@ -664,7 +681,7 @@ export default function ReportsDashboard() {
           <span style={{ cursor: 'pointer' }}>Privacy Policy</span>
           <span style={{ cursor: 'pointer' }}>Terms of Service</span>
           <span style={{ cursor: 'pointer' }}>Support</span>
-          <span>Built with ❤️ for CA Professionals</span>
+          <span>Built for CA Professionals</span>
         </div>
       </div>
 

@@ -378,7 +378,7 @@ export default function BillingManagement() {
               </div>
               {automationItems.map((item) => (
                 <div key={item.title} className="billing-panel-item">
-                  <span className="billing-panel-check">✓</span>
+                  <span className="billing-panel-check"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg></span>
                   <div>
                     <strong>{item.title}</strong>
                     <span>{item.text}</span>
@@ -410,7 +410,7 @@ export default function BillingManagement() {
               </div>
               {reportItems.map((r) => (
                 <div key={r} className="billing-panel-item">
-                  <span className="billing-panel-check">✓</span>
+                  <span className="billing-panel-check"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg></span>
                   <div>
                     <strong style={{ marginBottom: 0 }}>{r}</strong>
                   </div>

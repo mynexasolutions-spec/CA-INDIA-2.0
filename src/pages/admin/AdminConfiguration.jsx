@@ -190,7 +190,7 @@ export default function AdminConfiguration() {
       </div>
 
       {/* Tab Bar matching reference */}
-      <div style={{
+      <div className="cfg-tabs" style={{
         display: 'flex',
         background: '#fff',
         border: '1.5px solid #bfdbfe',
@@ -459,7 +459,7 @@ function MasterTable({ tab }) {
       }}>
 
         {/* Card Header matching screenshot */}
-        <div style={{
+        <div className="cfg-head" style={{
           padding: '16px 20px',
           borderBottom: '1.5px solid #e2e8f0',
           display: 'flex',
@@ -498,7 +498,7 @@ function MasterTable({ tab }) {
           </div>
 
           {/* Right Action Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="cfg-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {/* Import Excel */}
             <button
               type="button"
@@ -602,7 +602,7 @@ function MasterTable({ tab }) {
         )}
 
         {/* Filter Strip matching screenshot */}
-        <div style={{
+        <div className="cfg-filter" style={{
           padding: '12px 20px',
           borderBottom: '1.5px solid #e2e8f0',
           display: 'flex',
@@ -610,7 +610,7 @@ function MasterTable({ tab }) {
           gap: 12,
         }}>
           {/* Search Input */}
-          <div style={{ position: 'relative', width: 340 }}>
+          <div className="cfg-search" style={{ position: 'relative', width: 340 }}>
             <svg
               width="15"
               height="15"
@@ -644,7 +644,7 @@ function MasterTable({ tab }) {
           </div>
 
           {/* Status Dropdown */}
-          <div style={{ position: 'relative', width: 140 }}>
+          <div className="cfg-sel" style={{ position: 'relative', width: 140 }}>
             <select
               value={status}
               onChange={e => setStatus(e.target.value)}
@@ -680,7 +680,7 @@ function MasterTable({ tab }) {
           </div>
 
           {/* Action buttons on right */}
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="cfg-fbtns" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
               type="button"
               onClick={doReset}
@@ -717,7 +717,7 @@ function MasterTable({ tab }) {
         </div>
 
         {/* Master Table */}
-        <div style={{ overflowX: 'auto' }}>
+        <div className="cfg-scroll" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
@@ -957,7 +957,7 @@ function MasterTable({ tab }) {
         </div>
 
         {/* Footer with record counter and pagination matching screenshot */}
-        <div style={{
+        <div className="cfg-foot" style={{
           padding: '14px 20px',
           borderTop: '1.5px solid #e2e8f0',
           display: 'flex',
@@ -970,7 +970,7 @@ function MasterTable({ tab }) {
             Showing {fromRow} to {toRow} of {total} records
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div className="cfg-pager" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {/* Prev button */}
             <button
               type="button"

@@ -42,6 +42,12 @@ class DocumentController extends Controller
         // whatever from/fy filter (or none) the request sends.
         $q->whereDate('created_at', '>=', BillingPolicy::MIN_BILLING_FY_START_DATE);
 
+        // Amendment versions live in Amendment History only: they never appear in the normal billing
+        // lists, counts or totals (only an explicit type=amendment request, used by that module, sees them).
+        if ($request->input('type') !== 'amendment') {
+            $q->where('type', '!=', 'amendment');
+        }
+
         if ($request->filled('status')) {
             $q->where('status', $request->status);
         } else {
@@ -139,10 +145,16 @@ class DocumentController extends Controller
             if ($request->gst_type === 'b2b') {
                 $q->whereHas('customer', fn ($c) => $c->where('gst_status', 'registered'));
             } elseif ($request->gst_type === 'b2c') {
-                $q->whereHas('customer', fn ($c) => $c->where('gst_status', 'unregistered'));
+                // B2C = everything that is not a registered (B2B) party, including walk-in sales with no party.
+                $q->whereDoesntHave('customer', fn ($c) => $c->where('gst_status', 'registered'));
             }
+            // GSTR-1 lists show the GST % of each document.
+            $q->with('lineItems:id,commercial_document_id,gst_rate');
         }
         $q->with('customer:id,name,gstin,gst_status')->latest('created_at')->latest('id');
+        if ($request->input('type') === 'amendment') {
+            $q->with('referenceDocument:id,number,type');
+        }
 
         $perPage = min(500, max(1, (int) $request->input('per_page', 25)));
         $paginated = $q->paginate($perPage);
@@ -220,6 +232,20 @@ class DocumentController extends Controller
     {
         $profile = $this->profile($request);
         $doc = CommercialDocument::where('client_profile_id', $profile->id)->findOrFail($id);
+
+        // The conversion target is fixed by the GST registration type. A request that asks for the
+        // other document is rejected here (not just hidden in the UI).
+        $data = $request->validate(['target_type' => 'nullable|string|in:tax_invoice,bill_of_supply']);
+        $isComposition = $profile->dealer_type === 'composition';
+        $expected = $isComposition ? 'bill_of_supply' : 'tax_invoice';
+        if (! empty($data['target_type']) && $data['target_type'] !== $expected) {
+            return response()->json([
+                'message' => $isComposition
+                    ? 'A Composition taxpayer can convert a quotation only to a Bill of Supply.'
+                    : 'A Regular taxpayer can convert a quotation only to a Tax Invoice.',
+            ], 422);
+        }
+
         $invoice = $this->invoices->convertQuotation($doc, $profile);
         try {
             $this->invoices->generatePdf($invoice);

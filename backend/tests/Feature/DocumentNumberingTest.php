@@ -142,7 +142,7 @@ class DocumentNumberingTest extends TestCase
         ]);
 
         // Attempting to set next_number = '01' for invoice should fail with 422
-        $response = $this->putJson("/api/admin/clients/{$this->profile->id}", [
+        $response = $this->putJson("/api/admin/clients/{$this->profile->id}", ['email' => 'ntc@test.com', 'login_prefix' => 'ntc001', 
             'document_numbering_settings' => [
                 'invoice' => [
                     'prefix' => 'INV',
@@ -175,7 +175,7 @@ class DocumentNumberingTest extends TestCase
         ]);
 
         // Attempting to set next_number = '05' should fail with 422
-        $response = $this->putJson("/api/admin/clients/{$this->profile->id}", [
+        $response = $this->putJson("/api/admin/clients/{$this->profile->id}", ['email' => 'ntc@test.com', 'login_prefix' => 'ntc001', 
             'document_numbering_settings' => [
                 'invoice' => [
                     'prefix' => 'INV',
@@ -208,7 +208,7 @@ class DocumentNumberingTest extends TestCase
         ]);
 
         // Setting next_number = '04' (which is lower than 10, but unused) triggers 409
-        $response = $this->putJson("/api/admin/clients/{$this->profile->id}", [
+        $response = $this->putJson("/api/admin/clients/{$this->profile->id}", ['email' => 'ntc@test.com', 'login_prefix' => 'ntc001', 
             'document_numbering_settings' => [
                 'invoice' => [
                     'prefix' => 'INV',
@@ -230,7 +230,7 @@ class DocumentNumberingTest extends TestCase
             ]);
 
         // Passing confirm_gap: true should successfully save
-        $confirmResponse = $this->putJson("/api/admin/clients/{$this->profile->id}", [
+        $confirmResponse = $this->putJson("/api/admin/clients/{$this->profile->id}", ['email' => 'ntc@test.com', 'login_prefix' => 'ntc001', 
             'confirm_gap' => true,
             'document_numbering_settings' => [
                 'invoice' => [
@@ -266,7 +266,7 @@ class DocumentNumberingTest extends TestCase
         ]);
 
         // Setting next_number = '01' when no issued documents exist should NOT trigger 409
-        $response = $this->putJson("/api/admin/clients/{$this->profile->id}", [
+        $response = $this->putJson("/api/admin/clients/{$this->profile->id}", ['email' => 'ntc@test.com', 'login_prefix' => 'ntc001', 
             'document_numbering_settings' => [
                 'invoice' => [
                     'prefix' => 'INV',
@@ -286,7 +286,7 @@ class DocumentNumberingTest extends TestCase
     {
         $this->unlockAdmin();
 
-        $response = $this->putJson("/api/admin/clients/{$this->profile->id}", [
+        $response = $this->putJson("/api/admin/clients/{$this->profile->id}", ['email' => 'ntc@test.com', 'login_prefix' => 'ntc001', 
             'document_numbering_settings' => [
                 'quotation' => [
                     'prefix' => 'ESTIMATE',
@@ -386,6 +386,7 @@ class DocumentNumberingTest extends TestCase
         ]);
 
         $basePayload = [
+            'email' => 'ntc@test.com', 'login_prefix' => 'ntc001',
             '_method' => 'PUT',
             'document_numbering_settings' => $settingsJson,
             'invoice_prefix' => 'INV',
@@ -424,6 +425,7 @@ class DocumentNumberingTest extends TestCase
             ],
         ]);
         $payloadC = [
+            'email' => 'ntc@test.com', 'login_prefix' => 'ntc001',
             '_method' => 'PUT',
             'document_numbering_settings' => $settingsJsonC,
             'invoice_prefix' => 'INV',

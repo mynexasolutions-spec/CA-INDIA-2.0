@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
-import { useClientPortal } from '../../components/portal/PortalShell';
+import { useClientPortal } from '../../components/portal/ClientPortalContext';
 import { api, getAuthToken } from '../../api/client';
 import { LoadingBlock } from '../../components/Spinner';
 import NumberedPagination from './NumberedPagination';
@@ -39,13 +39,13 @@ const CREATE_OPTIONS = [
 ];
 
 const CARDS = [
-  { key: 'total',            label: 'Total Documents',    Ic: IcLayers,  color: '#1e3a5f', bg: '#e8f0fe', viewLabel: 'View All Documents',    viewTo: null },
-  { key: 'tax_invoice',      label: 'Tax Invoices',       Ic: IcDoc,     color: '#2563eb', bg: '#eff6ff', viewLabel: 'View Tax Invoices',     viewTo: '/portal/billing/invoices' },
-  { key: 'bill_of_supply',   label: 'Bills of Supply',    Ic: IcGrid,    color: '#15803d', bg: '#f0fdf4', viewLabel: 'View Bills of Supply',  viewTo: '/portal/billing/bill-of-supply' },
-  { key: 'debit_note',       label: 'Debit Notes',        Ic: IcDocPlus, color: '#7c3aed', bg: '#f5f3ff', viewLabel: 'View Debit Notes',      viewTo: '/portal/billing/debit-notes' },
-  { key: 'credit_note',      label: 'Credit Notes',       Ic: IcDocMin,  color: '#dc2626', bg: '#fef2f2', viewLabel: 'View Credit Notes',     viewTo: '/portal/billing/credit-notes' },
-  { key: 'quotation',        label: 'Quotations',         Ic: IcClip,    color: '#d97706', bg: '#fffbeb', viewLabel: 'View Quotations',       viewTo: '/portal/billing/quotation' },
-  { key: 'delivery_challan', label: 'Delivery Challans',  Ic: IcTruck,   color: '#0891b2', bg: '#ecfeff', viewLabel: 'View Delivery Challans', viewTo: '/portal/billing/delivery-challan' },
+  { key: 'total',            label: 'Total Documents',    Ic: IcLayers,  color: '#1d4ed8', bg: '#e6eeff', tint: 'linear-gradient(135deg,#eaf1ff 0%,#dfe9fb 100%)', edge: '#cfdcf6', viewLabel: 'View All Documents',    viewTo: null },
+  { key: 'tax_invoice',      label: 'Tax Invoices',       Ic: IcDoc,     color: '#2563eb', bg: '#dbe8ff', tint: 'linear-gradient(135deg,#eef5ff 0%,#e3eeff 100%)', edge: '#d2e2fb', viewLabel: 'View Tax Invoices',     viewTo: '/portal/billing/invoices' },
+  { key: 'bill_of_supply',   label: 'Bills of Supply',    Ic: IcGrid,    color: '#15803d', bg: '#d6f3e0', tint: 'linear-gradient(135deg,#f0fbf4 0%,#e1f6e9 100%)', edge: '#cdeed9', viewLabel: 'View Bills of Supply',  viewTo: '/portal/billing/bill-of-supply' },
+  { key: 'debit_note',       label: 'Debit Notes',        Ic: IcDocPlus, color: '#7c3aed', bg: '#e8defc', tint: 'linear-gradient(135deg,#f6f2ff 0%,#ede6fd 100%)', edge: '#e0d4fa', viewLabel: 'View Debit Notes',      viewTo: '/portal/billing/debit-notes' },
+  { key: 'credit_note',      label: 'Credit Notes',       Ic: IcDocMin,  color: '#dc2626', bg: '#fbdcdc', tint: 'linear-gradient(135deg,#fff3f3 0%,#fde6e6 100%)', edge: '#f8d2d2', viewLabel: 'View Credit Notes',     viewTo: '/portal/billing/credit-notes' },
+  { key: 'quotation',        label: 'Quotations',         Ic: IcClip,    color: '#d97706', bg: '#fde8c6', tint: 'linear-gradient(135deg,#fff8ec 0%,#fef0d6 100%)', edge: '#f9e3bc', viewLabel: 'View Quotations',       viewTo: '/portal/billing/quotation' },
+  { key: 'delivery_challan', label: 'Delivery Challans',  Ic: IcTruck,   color: '#0e7490', bg: '#cdeef5', tint: 'linear-gradient(135deg,#eefafd 0%,#dff4f9 100%)', edge: '#c5e8f0', viewLabel: 'View Delivery Challans', viewTo: '/portal/billing/delivery-challan' },
 ];
 
 const DIST_SEGS = [
@@ -95,47 +95,84 @@ function CreateDocumentDropdown({ profile }) {
   );
 }
 
-/* ═══ DONUT CHART ═══ */
+/* ═══ DONUT CHART (interactive) ═══ */
 function DonutChart({ counts }) {
-  const r = 58, C = 2 * Math.PI * r;
+  const navigate = useNavigate();
+  const [active, setActive] = useState(null);
+  const [drawn, setDrawn] = useState(false);
+  useEffect(() => { const t = requestAnimationFrame(() => setDrawn(true)); return () => cancelAnimationFrame(t); }, []);
+
+  const R = 62, SW = 24, C = 2 * Math.PI * R, GAP = 3;
   const total = DIST_SEGS.reduce((s, seg) => s + (counts[seg.key] || 0), 0);
   let cum = 0;
-  const arcs = DIST_SEGS.map((seg) => {
+  const segs = DIST_SEGS.map((seg) => {
     const cnt = counts[seg.key] || 0;
     const len = total > 0 ? (cnt / total) * C : 0;
     const off = cum;
     cum += len;
-    return { ...seg, cnt, len, off };
+    const pct = total > 0 ? (cnt / total) * 100 : 0;
+    const link = CARDS.find((c) => c.key === seg.key)?.viewTo;
+    return { ...seg, cnt, len, off, pct, link };
   });
+  const cur = segs.find((x) => x.key === active);
+  const go = (seg) => { if (seg.link) navigate(seg.link); };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-      <div style={{ position: 'relative', width: 140, height: 140, flexShrink: 0 }}>
-        <svg width="140" height="140" viewBox="0 0 140 140">
-          <circle cx="70" cy="70" r={r} fill="none" stroke="#f1f5f9" strokeWidth="22" />
-          {arcs.map((a) => a.cnt > 0 && (
-            <circle key={a.key} cx="70" cy="70" r={r} fill="none"
-              stroke={a.color} strokeWidth="22"
-              strokeDasharray={`${a.len} ${C - a.len}`}
-              strokeDashoffset={-a.off}
-              style={{ transform: 'rotate(-90deg)', transformOrigin: '70px 70px' }}
-            />
+    <div className="bd-donut">
+      <div className="bd-donut-ring">
+        <svg viewBox="0 0 160 160" width="100%" height="100%" role="img" aria-label="Document distribution">
+          <circle cx="80" cy="80" r={R} fill="none" stroke="#eef3fb" strokeWidth={SW} />
+          {segs.map((sg) => sg.cnt > 0 && (
+            <circle
+              key={sg.key} cx="80" cy="80" r={R} fill="none"
+              stroke={sg.color}
+              strokeWidth={active === sg.key ? SW + 7 : SW}
+              strokeLinecap="butt"
+              strokeDasharray={`${drawn ? Math.max(sg.len - GAP, 0.5) : 0} ${C}`}
+              strokeDashoffset={-sg.off}
+              transform="rotate(-90 80 80)"
+              opacity={active && active !== sg.key ? 0.3 : 1}
+              style={{ transition: 'stroke-dasharray 0.9s cubic-bezier(.2,.8,.2,1), stroke-width 0.15s ease, opacity 0.15s ease', cursor: sg.link ? 'pointer' : 'default' }}
+              onMouseEnter={() => setActive(sg.key)}
+              onMouseLeave={() => setActive(null)}
+              onClick={() => go(sg)}
+            >
+              <title>{`${sg.label}: ${sg.cnt} (${sg.pct.toFixed(1)}%)`}</title>
+            </circle>
           ))}
         </svg>
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-          <span style={{ fontSize: 22, fontWeight: 700, color: '#1e293b', lineHeight: 1 }}>{total}</span>
-          <span style={{ fontSize: 9.5, color: '#64748b', marginTop: 3 }}>Total</span>
-          <span style={{ fontSize: 9.5, color: '#64748b' }}>Documents</span>
+        <div className="bd-donut-center">
+          {cur ? (
+            <>
+              <span className="bd-donut-num" style={{ color: cur.color }}>{cur.cnt}</span>
+              <span className="bd-donut-sub" style={{ fontWeight: 800, color: '#334155' }}>{cur.label}</span>
+              <span className="bd-donut-sub">{cur.pct.toFixed(1)}%</span>
+            </>
+          ) : (
+            <>
+              <span className="bd-donut-num">{total}</span>
+              <span className="bd-donut-sub">Total</span>
+              <span className="bd-donut-sub">Documents</span>
+            </>
+          )}
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 140 }}>
-        {arcs.map((a) => (
-          <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-            <span style={{ width: 9, height: 9, borderRadius: '50%', background: a.color, flexShrink: 0 }} />
-            <span style={{ flex: 1, color: '#475569', whiteSpace: 'nowrap' }}>{a.label}</span>
-            <span style={{ fontWeight: 600, color: '#1e293b', minWidth: 20, textAlign: 'right' }}>{a.cnt}</span>
-            <span style={{ color: '#94a3b8', fontSize: 11, minWidth: 48, textAlign: 'right' }}>({total > 0 ? (a.cnt / total * 100).toFixed(1) : '0.0'}%)</span>
-          </div>
+
+      <div className="bd-legend">
+        {segs.map((sg) => (
+          <button
+            key={sg.key} type="button"
+            className={`bd-legend-row${active === sg.key ? ' is-active' : ''}${sg.cnt === 0 ? ' is-zero' : ''}`}
+            onMouseEnter={() => setActive(sg.key)} onMouseLeave={() => setActive(null)}
+            onFocus={() => setActive(sg.key)} onBlur={() => setActive(null)}
+            onClick={() => go(sg)}
+            title={sg.link ? `Open ${sg.label}` : sg.label}
+          >
+            <span className="bd-legend-dot" style={{ background: sg.color }} />
+            <span className="bd-legend-label">{sg.label}</span>
+            <span className="bd-legend-cnt">{sg.cnt}</span>
+            <span className="bd-legend-pct">({sg.pct.toFixed(1)}%)</span>
+          </button>
         ))}
       </div>
     </div>
@@ -222,76 +259,71 @@ export default function BillingDashboard() {
 
       {loading && !rows.length ? <LoadingBlock /> : (
         <>
-          {/* ── ROW 1: SUMMARY CARDS + DISTRIBUTION ── */}
-          <div style={{ ...ROW, gridTemplateColumns: '1fr 340px' }}>
-
-            {/* 7 summary cards in 4-col grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-              {CARDS.map(({ key, label, Ic, color, bg, viewLabel, viewTo }) => (
-                <div key={key} style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: '14px 14px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <span style={{ background: bg, color, width: 38, height: 38, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Ic /></span>
-                    <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 500, lineHeight: 1.3 }}>{label}</span>
+          {/* ── ROW 1: SUMMARY CARDS (4 + 3) + DISTRIBUTION (spans both rows) ── */}
+          <div className="bd-top" style={{ ...ROW }}>
+            <div className="bd-cards">
+              {CARDS.map(({ key, label, Ic, color, bg, tint, edge, viewLabel, viewTo }, i) => (
+                <div key={key} className="bd-card" style={{ background: tint, borderColor: edge, gridColumn: i < 4 ? 'span 3' : 'span 4' }}>
+                  <span className="bd-card-ico" style={{ background: bg, color }}><Ic /></span>
+                  <div className="bd-card-body">
+                    <span className="bd-card-label">{label}</span>
+                    <span className="bd-card-num" style={{ color: key === 'total' ? '#0f2a5f' : color }}>{allCounts[key] ?? 0}</span>
+                    {viewTo
+                      ? <Link to={viewTo} className="bd-card-link">{viewLabel}</Link>
+                      : <span className="bd-card-link">{viewLabel}</span>}
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 700, color, lineHeight: 1, marginBottom: 6, paddingLeft: 2 }}>{allCounts[key] ?? 0}</div>
-                  {viewTo
-                    ? <Link to={viewTo} style={{ fontSize: 11.5, color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>{viewLabel} →</Link>
-                    : <span style={{ fontSize: 11.5, color: '#2563eb', fontWeight: 500 }}>{viewLabel} →</span>}
                 </div>
               ))}
             </div>
 
-            {/* Document Distribution card */}
-            <div className="bp-card" style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ fontWeight: 700, fontSize: 14.5, color: '#1e3a5f', marginBottom: 14 }}>Document Distribution</div>
+            <div className="bd-panel bd-dist">
+              <div className="bd-panel-title">Document Distribution</div>
               <DonutChart counts={typeCounts} />
             </div>
-
           </div>
 
           {/* ── ROW 2: TAX INVOICE B2B/B2C + QUICK LINKS ── */}
           <div style={{ ...ROW, gridTemplateColumns: '1fr 1fr' }}>
 
             {/* Tax Invoice Summary */}
-            <div className="bp-card" style={{ padding: '18px 20px' }}>
-              <div style={{ fontWeight: 700, fontSize: 14.5, color: '#1e3a5f', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ background: '#e8f0fe', color: '#2563eb', width: 28, height: 28, borderRadius: 6, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><IcDoc /></span>
+            <div className="bd-panel">
+              <div className="bd-panel-title">
+                <span className="bd-panel-ico" style={{ background: '#dbe8ff', color: '#2563eb' }}><IcDoc /></span>
                 Tax Invoice Summary (B2B vs B2C)
               </div>
-              <div style={{ display: 'flex', gap: 16 }}>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Total Tax Invoices</div>
-                  <div style={{ fontSize: 32, fontWeight: 700, color: '#1e3a5f' }}>{tiTotal}</div>
-                </div>
-                <div style={{ width: 1, background: '#e2e8f0' }} />
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>B2B Invoices</div>
-                  <div style={{ fontSize: 32, fontWeight: 700, color: '#15803d' }}>{b2b}</div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>({tiTotal > 0 ? Math.round(b2b / tiTotal * 100) : 0}%)</div>
-                </div>
-                <div style={{ width: 1, background: '#e2e8f0' }} />
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>B2C Invoices</div>
-                  <div style={{ fontSize: 32, fontWeight: 700, color: '#d97706' }}>{b2c}</div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>({tiTotal > 0 ? Math.round(b2c / tiTotal * 100) : 0}%)</div>
+              <div className="bd-ti-wrap">
+                <div className="bd-ti-tiles">
+                  <div className="bd-ti-tile bd-ti-total">
+                    <div className="bd-ti-label">Total Tax Invoices</div>
+                    <div className="bd-ti-num">{tiTotal}</div>
+                    <div className="bd-ti-sub">All invoices</div>
+                  </div>
+                  <div className="bd-ti-tile bd-ti-b2b">
+                    <div className="bd-ti-label">B2B Invoices</div>
+                    <div className="bd-ti-num">{b2b}</div>
+                    <div className="bd-ti-sub">{tiTotal > 0 ? Math.round(b2b / tiTotal * 100) : 0}% of total</div>
+                  </div>
+                  <div className="bd-ti-tile bd-ti-b2c">
+                    <div className="bd-ti-label">B2C Invoices</div>
+                    <div className="bd-ti-num">{b2c}</div>
+                    <div className="bd-ti-sub">{tiTotal > 0 ? Math.round(b2c / tiTotal * 100) : 0}% of total</div>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Quick Links */}
-            <div className="bp-card" style={{ padding: '18px 20px' }}>
-              <div style={{ fontWeight: 700, fontSize: 14.5, color: '#1e3a5f', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ background: '#f1f5f9', color: '#475569', width: 28, height: 28, borderRadius: 6, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><IcGear /></span>
+            <div className="bd-panel">
+              <div className="bd-panel-title">
+                <span className="bd-panel-ico" style={{ background: '#dbe8ff', color: '#1d4ed8' }}><IcGear /></span>
                 Quick Links
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {QUICK.map(({ label, to, Ic, color, bg }) => (
                   <Link key={to} to={to}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 8, textDecoration: 'none', fontSize: 12.5, fontWeight: 500, color: '#334155', transition: 'background .15s' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                    className="bd-quick"
                   >
-                    <span style={{ background: bg, color, width: 30, height: 30, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Ic /></span>
+                    <span style={{ background: bg, color, width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Ic /></span>
                     {label}
                   </Link>
                 ))}
@@ -301,16 +333,16 @@ export default function BillingDashboard() {
           </div>
 
           {/* ── ROW 3: RECENT DOCUMENTS ── */}
-          <div className="bp-card" style={{ padding: '18px 20px' }}>
+          <div className="bd-panel">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, fontSize: 14.5, color: '#1e3a5f', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ background: '#e8f0fe', color: '#2563eb', width: 28, height: 28, borderRadius: 6, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><IcLayers /></span>
+              <div className="bd-panel-title" style={{ marginBottom: 0 }}>
+                <span className="bd-panel-ico" style={{ background: '#dbe8ff', color: '#2563eb' }}><IcDoc /></span>
                 Recent Documents
               </div>
-              <Link to="/portal/billing/invoices" style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}>View All Documents →</Link>
+              <Link to="/portal/billing/invoices" style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}>View All Documents</Link>
             </div>
             <div style={{ overflowX: 'auto' }}>
-              <table className="bp-table bp-doc-table" style={{ width: '100%', fontSize: 13 }}>
+              <table className="bp-table bp-doc-table bd-table" style={{ width: '100%', fontSize: 13 }}>
                 <thead>
                   <tr>
                     <th style={{ width: 36 }}>#</th>
@@ -333,11 +365,7 @@ export default function BillingDashboard() {
                         <td><Link className="bp-doc-num-link" to={billingDocPath(d.type, d.id)}>{d.number}</Link></td>
                         <td>{formatDMY(d.document_date)}</td>
                         <td>{d.customer?.name || '—'}</td>
-                        <td>
-                          <span style={{ background: card?.bg || '#f1f5f9', color: card?.color || '#475569', borderRadius: 6, padding: '3px 10px', fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                            {docTypeLabel(d.type)}
-                          </span>
-                        </td>
+                        <td style={{ whiteSpace: 'nowrap', color: card?.color || '#334155', fontWeight: 600 }}>{docTypeLabel(d.type)}</td>
                         <td>{money(d.grand_total || d.total_amount)}</td>
                         <td><span className={`bp-badge ${paymentStatusBadge(d.status)}`}>{paymentStatusLabel(d.status)}</span></td>
                         <td style={{ whiteSpace: 'nowrap' }}>{formatDMYTime(d.created_at)}</td>

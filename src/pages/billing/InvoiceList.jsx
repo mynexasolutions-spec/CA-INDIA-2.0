@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import { useClientPortal } from '../../components/portal/PortalShell';
+import { useClientPortal } from '../../components/portal/ClientPortalContext';
 import { isDocTypeDisabled, isRetail, docTypeLock } from './billingProfile';
 import BillingDateFilters from './BillingDateFilters';
 import DocActionMenu from './DocActionMenu';
@@ -31,12 +31,8 @@ function PdfIcon() {
 
 /* ── GST badges ─────────────────────────────────────────────────── */
 function GstBadge({ type }) {
-  if (type === 'b2b') {
-    return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#e7f6ec', color: '#1d7a3c' }}>B2B</span>;
-  }
-  if (type === 'b2c') {
-    return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#fef9ec', color: '#b45309' }}>B2C</span>;
-  }
+  if (type === 'b2b') return <span className="il-badge il-b2b">B2B</span>;
+  if (type === 'b2c') return <span className="il-badge il-b2c">B2C</span>;
   return <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>;
 }
 
@@ -48,7 +44,7 @@ function gstTypeOf(row) {
 }
 
 /* ── action helpers (moved out of component for clarity) ─────── */
-function buildActions(d, { onConvert, onDuplicate, onSend, onMarkPaid, onCancel }) {
+function buildActions(d, { onConvert, onDuplicate, onSend, onMarkPaid, onCancel, convertLabel }) {
   const editPath = billingDocEditPath(d.type, d.id);
   const isIssuedFamily = ['issued', 'partial', 'paid'].includes(d.status);
   const canEditDraft = d.status === 'draft' && editPath;
@@ -75,7 +71,7 @@ function buildActions(d, { onConvert, onDuplicate, onSend, onMarkPaid, onCancel 
   const cancel = cancellable ? { label: 'Cancel', danger: true, onClick: () => onCancel(d) } : null;
 
   if (d.type === 'quotation') {
-    const convert = !d.converted_document_id && d.status !== 'cancelled' ? { label: 'Convert', onClick: () => onConvert(d) } : null;
+    const convert = !d.converted_document_id && d.status !== 'cancelled' ? { label: convertLabel || 'Convert', onClick: () => onConvert(d) } : null;
     return [view, editOrRequest, downloadPdf, send, duplicate, convert, cancel];
   }
   if (d.type === 'bill_of_supply') return [view, downloadPdf, editOrRequest, send, cancel];
@@ -88,18 +84,23 @@ function buildActions(d, { onConvert, onDuplicate, onSend, onMarkPaid, onCancel 
 /* ── Summary tiles (B2B/B2C) — shown only for tax_invoice ──────── */
 function SummaryTiles({ total, b2b, b2c }) {
   const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
-  const tile = (label, count, pctVal, color, bg) => (
-    <div style={{ flex: 1, minWidth: 160, background: bg, border: `1.5px solid ${color}22`, borderRadius: 12, padding: '14px 20px' }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 800, color, lineHeight: 1 }}>{count}</div>
-      {pctVal !== null && <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{pctVal}% of total</div>}
+  const tile = (cls, icon, label, count, pctVal, sub) => (
+    <div className={`il-tile ${cls}`}>
+      <span className="il-tile-ico">{icon}</span>
+      <div className="il-tile-body">
+        <span className="il-tile-label">{label}</span>
+        <span className="il-tile-num">{count}{pctVal !== null && <small>({pctVal}%)</small>}</span>
+        <span className="il-tile-sub">{sub}</span>
+      </div>
     </div>
   );
+  const docIc = <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="14" y2="17" /></svg>;
+  const peopleIc = <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
   return (
-    <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-      {tile('Total Tax Invoices', total, null, '#1e3a5f', '#f0f4fa')}
-      {tile('B2B Invoices', b2b, pct(b2b), '#15803d', '#f0faf4')}
-      {tile('B2C Invoices', b2c, pct(b2c), '#d97706', '#fffbeb')}
+    <div className="il-tiles">
+      {tile('is-total', docIc, 'Total Tax Invoices', total, null, 'All Tax Invoices issued in this financial year')}
+      {tile('is-b2b', peopleIc, 'B2B Tax Invoices', b2b, pct(b2b), 'Issued to GST registered customers')}
+      {tile('is-b2c', peopleIc, 'B2C Tax Invoices', b2c, pct(b2c), 'Issued to unregistered customers')}
     </div>
   );
 }
@@ -109,48 +110,30 @@ const TAB_DEFS = [
   { key: '', label: 'All Invoices' },
   { key: 'b2b', label: 'B2B Invoices' },
   { key: 'b2c', label: 'B2C Invoices' },
-  { key: 'cancelled', label: 'Cancelled' },
-  { key: 'deleted', label: 'Deleted' },
+  { key: 'cancelled', label: 'Cancelled Invoices' },
+  { key: 'deleted', label: 'Deleted Invoices' },
 ];
 const NON_GST_TABS = [
   { key: '', label: 'All' },
   { key: 'cancelled', label: 'Cancelled' },
 ];
 
-function TabBar({ tabs, active, onTab, counts, onExcelExport, onPdfExport }) {
+function TabBar({ tabs, active, onTab, counts, onExcelExport, onPdfExport, exporting }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderBottom: '2px solid #e2e8f0', marginBottom: 16, flexWrap: 'wrap' }}>
-      <div style={{ display: 'flex', flex: 1, gap: 0, overflowX: 'auto' }}>
+    <div className="il-tabbar">
+      <div className="il-tabs">
         {tabs.map((t) => {
           const cnt = counts?.[t.key] ?? null;
-          const isActive = active === t.key;
           return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => onTab(t.key)}
-              style={{
-                padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer',
-                fontWeight: isActive ? 700 : 500, fontSize: 13,
-                color: isActive ? '#1e3a5f' : '#64748b',
-                borderBottom: isActive ? '2.5px solid #1e3a5f' : '2.5px solid transparent',
-                marginBottom: -2, whiteSpace: 'nowrap',
-              }}
-            >
+            <button key={t.key} type="button" onClick={() => onTab(t.key)} className={`il-tab${active === t.key ? ' is-active' : ''}`}>
               {t.label}{cnt !== null ? ` (${cnt})` : ''}
             </button>
           );
         })}
       </div>
-      <div style={{ display: 'flex', gap: 8, padding: '6px 0 6px 12px', flexShrink: 0 }}>
-        <button type="button" onClick={onExcelExport}
-          style={{ height: 32, padding: '0 12px', borderRadius: 7, border: '1.5px solid #e2e8f0', background: '#fff', color: '#15803d', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
-          <ExcelIcon /> Export Excel
-        </button>
-        <button type="button" onClick={onPdfExport}
-          style={{ height: 32, padding: '0 12px', borderRadius: 7, border: '1.5px solid #e2e8f0', background: '#fff', color: '#dc2626', fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
-          <PdfIcon /> Export PDF
-        </button>
+      <div className="il-export">
+        <button type="button" onClick={onExcelExport} disabled={exporting} className="il-exp il-exp-xls"><ExcelIcon /> Export Excel</button>
+        <button type="button" onClick={onPdfExport} disabled={exporting} className="il-exp il-exp-pdf"><PdfIcon /> Export PDF</button>
       </div>
     </div>
   );
@@ -166,14 +149,25 @@ function TotalsBar({ rows, showGst }) {
   const total = rows.reduce((s, r) => s + Number(r.grand_total || r.total_amount || 0), 0);
   if (!rows.length) return null;
   return (
-    <div style={{ display: 'flex', gap: 0, background: '#f8fafc', borderTop: '2px solid #e2e8f0', padding: '10px 14px', fontSize: 13, fontWeight: 600, color: '#1e3a5f', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginTop: 2 }}>
-      <span style={{ color: '#64748b', fontWeight: 700 }}>Total (Filtered Results)</span>
-      <span>Taxable: <b>{money(taxable)}</b></span>
-      {showGst && <span>GST: <b>{money(gst)}</b></span>}
-      <span>Total: <b style={{ color: '#1e3a5f', fontSize: 14 }}>{money(total)}</b></span>
+    <div className="il-totals">
+      <span className="il-totals-ico">₹</span>
+      <span className="il-totals-title">Total (Filtered Results)</span>
+      <span className="il-totals-item"><b>{money(taxable)}</b><small>Taxable Value</small></span>
+      {showGst && <span className="il-totals-item"><b>{money(gst)}</b><small>GST</small></span>}
+      <span className="il-totals-item"><b>{money(total)}</b><small>Total</small></span>
     </div>
   );
 }
+
+/* Document No. / Date wording for each billing document (the filters and table follow it). */
+const DOC_WORDS = {
+  tax_invoice:      { no: 'Invoice No.',        date: 'Invoice Date',        item: 'invoice no.' },
+  bill_of_supply:   { no: 'Bill No.',           date: 'Bill Date',           item: 'bill no.' },
+  debit_note:       { no: 'Debit Note No.',     date: 'Debit Note Date',     item: 'debit note no.' },
+  credit_note:      { no: 'Credit Note No.',    date: 'Credit Note Date',    item: 'credit note no.' },
+  quotation:        { no: 'Quotation No.',      date: 'Quotation Date',      item: 'quotation no.' },
+  delivery_challan: { no: 'Challan No.',        date: 'Challan Date',        item: 'challan no.' },
+};
 
 /* ── Main component ──────────────────────────────────────────────── */
 export default function InvoiceList({ type = 'tax_invoice', title = 'Tax Invoices', newPath, createLabel }) {
@@ -184,6 +178,7 @@ export default function InvoiceList({ type = 'tax_invoice', title = 'Tax Invoice
   const disabled = isDocTypeDisabled(profile, type);
   const displayTitle = (isRetail(profile) && type === 'tax_invoice') ? 'Invoice' : title;
   const isTaxInvoice = type === 'tax_invoice';
+  const words = DOC_WORDS[type] || DOC_WORDS.tax_invoice;
   const showGst = type !== 'bill_of_supply';
 
   const fyDefault = currentFyRange();
@@ -264,14 +259,14 @@ export default function InvoiceList({ type = 'tax_invoice', title = 'Tax Invoice
     b2c: summary.b2c,
   } : {};
 
-  const buttonText = createLabel || createButtonLabel(type, profile);
+  const buttonText = String(createLabel || createButtonLabel(type, profile)).replace(/^\+\s*/, '');
 
   /* action handlers */
   const isComposition = profile?.dealer_type === 'composition';
   const doConvert = async (d) => {
     setMsg(''); setErr('');
     try {
-      const inv = await api(`/billing/documents/${d.id}/convert`, { method: 'POST', body: {} });
+      const inv = await api(`/billing/documents/${d.id}/convert`, { method: 'POST', body: { target_type: isComposition ? 'bill_of_supply' : 'tax_invoice' } });
       const dest = isComposition ? `/portal/billing/bill-of-supply/${inv.id}` : `/portal/billing/invoices/${inv.id}`;
       window.location.href = dest;
     } catch (e) { setErr(e.message || 'Failed to convert document.'); }
@@ -308,8 +303,42 @@ export default function InvoiceList({ type = 'tax_invoice', title = 'Tax Invoice
     finally { setCancelBusy(false); }
   };
 
-  const doExcelExport = () => alert('Excel export coming soon.');
-  const doPdfExport = () => alert('PDF export coming soon.');
+  /* Export: every row matching the current filters/tab (all pages), not just the visible page. */
+  const [exporting, setExporting] = useState(false);
+  const exportRows = async (format) => {
+    setExporting(true); setErr('');
+    try {
+      const qs = new URLSearchParams(buildQs(1));
+      qs.set('per_page', '1000'); qs.set('page', '1');
+      const d = await api(`/billing/documents?${qs.toString()}`);
+      const list = d.data || [];
+      if (!list.length) { setErr('There are no documents to export for the current filters.'); return; }
+      const head = ['Document No.', 'Date', 'Created On', 'Party', 'GSTIN', 'Taxable Value', 'IGST', 'CGST', 'SGST', 'Total Amount', 'Status'];
+      const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const body = list.map((r) => [
+        r.number, formatDMY(r.document_date), formatDMY(r.created_at), r.customer?.name || '', r.customer?.gstin || '',
+        Number(r.taxable_amount || 0).toFixed(2), Number(r.igst_amount || 0).toFixed(2), Number(r.cgst_amount || 0).toFixed(2),
+        Number(r.sgst_amount || 0).toFixed(2), Number(r.grand_total || r.total_amount || 0).toFixed(2), r.status,
+      ]);
+      const table = `<table border="1" cellspacing="0" cellpadding="5" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px"><thead><tr>${head.map((h) => `<th style="background:#e8f0fe">${esc(h)}</th>`).join('')}</tr></thead><tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      const title = `${docTypeLabel(type)} Register`;
+      if (format === 'xlsx') {
+        const blob = new Blob([`<html><head><meta charset="utf-8"></head><body><h3>${esc(title)}</h3>${table}</body></html>`], { type: 'application/vnd.ms-excel' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${type}_register.xls`; a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const w = window.open('', '_blank');
+        if (!w) { setErr('Please allow pop-ups to export the PDF.'); return; }
+        w.document.write(`<html><head><title>${esc(title)}</title></head><body style="margin:24px"><h3 style="font-family:Arial">${esc(title)}</h3>${table}</body></html>`);
+        w.document.close(); w.focus(); w.print();
+      }
+    } catch (e) { setErr(e.message || 'Export failed.'); }
+    finally { setExporting(false); }
+  };
+  const doExcelExport = () => exportRows('xlsx');
+  const doPdfExport = () => exportRows('pdf');
 
   /* column definitions per doc type */
   const isTaxInvOrDN = ['tax_invoice', 'debit_note', 'credit_note'].includes(type);
@@ -317,10 +346,20 @@ export default function InvoiceList({ type = 'tax_invoice', title = 'Tax Invoice
   return (
     <div>
       {/* toolbar */}
-      <div className="bp-toolbar">
-        <h2 style={{ margin: 0, flex: 1 }}>{displayTitle}</h2>
+      <div className="il-crumb"><Link to="/portal/billing">Billing</Link><span>›</span><b>{displayTitle}</b></div>
+      <div className="il-head">
+        <span className="il-head-ico">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="17" x2="13" y2="17" /></svg>
+        </span>
+        <div className="il-head-text">
+          <h2>{displayTitle}</h2>
+          <p>View and manage all {displayTitle} issued to your customers.</p>
+        </div>
         {!disabled && (
-          <Link className="bp-btn bp-btn-primary" to={newPath || '/portal/billing/invoices/new'}>{buttonText}</Link>
+          <Link className="il-create" to={newPath || '/portal/billing/invoices/new'}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+            {buttonText}
+          </Link>
         )}
       </div>
 
@@ -336,7 +375,7 @@ export default function InvoiceList({ type = 'tax_invoice', title = 'Tax Invoice
       {/* B2B/B2C summary tiles — only for tax_invoice */}
       {isTaxInvoice && <SummaryTiles total={summary.total} b2b={summary.b2b} b2c={summary.b2c} />}
 
-      <div className="bp-card" style={{ padding: '16px 20px' }}>
+      <div className="il-card">
         {/* tab bar + export buttons */}
         <TabBar
           tabs={tabs}
@@ -345,6 +384,7 @@ export default function InvoiceList({ type = 'tax_invoice', title = 'Tax Invoice
           counts={tabCounts}
           onExcelExport={doExcelExport}
           onPdfExport={doPdfExport}
+          exporting={exporting}
         />
 
         {/* filter bar */}
@@ -356,18 +396,20 @@ export default function InvoiceList({ type = 'tax_invoice', title = 'Tax Invoice
           to={to} setTo={setTo}
           gstType={gstType} setGstType={setGstType}
           showGstType={isTaxInvoice}
+          dateLabel={words.date}
+          searchHint={`Search by ${words.item}, party name, GSTIN`}
           onApply={applyFilters}
           onClear={applyFilters}
         />
 
         {/* table */}
         <div style={{ overflowX: 'auto' }}>
-          <table className="bp-table bp-doc-table">
+          <table className="bp-table bp-doc-table bd-table il-table">
             <thead>
               <tr>
                 <th style={{ width: 36 }}>#</th>
-                <th>Invoice No.</th>
-                <th>Invoice Date</th>
+                <th>{words.no}</th>
+                <th>{words.date}</th>
                 <th>Creation Date</th>
                 <th>Party Name</th>
                 {isTaxInvoice && <th>Customer Type</th>}
@@ -389,9 +431,9 @@ export default function InvoiceList({ type = 'tax_invoice', title = 'Tax Invoice
                     <td><Link className="bp-doc-num-link" to={billingDocPath(type, d.id)}>{d.number}</Link></td>
                     <td>{formatDMY(d.document_date)}</td>
                     <td style={{ fontSize: 12, color: '#64748b' }}>{formatDMY(d.created_at)}</td>
-                    <td>{d.customer?.name || '—'}</td>
+                    <td className="il-left">{d.customer?.name || '—'}</td>
                     {isTaxInvoice && <td><GstBadge type={gt} /></td>}
-                    <td style={{ fontSize: 12 }}>{d.customer?.gstin || (gt === 'b2c' ? 'Unregistered' : '—')}</td>
+                    <td style={{ fontSize: 12 }}>{d.customer?.gstin || (gt === 'b2c' ? '-' : '—')}</td>
                     <td>{money(d.taxable_amount)}</td>
                     {isTaxInvOrDN && (
                       <>
@@ -404,9 +446,9 @@ export default function InvoiceList({ type = 'tax_invoice', title = 'Tax Invoice
                     <td className="bp-doc-total">{money(d.grand_total || d.total_amount)}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' }}>
-                        <Link className="bp-btn bp-btn-outline" style={{ padding: '4px 10px', fontSize: 12 }} to={billingDocPath(type, d.id)}>View</Link>
+                        <Link className="il-view" to={billingDocPath(type, d.id)}>View</Link>
                         <DocActionMenu
-                          actions={buildActions(d, { onConvert: doConvert, onDuplicate: doDuplicate, onSend: doSend, onMarkPaid: doMarkPaid, onCancel: setCancelTarget })}
+                          actions={buildActions(d, { onConvert: doConvert, onDuplicate: doDuplicate, onSend: doSend, onMarkPaid: doMarkPaid, onCancel: setCancelTarget, convertLabel: isComposition ? 'Convert to Bill of Supply' : 'Convert to Tax Invoice' })}
                         />
                       </div>
                     </td>

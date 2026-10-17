@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Client;
 
+use App\Support\ExcelExport;
+
 use App\Http\Controllers\Controller;
 use App\Models\ClientGstr2bInvoice;
 use App\Models\ClientGstr2bProjectedInvoice;
@@ -132,10 +134,10 @@ class Gstr2bController extends Controller
         $periods = [];
         if ($freq === 'quarterly') {
             $quarters = [
-                ['key' => "{$fyStart}-Q1", 'label' => "Q1 Apr–Jun {$fyStart}",  'available_by' => Carbon::create($fyStart, 8, 14)],
-                ['key' => "{$fyStart}-Q2", 'label' => "Q2 Jul–Sep {$fyStart}",  'available_by' => Carbon::create($fyStart, 11, 14)],
-                ['key' => "{$fyStart}-Q3", 'label' => "Q3 Oct–Dec {$fyStart}",  'available_by' => Carbon::create($fyEnd, 2, 14)],
-                ['key' => "{$fyStart}-Q4", 'label' => "Q4 Jan–Mar {$fyEnd}",    'available_by' => Carbon::create($fyEnd, 5, 14)],
+                ['key' => "{$fyStart}-Q1", 'label' => "Q1 Apr–Jun {$fyStart}",  'available_by' => Carbon::create($fyStart, 7, 14)],
+                ['key' => "{$fyStart}-Q2", 'label' => "Q2 Jul–Sep {$fyStart}",  'available_by' => Carbon::create($fyStart, 10, 14)],
+                ['key' => "{$fyStart}-Q3", 'label' => "Q3 Oct–Dec {$fyStart}",  'available_by' => Carbon::create($fyEnd, 1, 14)],
+                ['key' => "{$fyStart}-Q4", 'label' => "Q4 Jan–Mar {$fyEnd}",    'available_by' => Carbon::create($fyEnd, 4, 14)],
             ];
             foreach ($quarters as $q) {
                 $rec       = $records->get($q['key']);
@@ -146,7 +148,8 @@ class Gstr2bController extends Controller
                     'period'       => $q['key'],
                     'label'        => $q['label'],
                     'available_on' => $rec?->created_at?->format('d M Y'),
-                    'status'       => $rec ? 'available' : ($now->gt($q['available_by']) ? 'upcoming' : 'upcoming'),
+                    'expected_on'  => $q['available_by']->format('d M Y'),
+                    'status'       => $rec ? 'available' : 'upcoming',
                     'total_itc'    => $totalItc,
                     'no_bills'     => $rec?->no_bills ?? false,
                 ];
@@ -164,6 +167,7 @@ class Gstr2bController extends Controller
                     'period'       => $key,
                     'label'        => Carbon::create($year, $month, 1)->format('M Y'),
                     'available_on' => $rec?->created_at?->format('d M Y'),
+                    'expected_on'  => Carbon::create($year, $month, 1)->addMonthNoOverflow()->day(14)->format('d M Y'),
                     'status'       => $rec ? 'available' : 'upcoming',
                     'total_itc'    => $totalItc,
                     'no_bills'     => $rec?->no_bills ?? false,
@@ -180,10 +184,13 @@ class Gstr2bController extends Controller
                 'business_name'    => $profile->business_name,
                 'gstin'            => $profile->gstin,
                 'filing_frequency' => $freq,
+                'registration_type' => $profile->registration_type ?: ($profile->dealer_type === 'composition' ? 'Composition' : 'Regular'),
             ],
             'last_gstr2b' => $lastRecord ? [
                 'period'       => $lastRecord->tax_period,
+                'label'        => collect($periods)->firstWhere('period', $lastRecord->tax_period)['label'] ?? $lastRecord->tax_period,
                 'available_on' => $lastRecord->created_at->format('d M Y'),
+                'total_itc'    => (float) ClientGstr2bInvoice::where('client_profile_id', $profileId)->where('tax_period', $lastRecord->tax_period)->sum('total_gst'),
             ] : null,
             'periods' => $periods,
         ]);
@@ -197,8 +204,12 @@ class Gstr2bController extends Controller
         $base = ClientGstr2bInvoice::where('client_profile_id', $profileId)
             ->where('tax_period', $period);
 
+        // The summary cards describe the whole tax period, whatever the table is filtered to.
+        $periodBase = clone $base;
+
         if ($ms = $request->input('match_status')) {
-            $base->where('match_status', $ms);
+            // "Unmatched" means anything not (yet) matched, which is how the summary counts it too.
+            $ms === 'unmatched' ? $base->where('match_status', '<>', 'matched') : $base->where('match_status', $ms);
         }
         if ($q = $request->input('q')) {
             $base->where(fn($w) => $w
@@ -211,7 +222,7 @@ class Gstr2bController extends Controller
         $dir  = $request->input('dir') === 'asc' ? 'asc' : 'desc';
         $data = (clone $base)->orderBy($sort, $dir)->paginate($perPage)->toArray();
 
-        $summaryRow = (clone $base)->selectRaw(
+        $summaryRow = (clone $periodBase)->selectRaw(
             'COUNT(*) AS total,
              SUM(CASE WHEN match_status = "matched" THEN 1 ELSE 0 END) AS matched,
              SUM(CASE WHEN match_status <> "matched" THEN 1 ELSE 0 END) AS unmatched,
@@ -230,6 +241,168 @@ class Gstr2bController extends Controller
         ];
 
         return response()->json($data);
+    }
+
+    private const PROJECTED_RULES = [
+        'invoice_date'   => 'required|date',
+        'invoice_number' => 'required|string|max:50',
+        'party_name'     => 'required|string|max:200',
+        'gstin'          => ['required', 'string', 'regex:/^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z][Zz][0-9A-Za-z]$/'],
+        'taxable_value'  => 'required|numeric|min:0',
+        'igst'           => 'nullable|numeric|min:0',
+        'cgst'           => 'nullable|numeric|min:0',
+        'sgst_utgst'     => 'nullable|numeric|min:0',
+        'itc_amount'     => 'nullable|numeric|min:0',
+    ];
+
+    private const PROJECTED_MESSAGES = [
+        'gstin.regex' => 'Enter a valid 15-character GSTIN (e.g. 27ABCDE1234F1Z5).',
+    ];
+
+    private const TEMPLATE_HEADINGS = ['Invoice Date', 'Invoice No.', 'Party Name', 'GSTIN', 'Taxable Value', 'IGST', 'CGST', 'SGST/UTGST', 'ITC Amount'];
+
+    /** Uppercase GSTIN; ITC amount defaults to IGST + CGST + SGST. */
+    private function normaliseProjected(array $d): array
+    {
+        $d['gstin'] = strtoupper(trim((string) ($d['gstin'] ?? '')));
+        foreach (['igst', 'cgst', 'sgst_utgst'] as $k) {
+            $d[$k] = isset($d[$k]) && $d[$k] !== '' ? (float) $d[$k] : 0.0;
+        }
+        if (! isset($d['itc_amount']) || $d['itc_amount'] === '' || $d['itc_amount'] === null) {
+            $d['itc_amount'] = round($d['igst'] + $d['cgst'] + $d['sgst_utgst'], 2);
+        }
+
+        return $d;
+    }
+
+    /** The predefined Excel template the client fills in and uploads. */
+    public function projectedTemplate(Request $request, string $period)
+    {
+        $this->profileId($request);
+
+        $sheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $ws = $sheet->getActiveSheet();
+        $ws->setTitle('Projected ITC');
+        $ws->fromArray(self::TEMPLATE_HEADINGS, null, 'A1');
+        $ws->fromArray([['2026-08-15', 'INV-001', 'ABC Traders Pvt Ltd', '27ABCDE1234F1Z5', 10000, 0, 900, 900, 1800]], null, 'A2');
+        $ws->getStyle('A1:I1')->getFont()->setBold(true);
+        $ws->getStyle('A1:I1')->getFill()->setFillType('solid')->getStartColor()->setRGB('E8F0FE');
+        foreach (range('A', 'I') as $col) {
+            $ws->getColumnDimension($col)->setWidth(20);
+        }
+        $ws->setCellValue('A4', 'Notes: Invoice Date, Invoice No., Party Name, GSTIN and Taxable Value are required. Fill either IGST or CGST + SGST/UTGST. ITC Amount is optional (defaults to IGST + CGST + SGST). Delete this sample row and these notes before uploading.');
+
+        $tmp = tempnam(sys_get_temp_dir(), 'pitc');
+        (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($sheet))->save($tmp);
+
+        return response()->download($tmp, 'gstr2b_projected_itc_template.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /** Validates the whole uploaded sheet first; nothing is imported unless every row is valid. */
+    public function projectedImport(Request $request, string $period)
+    {
+        $profileId = $this->profileId($request);
+        $request->validate(['file' => 'required|file|mimes:xlsx,xls,csv|max:5120'], [
+            'file.mimes' => 'Please upload the Excel template (.xlsx, .xls or .csv).',
+        ]);
+
+        try {
+            $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($request->file('file')->getRealPath());
+            $raw = $book->getActiveSheet()->toArray(null, true, false, false);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'The file could not be read. Please upload the Excel template without changing its columns.'], 422);
+        }
+
+        $norm = fn ($v) => strtolower(preg_replace('/[^a-z0-9]/i', '', (string) $v));
+        $head = array_map($norm, $raw[0] ?? []);
+        $required = array_slice(self::TEMPLATE_HEADINGS, 0, 5);
+        $missing = array_values(array_filter($required, fn ($h) => ! in_array($norm($h), $head, true)));
+        if ($missing) {
+            return response()->json(['message' => 'The file does not match the template. Missing column(s): '.implode(', ', $missing).'.'], 422);
+        }
+        $idx = array_flip($head);
+        $cell = fn (array $row, string $name) => isset($idx[$norm($name)]) ? ($row[$idx[$norm($name)]] ?? null) : null;
+
+        $fy = $request->input('financial_year');
+        if (! $fy) {
+            $parsed = Carbon::createFromFormat('Y-m', substr($period, 0, 7));
+            $year = $parsed ? (int) $parsed->format('Y') : (int) date('Y');
+            $month = $parsed ? (int) $parsed->format('m') : (int) date('m');
+            $fyStart = $month >= 4 ? $year : $year - 1;
+            $fy = $fyStart.'-'.substr($fyStart + 1, -2);
+        }
+
+        $rows = [];
+        $errors = [];
+        foreach (array_slice($raw, 1) as $i => $row) {
+            $line = $i + 2;
+            $row = array_values($row);
+            if (! array_filter($row, fn ($v) => $v !== null && trim((string) $v) !== '')) {
+                continue;
+            }
+            if (stripos(trim((string) ($row[0] ?? '')), 'notes:') === 0) {
+                continue;
+            }
+
+            $dateRaw = $cell($row, 'Invoice Date');
+            try {
+                $date = is_numeric($dateRaw)
+                    ? \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $dateRaw)->format('Y-m-d')
+                    : Carbon::createFromFormat(str_contains((string) $dateRaw, '/') ? 'd/m/Y' : 'Y-m-d', trim((string) $dateRaw))->format('Y-m-d');
+            } catch (\Throwable $e) {
+                $date = null;
+            }
+
+            $candidate = [
+                'invoice_date'   => $date,
+                'invoice_number' => trim((string) $cell($row, 'Invoice No.')),
+                'party_name'     => trim((string) $cell($row, 'Party Name')),
+                'gstin'          => strtoupper(trim((string) $cell($row, 'GSTIN'))),
+                'taxable_value'  => $cell($row, 'Taxable Value'),
+                'igst'           => $cell($row, 'IGST'),
+                'cgst'           => $cell($row, 'CGST'),
+                'sgst_utgst'     => $cell($row, 'SGST/UTGST'),
+                'itc_amount'     => $cell($row, 'ITC Amount'),
+            ];
+            foreach (['taxable_value', 'igst', 'cgst', 'sgst_utgst', 'itc_amount'] as $k) {
+                if ($candidate[$k] === '' || $candidate[$k] === null) {
+                    $candidate[$k] = null;
+                } elseif (is_string($candidate[$k])) {
+                    $candidate[$k] = str_replace(',', '', trim($candidate[$k]));
+                }
+            }
+
+            $v = \Illuminate\Support\Facades\Validator::make($candidate, self::PROJECTED_RULES, self::PROJECTED_MESSAGES);
+            if ($v->fails()) {
+                foreach ($v->errors()->all() as $m) {
+                    $errors[] = "Row {$line}: {$m}";
+                }
+                continue;
+            }
+            $clean = $this->normaliseProjected($v->validated());
+            if ($clean['igst'] > 0 && ($clean['cgst'] > 0 || $clean['sgst_utgst'] > 0)) {
+                $errors[] = "Row {$line}: Enter either IGST or CGST + SGST/UTGST, not both.";
+                continue;
+            }
+            $rows[] = $clean;
+        }
+
+        if ($errors) {
+            return response()->json(['message' => 'The file has errors. Nothing was imported - please correct these rows and upload again.', 'errors' => array_slice($errors, 0, 30)], 422);
+        }
+        if (! $rows) {
+            return response()->json(['message' => 'The file has no invoice rows to import.'], 422);
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($rows, $profileId, $fy, $period) {
+            foreach ($rows as $r) {
+                ClientGstr2bProjectedInvoice::create(['client_profile_id' => $profileId, 'financial_year' => $fy, 'tax_period' => $period, ...$r]);
+            }
+        });
+
+        return response()->json(['message' => count($rows).' invoice(s) imported successfully.', 'imported' => count($rows)], 201);
     }
 
     public function projectedIndex(Request $request, string $period)
@@ -257,17 +430,8 @@ class Gstr2bController extends Controller
             $fy      = $fyStart . '-' . substr($fyStart + 1, -2);
         }
 
-        $data = $request->validate([
-            'invoice_date'   => 'nullable|date',
-            'invoice_number' => 'nullable|string|max:50',
-            'party_name'     => 'nullable|string|max:200',
-            'gstin'          => 'nullable|string|max:20',
-            'taxable_value'  => 'nullable|numeric|min:0',
-            'igst'           => 'nullable|numeric|min:0',
-            'cgst'           => 'nullable|numeric|min:0',
-            'sgst_utgst'     => 'nullable|numeric|min:0',
-            'itc_amount'     => 'nullable|numeric|min:0',
-        ]);
+        $data = $request->validate(self::PROJECTED_RULES, self::PROJECTED_MESSAGES);
+        $data = $this->normaliseProjected($data);
 
         $inv = ClientGstr2bProjectedInvoice::create([
             'client_profile_id' => $profileId,
@@ -285,17 +449,8 @@ class Gstr2bController extends Controller
         $inv = ClientGstr2bProjectedInvoice::where('client_profile_id', $profileId)
             ->where('tax_period', $period)->findOrFail($id);
 
-        $data = $request->validate([
-            'invoice_date'   => 'nullable|date',
-            'invoice_number' => 'nullable|string|max:50',
-            'party_name'     => 'nullable|string|max:200',
-            'gstin'          => 'nullable|string|max:20',
-            'taxable_value'  => 'nullable|numeric|min:0',
-            'igst'           => 'nullable|numeric|min:0',
-            'cgst'           => 'nullable|numeric|min:0',
-            'sgst_utgst'     => 'nullable|numeric|min:0',
-            'itc_amount'     => 'nullable|numeric|min:0',
-        ]);
+        $data = $request->validate(self::PROJECTED_RULES, self::PROJECTED_MESSAGES);
+        $data = $this->normaliseProjected($data);
 
         $inv->update($data);
         return response()->json($inv->fresh());
@@ -308,60 +463,6 @@ class Gstr2bController extends Controller
             ->where('tax_period', $period)->findOrFail($id);
         $inv->delete();
         return response()->json(null, 204);
-    }
-
-    public function projectedExtract(Request $request, string $period)
-    {
-        $this->profileId($request); // auth check
-
-        $request->validate(['file' => 'required|file|mimes:jpg,jpeg,png,webp,pdf|max:10240']);
-
-        $file     = $request->file('file');
-        $mime     = $file->getMimeType();
-        $base64   = base64_encode(file_get_contents($file->getRealPath()));
-
-        $apiKey = config('services.anthropic.api_key');
-        abort_unless($apiKey, 503, 'AI extraction is not configured on this server.');
-
-        $isImage = str_starts_with($mime, 'image/');
-        $mediaType = $isImage ? ($mime === 'image/jpg' ? 'image/jpeg' : $mime) : 'application/pdf';
-
-        $systemPrompt = 'You are an invoice data extraction assistant. Extract structured invoice data from the provided invoice image or PDF and return ONLY a valid JSON object with these keys: invoice_date (YYYY-MM-DD), invoice_number, party_name, gstin, taxable_value (number), igst (number), cgst (number), sgst_utgst (number). Use null for missing fields. Do not include any explanation outside the JSON.';
-
-        $content = $isImage
-            ? [['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => $mediaType, 'data' => $base64]], ['type' => 'text', 'text' => 'Extract the invoice data from this image and return JSON.']]
-            : [['type' => 'document', 'source' => ['type' => 'base64', 'media_type' => 'application/pdf', 'data' => $base64]], ['type' => 'text', 'text' => 'Extract the invoice data from this PDF and return JSON.']];
-
-        $response = Http::withHeaders([
-            'x-api-key'         => $apiKey,
-            'anthropic-version' => '2023-06-01',
-        ])->post('https://api.anthropic.com/v1/messages', [
-            'model'      => 'claude-opus-4-5',
-            'max_tokens' => 512,
-            'system'     => $systemPrompt,
-            'messages'   => [['role' => 'user', 'content' => $content]],
-        ]);
-
-        abort_if($response->failed(), 502, 'AI extraction service returned an error.');
-
-        $text = $response->json('content.0.text', '');
-        // Strip any markdown code fences if present
-        $text = preg_replace('/^```[a-z]*\n?/', '', trim($text));
-        $text = preg_replace('/\n?```$/', '', $text);
-
-        $extracted = json_decode($text, true);
-        abort_if(!is_array($extracted), 422, 'Could not parse extracted invoice data.');
-
-        return response()->json([
-            'invoice_date'   => $extracted['invoice_date']   ?? null,
-            'invoice_number' => $extracted['invoice_number'] ?? null,
-            'party_name'     => $extracted['party_name']     ?? null,
-            'gstin'          => $extracted['gstin']          ?? null,
-            'taxable_value'  => is_numeric($extracted['taxable_value'] ?? null) ? (float) $extracted['taxable_value'] : null,
-            'igst'           => is_numeric($extracted['igst']          ?? null) ? (float) $extracted['igst']          : null,
-            'cgst'           => is_numeric($extracted['cgst']          ?? null) ? (float) $extracted['cgst']          : null,
-            'sgst_utgst'     => is_numeric($extracted['sgst_utgst']    ?? null) ? (float) $extracted['sgst_utgst']    : null,
-        ]);
     }
 
     public function index(Request $request)
@@ -468,23 +569,27 @@ class Gstr2bController extends Controller
     private function xlsxDownload(array $rows)
     {
         $headers = array_keys($rows[0] ?? ['value' => '']);
+        $esc = fn ($v) => htmlspecialchars((string) $v, ENT_QUOTES | ENT_XML1);
         $xml = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>';
-        $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="GSTR-2B"><Table>';
+        $xml .= ExcelExport::root();
+        $xml .= ExcelExport::styles();
+        $xml .= '<Worksheet ss:Name="GSTR-2B"><Table>'.ExcelExport::cols($headers, $rows);
         $xml .= '<Row>';
         foreach ($headers as $h) {
-            $xml .= '<Cell><Data ss:Type="String">'.htmlspecialchars((string) $h).'</Data></Cell>';
+            $xml .= '<Cell ss:StyleID="colHead"><Data ss:Type="String">'.$esc($h).'</Data></Cell>';
         }
         $xml .= '</Row>';
         foreach ($rows as $row) {
             $xml .= '<Row>';
-            foreach ($headers as $h) {
+            foreach ($headers as $ci => $h) {
                 $v = $row[$h] ?? '';
                 $typeAttr = is_numeric($v) ? 'Number' : 'String';
-                $xml .= '<Cell><Data ss:Type="'.$typeAttr.'">'.htmlspecialchars((string) $v).'</Data></Cell>';
+                $xml .= '<Cell ss:StyleID="'.($ci === 0 ? 'cellLabel' : 'cell').'"><Data ss:Type="'.$typeAttr.'">'.$esc(is_scalar($v) ? $v : json_encode($v)).'</Data></Cell>';
             }
             $xml .= '</Row>';
         }
-        $xml .= '</Table></Worksheet></Workbook>';
+        $xml .= '<Row></Row><Row><Cell ss:StyleID="footer"><Data ss:Type="String">'.$esc('Report Generated On: '.now()->format('d-m-Y')).'</Data></Cell></Row>';
+        $xml .= ExcelExport::end();
 
         return response($xml, 200, [
             'Content-Type' => 'application/vnd.ms-excel',

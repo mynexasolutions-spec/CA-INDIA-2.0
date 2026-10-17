@@ -286,7 +286,6 @@ export function getDocumentActionDisabledReason(action, docData, docTypeParam = 
 
   if (action === 'edit') {
     if (isDeleted) return 'Deleted documents cannot be edited.';
-    if (docTypeKey !== 'tax_invoice') return 'Only Tax Invoices can be edited.';
     if (isConverted) return 'Converted quotations cannot be edited.';
     if (isCancelled) return 'Cancelled documents cannot be edited.';
     if (!isActive) return 'Only active documents can be edited.';

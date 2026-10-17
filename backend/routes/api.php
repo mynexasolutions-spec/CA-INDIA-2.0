@@ -71,6 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/change-requests/history', [ClientChangeRequestController::class, 'history']);
             Route::post('/change-requests', [ClientChangeRequestController::class, 'store']);
             Route::post('/change-requests/assets/{field}', [ClientChangeRequestController::class, 'uploadAsset']);
+            Route::get('/layout-preview', [ClientChangeRequestController::class, 'layoutPreview'])->middleware('throttle:30,1');
             Route::get('/edit-requests', [ClientDocumentEditRequestController::class, 'index']);
             Route::get('/edit-requests/lookup', [ClientDocumentEditRequestController::class, 'lookup']);
             Route::post('/edit-requests', [ClientDocumentEditRequestController::class, 'store']);
@@ -108,7 +109,8 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('/gstr2b/period/{period}/invoices', [ClientGstr2bController::class, 'periodInvoices']);
                 Route::get('/gstr2b/period/{period}/projected', [ClientGstr2bController::class, 'projectedIndex']);
                 Route::post('/gstr2b/period/{period}/projected', [ClientGstr2bController::class, 'projectedStore']);
-                Route::post('/gstr2b/period/{period}/projected/extract', [ClientGstr2bController::class, 'projectedExtract']);
+                Route::get('/gstr2b/period/{period}/projected/template', [ClientGstr2bController::class, 'projectedTemplate']);
+                Route::post('/gstr2b/period/{period}/projected/import', [ClientGstr2bController::class, 'projectedImport']);
                 Route::put('/gstr2b/period/{period}/projected/{id}', [ClientGstr2bController::class, 'projectedUpdate']);
                 Route::delete('/gstr2b/period/{period}/projected/{id}', [ClientGstr2bController::class, 'projectedDestroy']);
                 Route::patch('/gstr2b/invoices/{invoiceId}/match-status', [ClientGstr2bController::class, 'updateMatchStatus']);

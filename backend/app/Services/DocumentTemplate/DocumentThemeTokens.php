@@ -12,11 +12,13 @@ class DocumentThemeTokens
         'slate_blue' => [
             'key' => 'slate_blue',
             'name' => 'Slate Blue',
-            'primary' => '#4A5F7A',
-            'dark' => '#34455C',
-            'light_tint' => '#E6EBF2',
+            // Matches the blue swatch the client picks in Settings > Layouts (#2563EB), so choosing
+            // "Slate Blue" gives a genuinely blue document.
+            'primary' => '#2563EB',
+            'dark' => '#1D4ED8',
+            'light_tint' => '#E6EEFD',
             'text_on_primary' => '#FFFFFF',
-            'rgb' => [0.290, 0.373, 0.478],
+            'rgb' => [0.145, 0.388, 0.922],
         ],
         'charcoal_grey' => [
             'key' => 'charcoal_grey',

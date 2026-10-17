@@ -124,6 +124,35 @@ class ClientLayoutController extends Controller
         ]);
     }
 
+    /**
+     * Makes a layout + colour the client's active design for all six document types.
+     * Shared by the admin's Layout tab and by approval of a client's Layout request.
+     */
+    public static function applyLayout(ClientProfile $profile, int $layoutId, string $colourScheme, ?string $appliedFrom = null): void
+    {
+        DB::transaction(function () use ($profile, $layoutId, $colourScheme, $appliedFrom) {
+            $profile->default_layout_id = $layoutId;
+            $profile->default_colour_scheme = $colourScheme;
+
+            if (! empty($appliedFrom)) {
+                $profile->layout_applied_from = $appliedFrom;
+            } elseif (! $profile->layout_applied_from) {
+                $profile->layout_applied_from = now()->toDateString();
+            }
+
+            $profile->layout_updated_at = now();
+            $profile->save();
+
+            // Overwrite all 6 client_document_settings rows with the new default layout & colour
+            foreach (array_keys(ClientDocumentSetting::DOCUMENT_TYPES) as $docType) {
+                ClientDocumentSetting::updateOrCreate(
+                    ['client_profile_id' => $profile->id, 'document_type' => $docType],
+                    ['layout_id' => $layoutId, 'colour_scheme' => $colourScheme]
+                );
+            }
+        });
+    }
+
     public function update(Request $request, int $clientId)
     {
         $this->assertClientsUnlocked($request);
@@ -135,36 +164,7 @@ class ClientLayoutController extends Controller
             'applied_from' => 'nullable|date',
         ]);
 
-        DB::transaction(function () use ($profile, $data) {
-            $layoutId = (int) $data['layout_id'];
-            $colourScheme = (string) $data['colour_scheme'];
-
-            $profile->default_layout_id = $layoutId;
-            $profile->default_colour_scheme = $colourScheme;
-
-            if (array_key_exists('applied_from', $data) && !empty($data['applied_from'])) {
-                $profile->layout_applied_from = $data['applied_from'];
-            } elseif (!$profile->layout_applied_from) {
-                $profile->layout_applied_from = now()->toDateString();
-            }
-
-            $profile->layout_updated_at = now();
-            $profile->save();
-
-            // Overwrite all 6 client_document_settings rows with the new default layout & colour
-            foreach (array_keys(ClientDocumentSetting::DOCUMENT_TYPES) as $docType) {
-                ClientDocumentSetting::updateOrCreate(
-                    [
-                        'client_profile_id' => $profile->id,
-                        'document_type' => $docType,
-                    ],
-                    [
-                        'layout_id' => $layoutId,
-                        'colour_scheme' => $colourScheme,
-                    ]
-                );
-            }
-        });
+        self::applyLayout($profile, (int) $data['layout_id'], (string) $data['colour_scheme'], $data['applied_from'] ?? null);
 
         $profile->refresh();
 

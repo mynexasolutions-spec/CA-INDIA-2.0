@@ -1,10 +1,10 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    Admin panel – polished dropdowns
-   Applies to every native <select> inside the admin shell. Selects that already
+   Applies to every native <select> inside the admin and client portal shells. Selects that already
    draw their own chevron (inline `appearance: none` + wrapper icon) are skipped
    so they do not get a double arrow.
    ───────────────────────────────────────────────────────────────────────────── */
-.bp-shell-admin select:not([multiple]):not([style*="appearance: none"]) {
+:is(.bp-shell-admin, .bp-shell-client) select:not([multiple]):not([style*="appearance: none"]) {
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
   appearance: none !important;
@@ -22,39 +22,39 @@
   transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
 }
 
-.bp-shell-admin select:not([multiple]):not([style*="appearance: none"]):hover:not(:disabled) {
+:is(.bp-shell-admin, .bp-shell-client) select:not([multiple]):not([style*="appearance: none"]):hover:not(:disabled) {
   border-color: #60a5fa;
   background-color: #f8fbff;
 }
 
-.bp-shell-admin select:not([multiple]):not([style*="appearance: none"]):focus {
+:is(.bp-shell-admin, .bp-shell-client) select:not([multiple]):not([style*="appearance: none"]):focus {
   outline: none;
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
 
-.bp-shell-admin select:disabled {
+:is(.bp-shell-admin, .bp-shell-client) select:disabled {
   cursor: not-allowed;
   opacity: 0.6;
   background-color: #f1f5f9;
 }
 
 /* Option list (honoured by Chromium / Firefox on desktop) */
-.bp-shell-admin select option {
+:is(.bp-shell-admin, .bp-shell-client) select option {
   padding: 8px 12px;
   color: #1e293b;
   background: #fff;
   font-weight: 500;
 }
 
-.bp-shell-admin select option:checked,
-.bp-shell-admin select option:hover {
+:is(.bp-shell-admin, .bp-shell-client) select option:checked,
+:is(.bp-shell-admin, .bp-shell-client) select option:hover {
   background: #dbeafe linear-gradient(#dbeafe, #dbeafe);
   color: #1e3a8a;
 }
 
 /* Selects that provide their own chevron still get the focus ring + hover */
-.bp-shell-admin select[style*="appearance: none"] {
+:is(.bp-shell-admin, .bp-shell-client) select[style*="appearance: none"] {
   cursor: pointer;
   outline: none;
 }
@@ -62,13 +62,13 @@
 /* Focus ring while the custom list is open. The chevron itself is left alone:
    selects with their own inline chevron/wrapper icon would otherwise tile a
    background-image across the whole field. */
-.bp-shell-admin select[data-ss-open] {
+:is(.bp-shell-admin, .bp-shell-client) select[data-ss-open] {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
 
 /* Plain selects (the ones that use the CSS chevron above) flip it while open */
-.bp-shell-admin select:not([multiple]):not([style*="appearance: none"])[data-ss-open] {
+:is(.bp-shell-admin, .bp-shell-client) select:not([multiple]):not([style*="appearance: none"])[data-ss-open] {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%231d4ed8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='18 15 12 9 6 15'/></svg>") !important;
   background-repeat: no-repeat !important;
   background-position: right 12px center !important;

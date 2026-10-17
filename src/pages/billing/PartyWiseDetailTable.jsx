@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useReportsEnv } from './ReportsContext';
 import PartyDocumentsModal from './PartyDocumentsModal';
-import { filterDocsByPeriod, money } from './billingUtils';
+import { filterDocsByPeriod, moneyFixed as money } from './billingUtils';
 
 /**
  * Party-wise Detail table with clickable Documents count.

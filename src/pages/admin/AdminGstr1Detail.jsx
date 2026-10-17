@@ -52,7 +52,7 @@ export default function AdminGstr1Detail({ returnType = 'GSTR1' }) {
   return (
     <div style={{ fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif", padding: '0 0 40px' }}>
       {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 13 }}>
+      <div className="gst-crumbs" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 13 }}>
         <Link to="/admin/gst-returns" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>
           GST Compliance
         </Link>
@@ -65,7 +65,7 @@ export default function AdminGstr1Detail({ returnType = 'GSTR1' }) {
       </div>
 
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+      <div className="gst-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#1e3a8a', lineHeight: 1.2 }}>
             {label} – Outward Supplies
@@ -104,7 +104,7 @@ export default function AdminGstr1Detail({ returnType = 'GSTR1' }) {
       </div>
 
       {/* 3 Info Cards */}
-      <div
+      <div className="gst-info3"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
@@ -404,7 +404,7 @@ export default function AdminGstr1Detail({ returnType = 'GSTR1' }) {
       </div>
 
       {/* Filing Periods Table */}
-      <div style={{ border: '1.5px solid #bfdbfe', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+      <div className="gst-periods" style={{ border: '1.5px solid #bfdbfe', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
           <thead>
             <tr style={{ background: '#0e3a6c' }}>

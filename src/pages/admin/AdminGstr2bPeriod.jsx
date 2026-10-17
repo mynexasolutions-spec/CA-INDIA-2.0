@@ -189,7 +189,7 @@ export default function AdminGstr2bPeriod() {
   return (
     <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", padding: '16px 20px 60px' }}>
       {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, fontSize: 13 }}>
+      <div className="gst-crumbs" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, fontSize: 13 }}>
         <Link to="/admin/gst-returns?tab=gstr-2b" style={bcLink}>
           GST Compliance
         </Link>
@@ -206,12 +206,12 @@ export default function AdminGstr2bPeriod() {
       </div>
 
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+      <div className="gst-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#1e3a8a', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
             GSTR-2B – {pLabel}
           </h1>
-          <div style={{ marginTop: 6, fontSize: 13, color: '#64748b', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="gst-meta" style={{ marginTop: 6, fontSize: 13, color: '#64748b', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ color: '#1e293b', fontWeight: 600 }}>{client.business_name}</span>
             <span style={{ color: '#cbd5e1' }}>|</span>
             <span>
@@ -277,7 +277,7 @@ export default function AdminGstr2bPeriod() {
       </div>
 
       {/* Two-column: ITC + Upload */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
+      <div className="gp-two" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
         {/* Left Card: ITC Balance & Adjustment */}
         <div style={{ background: '#fff', border: '1.5px solid #bfdbfe', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {/* Card Header */}
@@ -446,6 +446,7 @@ export default function AdminGstr2bPeriod() {
 
           {/* Adjustment Reason + Save */}
           <div
+            className="gp-adj"
             style={{
               padding: '13px 16px',
               borderTop: '1px solid #e2e8f0',
@@ -717,7 +718,7 @@ export default function AdminGstr2bPeriod() {
             )}
 
             {/* Buttons */}
-            <div style={{ display: 'flex', gap: 12, marginTop: 14 }}>
+            <div className="gp-actions" style={{ display: 'flex', gap: 12, marginTop: 14 }}>
               <button
                 type="button"
                 onClick={downloadPredefinedFormat}
@@ -794,7 +795,7 @@ export default function AdminGstr2bPeriod() {
           <span style={{ fontWeight: 700, fontSize: 15.5, color: '#1e3a8a' }}>GSTR-2B Summary</span>
         </div>
 
-        <div style={{ padding: '16px 18px', display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12 }}>
+        <div className="gp-six" style={{ padding: '16px 18px', display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12 }}>
           {[
             {
               label: 'Total Documents',
@@ -858,6 +859,7 @@ export default function AdminGstr2bPeriod() {
 
       {/* Uploaded GSTR-2B Documents Card */}
       <div
+        className="gp-view-card"
         style={{
           background: '#fff',
           border: '1.5px solid #bfdbfe',

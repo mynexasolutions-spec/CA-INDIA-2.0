@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, getAuthToken } from '../../api/client';
 import { LoadingBlock } from '../../components/Spinner';
-import { buildFyOptions, currentFyRange, money } from './billingUtils';
+import { buildFyOptions, currentFyRange, moneyFixed as money } from './billingUtils';
 import { useReportsEnv } from './ReportsContext';
 
 /* ── Icons ─────────────────────────────────────────────────── */
@@ -193,9 +193,9 @@ export default function HsnSummaryPage({
     <div style={{ maxWidth: '100%' }}>
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
+      <div className="gs-head gl-head" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 44, height: 44, background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div className="gl-head-ic" style={{ width: 44, height: 44, background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
             </svg>
@@ -220,7 +220,7 @@ export default function HsnSummaryPage({
       </div>
 
       {/* ── Filter Bar ─────────────────────────────────────── */}
-      <div className="bp-card" style={{ marginBottom: 20, padding: '14px 18px' }}>
+      <div className="bp-card gs-filter" style={{ marginBottom: 20, padding: '14px 18px' }}>
         {/* Row 1 */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
           {/* Quick pills */}
@@ -322,10 +322,10 @@ export default function HsnSummaryPage({
       </div>
 
       {/* ── KPI Cards ──────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 20 }}>
+      <div className="gl-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 20 }}>
         {/* Total HSN Codes */}
-        <div style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#eff6ff,#dbeafe)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>
+        <div className="gl-kpi" style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#eff6ff,#dbeafe)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div className="gl-kpi-ic" style={{ width: 44, height: 44, borderRadius: 12, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
             </svg>
@@ -338,8 +338,8 @@ export default function HsnSummaryPage({
         </div>
 
         {/* Total SAC Codes */}
-        <div style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#f0fdf4,#dcfce7)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>
+        <div className="gl-kpi" style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#f0fdf4,#dcfce7)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div className="gl-kpi-ic" style={{ width: 44, height: 44, borderRadius: 12, background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
               <path d="M14 17h3m0 0h3m-3 0v-3m0 3v3"/>
@@ -353,8 +353,8 @@ export default function HsnSummaryPage({
         </div>
 
         {/* Total Quantity */}
-        <div style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#fff7ed,#fed7aa)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>
+        <div className="gl-kpi" style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#fff7ed,#fed7aa)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div className="gl-kpi-ic" style={{ width: 44, height: 44, borderRadius: 12, background: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
             </svg>
@@ -367,8 +367,8 @@ export default function HsnSummaryPage({
         </div>
 
         {/* Total Taxable Value */}
-        <div style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#faf5ff,#e9d5ff)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>
+        <div className="gl-kpi" style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#faf5ff,#e9d5ff)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div className="gl-kpi-ic" style={{ width: 44, height: 44, borderRadius: 12, background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>
             <svg width="22" height="22" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="16" cy="16" r="12" stroke="white" strokeWidth="1.8" fill="none"/>
               <text x="16" y="21" textAnchor="middle" fontSize="14" fontWeight="800" fill="white" stroke="none">₹</text>
@@ -382,8 +382,8 @@ export default function HsnSummaryPage({
         </div>
 
         {/* Total GST Amount */}
-        <div style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#eff6ff,#dbeafe)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>
+        <div className="gl-kpi" style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#eff6ff,#dbeafe)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div className="gl-kpi-ic" style={{ width: 44, height: 44, borderRadius: 12, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginBottom: 10 }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
               <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>
@@ -398,7 +398,7 @@ export default function HsnSummaryPage({
       </div>
 
       {/* ── Table ──────────────────────────────────────────── */}
-      <div className="bp-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
+      <div className="bp-card hs-table" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
         {/* Report period bar */}
         <div style={{ padding: '11px 18px', borderBottom: '1px solid var(--bp-border)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#f8fafc' }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--bp-navy)' }}>
@@ -487,7 +487,7 @@ export default function HsnSummaryPage({
       </div>
 
       {/* ── Pagination ─────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 13, color: '#64748b' }}>
+      <div className="hs-pager" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 13, color: '#64748b' }}>
         <span>Showing {total === 0 ? 0 : (safePage - 1) * pageSize + 1} to {Math.min(safePage * pageSize, total)} of {total} entries</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {/* First */}
@@ -499,7 +499,7 @@ export default function HsnSummaryPage({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>Rows per page</span>
-          <select className="bp-select" style={{ height: 32, width: 72 }} value={pageSize}
+          <select className="bp-select pg-rows" style={{ height: 32, width: 72 }} value={pageSize}
             onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}>
             {PAGE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>

@@ -171,9 +171,9 @@ export default function AdminStaff() {
       </div>
 
       {/* 4 Summary / KPI Cards matching screenshot */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+      <div className="ss-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
         {/* Card 1: Total Sub-Users */}
-        <div style={{
+        <div className="ss-card" style={{
           background: '#eff6ff',
           border: '1.5px solid #bfdbfe',
           borderRadius: 12,
@@ -182,7 +182,7 @@ export default function AdminStaff() {
           alignItems: 'center',
           gap: 14,
         }}>
-          <div style={{
+          <div className="ss-ic" style={{
             width: 44,
             height: 44,
             borderRadius: 10,
@@ -211,7 +211,7 @@ export default function AdminStaff() {
         </div>
 
         {/* Card 2: Active Users */}
-        <div style={{
+        <div className="ss-card" style={{
           background: '#f0fdf4',
           border: '1.5px solid #bbf7d0',
           borderRadius: 12,
@@ -220,7 +220,7 @@ export default function AdminStaff() {
           alignItems: 'center',
           gap: 14,
         }}>
-          <div style={{
+          <div className="ss-ic" style={{
             width: 40,
             height: 40,
             borderRadius: '50%',
@@ -246,7 +246,7 @@ export default function AdminStaff() {
         </div>
 
         {/* Card 3: Inactive Users */}
-        <div style={{
+        <div className="ss-card" style={{
           background: '#fef2f2',
           border: '1.5px solid #fecaca',
           borderRadius: 12,
@@ -255,7 +255,7 @@ export default function AdminStaff() {
           alignItems: 'center',
           gap: 14,
         }}>
-          <div style={{
+          <div className="ss-ic" style={{
             width: 40,
             height: 40,
             borderRadius: '50%',
@@ -282,7 +282,7 @@ export default function AdminStaff() {
         </div>
 
         {/* Card 4: Roles Assigned */}
-        <div style={{
+        <div className="ss-card" style={{
           background: '#fffbeb',
           border: '1.5px solid #fde68a',
           borderRadius: 12,
@@ -291,7 +291,7 @@ export default function AdminStaff() {
           alignItems: 'center',
           gap: 14,
         }}>
-          <div style={{
+          <div className="ss-ic" style={{
             width: 44,
             height: 44,
             borderRadius: 10,
@@ -365,7 +365,7 @@ export default function AdminStaff() {
         </div>
 
         {/* Filter Strip with search, Status, and Role dropdowns */}
-        <div style={{
+        <div className="ss-filter" style={{
           padding: '12px 20px',
           borderBottom: '1.5px solid #e2e8f0',
           display: 'flex',
@@ -373,7 +373,7 @@ export default function AdminStaff() {
           gap: 14,
         }}>
           {/* Search by name, email or role */}
-          <div style={{ position: 'relative', flex: 1, maxWidth: 380 }}>
+          <div className="ss-search" style={{ position: 'relative', flex: 1, maxWidth: 380 }}>
             <svg
               width="15"
               height="15"
@@ -494,7 +494,7 @@ export default function AdminStaff() {
         </div>
 
         {/* Table */}
-        <div style={{ overflowX: 'auto' }}>
+        <div className="cfg-scroll" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
@@ -818,7 +818,7 @@ export default function AdminStaff() {
         </div>
 
         {/* Footer matching screenshot */}
-        <div style={{
+        <div className="cfg-foot" style={{
           padding: '14px 20px',
           borderTop: '1.5px solid #e2e8f0',
           display: 'flex',
@@ -831,7 +831,7 @@ export default function AdminStaff() {
             Showing {fromRow} to {toRow} of {total} entries
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div className="cfg-pager" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {/* Prev button */}
             <button
               type="button"
@@ -1030,7 +1030,7 @@ function SubUserModal({ mode, user, onClose }) {
 
         <form onSubmit={save}>
           <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="cm-modal-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 5 }}>
                   Full Name <span style={{ color: '#ef4444' }}>*</span>
@@ -1072,7 +1072,7 @@ function SubUserModal({ mode, user, onClose }) {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="cm-modal-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 5 }}>
                   Role <span style={{ color: '#ef4444' }}>*</span>
@@ -1120,7 +1120,7 @@ function SubUserModal({ mode, user, onClose }) {
             </div>
 
             {mode === 'add' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="cm-modal-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 5 }}>
                     Password <span style={{ color: '#ef4444' }}>*</span>
@@ -1497,7 +1497,7 @@ function AssignClientsModal({ user, onClose }) {
         let list = asgn.clients ?? [];
         if (!list || list.length === 0) {
           try {
-            const cl = await api('/admin/clients?per_page=100');
+            const cl = await api('/admin/clients?per_page=100&directory=1');
             list = cl.data ?? cl.clients ?? (Array.isArray(cl) ? cl : []);
           } catch (e) {
             console.error(e);
@@ -1615,7 +1615,7 @@ function AssignClientsModal({ user, onClose }) {
   const isAllSelected = filtered.length > 0 && filtered.every(c => selected.has(c.id));
 
   return (
-    <div
+    <div className="as-modal"
       style={{
         position: 'fixed',
         inset: 0,
@@ -1629,7 +1629,7 @@ function AssignClientsModal({ user, onClose }) {
       }}
       onClick={(e) => e.target === e.currentTarget && onClose(false)}
     >
-      <div
+      <div className="as-modal-box"
         style={{
           background: '#fff',
           borderRadius: 14,
@@ -1644,7 +1644,7 @@ function AssignClientsModal({ user, onClose }) {
         }}
       >
         {/* Header matching screenshot */}
-        <div
+        <div className="as-modal-head"
           style={{
             background: '#155dfc',
             padding: '18px 26px',
@@ -1685,9 +1685,9 @@ function AssignClientsModal({ user, onClose }) {
         </div>
 
         {/* Modal Scrollable Content */}
-        <div style={{ padding: '20px 26px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div className="as-modal-body" style={{ padding: '20px 26px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* Sub-User Info Strip */}
-          <div
+          <div className="as-modal-user"
             style={{
               background: '#eff6ff',
               border: '1.5px solid #dbeafe',
@@ -1729,7 +1729,7 @@ function AssignClientsModal({ user, onClose }) {
           </div>
 
           {/* 2 Columns: Client Selection (Left) and Module Access (Right) */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.25fr', gap: 24, alignItems: 'start' }}>
+          <div className="ss-assign2" style={{ display: 'grid', gridTemplateColumns: '1fr 1.25fr', gap: 24, alignItems: 'start' }}>
             {/* Left Column: Select Client(s) */}
             <div>
               <div style={{ fontWeight: 800, fontSize: 15, color: '#0f172a', marginBottom: 10 }}>
@@ -1771,7 +1771,7 @@ function AssignClientsModal({ user, onClose }) {
               </div>
 
               {/* Clients Table */}
-              <div
+              <div className="as-client-tbl"
                 style={{
                   border: '1.5px solid #e2e8f0',
                   borderRadius: 8,
@@ -2207,7 +2207,7 @@ function AssignClientsModal({ user, onClose }) {
         </div>
 
         {/* Footer matching screenshot */}
-        <div
+        <div className="as-modal-foot"
           style={{
             padding: '16px 26px',
             borderTop: '1.5px solid #e2e8f0',

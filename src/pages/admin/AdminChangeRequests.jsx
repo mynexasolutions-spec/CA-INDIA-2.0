@@ -186,6 +186,12 @@ export function AdminChangeRequestDetail() {
               <strong style={{ textAlign: 'right', maxWidth: '55%' }}>{approved.text?.[k] || '—'}</strong>
             </div>
           ))}
+          {data.section === 'layout' && approved.layout && (
+            <div className="bp-gst-row" style={{ fontSize: 13 }}>
+              <span>Layout &amp; Colour</span>
+              <strong style={{ textAlign: 'right' }}>Layout {approved.layout.layout_id} · {String(approved.layout.colour_scheme).replace(/_/g, ' ')}</strong>
+            </div>
+          )}
         </div>
 
         <div className="bp-card">
@@ -213,6 +219,12 @@ export function AdminChangeRequestDetail() {
               </div>
             );
           })}
+          {data.section === 'layout' && proposed.layout && (
+            <div className="bp-gst-row" style={{ fontSize: 13, background: '#fff8e6' }}>
+              <span>Layout &amp; Colour</span>
+              <strong style={{ textAlign: 'right' }}>Layout {proposed.layout.layout_id} · {String(proposed.layout.colour_scheme).replace(/_/g, ' ')}</strong>
+            </div>
+          )}
         </div>
       </div>
 

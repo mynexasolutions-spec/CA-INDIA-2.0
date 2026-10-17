@@ -208,7 +208,7 @@ export default function AdminCmp08Detail() {
     <div style={{ fontFamily: "'Inter',system-ui,sans-serif", padding: '4px 0 48px', color: '#1e293b' }}>
 
       {/* Header & Breadcrumb */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+      <div className="gst-head gst-head-list" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.3px' }}>
             CMP-08 – Client Details <span style={{ fontWeight: 500, color: '#475569', fontSize: 17 }}>(Admin Portal)</span>
@@ -219,7 +219,7 @@ export default function AdminCmp08Detail() {
         </div>
 
         {/* Top-Right Breadcrumb */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 500 }}>
+        <div className="gst-crumbs gst-crumbs-right" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 500 }}>
           <Link to="/admin/gst-returns" style={{ color: '#2563eb', textDecoration: 'none' }}>
             GST Compliance
           </Link>
@@ -233,7 +233,7 @@ export default function AdminCmp08Detail() {
       </div>
 
       {/* Client Info Strip */}
-      <div style={{
+      <div className="cm-strip" style={{
         background: '#fff',
         border: '1.5px solid #bfdbfe',
         borderRadius: 10,
@@ -245,7 +245,7 @@ export default function AdminCmp08Detail() {
         flexWrap: 'wrap',
         gap: 14,
       }}>
-        <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div className="cm-strip-fields" style={{ display: 'flex', gap: 32, flexWrap: 'wrap', alignItems: 'center' }}>
           <div>
             <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 500, marginBottom: 2 }}>Client Name</div>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8' }}>{client?.business_name || '—'}</div>
@@ -313,7 +313,7 @@ export default function AdminCmp08Detail() {
       {request.statusBar}
 
       {/* 6 Stat Cards Strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 18 }}>
+      <div className="cm-stats6" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 18 }}>
         {/* Card 1: Total Taxable Turnover */}
         <div style={{
           background: '#eff6ff',
@@ -458,7 +458,7 @@ export default function AdminCmp08Detail() {
       </div>
 
       {/* Section 1: Turnover & Tax Liability Details */}
-      <div style={{
+      <div className="cm-table-card" style={{
         background: '#fff',
         border: '1.5px solid #bfdbfe',
         borderRadius: 10,
@@ -607,7 +607,7 @@ export default function AdminCmp08Detail() {
       </div>
 
       {/* Section 2: Adjustment Details */}
-      <div style={{
+      <div className="cm-table-card" style={{
         background: '#fff',
         border: '1.5px solid #bfdbfe',
         borderRadius: 10,
@@ -732,10 +732,10 @@ export default function AdminCmp08Detail() {
       </div>
 
       {/* Section 3 & 4 (Grid: 1fr 1.5fr) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 16, marginBottom: 18 }}>
+      <div className="cm-two" style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 16, marginBottom: 18 }}>
 
         {/* 3. Net Tax Payable */}
-        <div style={{
+        <div className="cm-table-card" style={{
           background: '#fff',
           border: '1.5px solid #bfdbfe',
           borderRadius: 10,
@@ -787,7 +787,7 @@ export default function AdminCmp08Detail() {
         </div>
 
         {/* 4. Tax Payment Details */}
-        <div style={{
+        <div className="cm-table-card" style={{
           background: '#fff',
           border: '1.5px solid #bfdbfe',
           borderRadius: 10,
@@ -923,12 +923,12 @@ export default function AdminCmp08Detail() {
           }}
         />
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="cm-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             {saveMsg && <span style={{ fontSize: 13, color: '#16a34a', fontWeight: 600 }}>{saveMsg}</span>}
             {saveErr && <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 600 }}>{saveErr}</span>}
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div className="cm-actions-btns" style={{ display: 'flex', gap: 10 }}>
             <button
               onClick={() => saveAll(null, null, null, remarks)}
               style={{
@@ -984,7 +984,7 @@ export default function AdminCmp08Detail() {
       {/* Payment Entry Modal */}
       {payModal && (
         <ModalWrap title={payEditIdx !== null ? 'Edit Payment Entry' : 'Add Payment Entry'} onClose={() => setPayModal(false)}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+          <div className="cm-modal-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
             <div>
               <label style={modalLbl}>Payment Date</label>
               <input
@@ -1144,7 +1144,7 @@ export default function AdminCmp08Detail() {
 
 function ModalWrap({ title, onClose, children }) {
   return (
-    <div style={{
+    <div className="cm-modal" style={{
       position: 'fixed',
       inset: 0,
       background: 'rgba(15, 23, 42, 0.45)',
@@ -1154,7 +1154,7 @@ function ModalWrap({ title, onClose, children }) {
       justifyContent: 'center',
       backdropFilter: 'blur(2px)',
     }}>
-      <div style={{
+      <div className="cm-modal-box" style={{
         background: '#fff',
         borderRadius: 12,
         width: 480,

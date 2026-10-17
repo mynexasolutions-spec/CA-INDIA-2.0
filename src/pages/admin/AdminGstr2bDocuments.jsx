@@ -183,7 +183,7 @@ export default function AdminGstr2bDocuments() {
   return (
     <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", padding: '16px 20px 60px' }}>
       {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, fontSize: 13 }}>
+      <div className="gst-crumbs" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, fontSize: 13 }}>
         <Link to="/admin/gst-returns?tab=gstr-2b" style={bcLink}>
           GST Compliance
         </Link>
@@ -204,12 +204,12 @@ export default function AdminGstr2bDocuments() {
       </div>
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+      <div className="gst-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#1e3a8a', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
             Uploaded GSTR-2B Documents – {pLabel}
           </h1>
-          <div style={{ marginTop: 6, fontSize: 13, color: '#64748b', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="gst-meta" style={{ marginTop: 6, fontSize: 13, color: '#64748b', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ color: '#1e293b', fontWeight: 600 }}>{client.business_name || '—'}</span>
             <span style={{ color: '#cbd5e1' }}>|</span>
             <span>

@@ -129,7 +129,7 @@ export default function AdminBillingClientDashboard() {
             margin: '40px auto',
           }}
         >
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+          <div style={{ marginBottom: 12, color: '#64748b', display: 'flex', justifyContent: 'center' }}><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg></div>
           <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>
             Client Not Found
           </h2>
@@ -372,6 +372,7 @@ export default function AdminBillingClientDashboard() {
 
       {/* 3. 7 Summary Cards (Single Row of 7 cards matching Mockup) */}
       <div
+        className="abd-tiles"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(7, minmax(125px, 1fr))',
@@ -383,6 +384,7 @@ export default function AdminBillingClientDashboard() {
       >
         {/* Card 1: Total Documents (Count only, NO link) */}
         <div
+          className="abd-tile"
           style={{
             background: '#f8fafc',
             border: '1px solid #e2e8f0',
@@ -397,6 +399,7 @@ export default function AdminBillingClientDashboard() {
         >
           <div>
             <div
+              className="abd-tile-ic"
               style={{
                 width: 36,
                 height: 36,
@@ -414,7 +417,7 @@ export default function AdminBillingClientDashboard() {
             <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', lineHeight: 1.2 }}>
               Total Documents
             </div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', marginTop: 4, lineHeight: 1.1 }}>
+            <div className="abd-tile-num" style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', marginTop: 4, lineHeight: 1.1 }}>
               {Number(cards.total ?? 0).toLocaleString('en-IN')}
             </div>
           </div>
@@ -429,6 +432,7 @@ export default function AdminBillingClientDashboard() {
           return (
             <div
               key={t.key}
+              className="abd-tile"
               style={{
                 background: t.bg,
                 border: `1px solid ${t.borderColor}`,
@@ -443,6 +447,7 @@ export default function AdminBillingClientDashboard() {
             >
               <div>
                 <div
+                  className="abd-tile-ic"
                   style={{
                     width: 36,
                     height: 36,
@@ -471,6 +476,7 @@ export default function AdminBillingClientDashboard() {
                   {t.pluralLabel}
                 </div>
                 <div
+                  className="abd-tile-num"
                   style={{
                     fontSize: 22,
                     fontWeight: 800,
@@ -509,7 +515,7 @@ export default function AdminBillingClientDashboard() {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))',
           gap: 20,
         }}
       >

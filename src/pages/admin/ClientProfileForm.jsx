@@ -114,8 +114,24 @@ const empty = () => ({
   updated_at: '',
 });
 
+/** Section heading: icon tile + title with a hairline underneath. */
+function SectionHead({ icon, title, style }) {
+  const paths = {
+    briefcase: (<><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></>),
+    pin: (<><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></>),
+  };
+  return (
+    <div className="cp-sec-head" style={style}>
+      <span className="cp-sec-ic">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[icon]}</svg>
+      </span>
+      <span className="cp-sec-title">{title}</span>
+    </div>
+  );
+}
+
 function TabIcon({ name, active }) {
-  const stroke = active ? '#2563eb' : '#475569';
+  const stroke = active ? '#ffffff' : '#475569';
   switch (name) {
     case 'personal':
       return (
@@ -257,6 +273,7 @@ function Field({ label, required, children, full, hint }) {
 function RegCard({ title, icon, enabled, onToggle, isEditing, children, span2 = false }) {
   return (
     <div
+      className="rc-card"
       style={{
         background: '#ffffff',
         border: '1px solid #e2e8f0',
@@ -283,8 +300,8 @@ function RegCard({ title, icon, enabled, onToggle, isEditing, children, span2 = 
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {icon}
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#1e3a8a' }}>{title}</span>
+            <span className="rc-ic">{icon}</span>
+            <span className="rc-title" style={{ fontSize: 13, fontWeight: 700, color: '#1e3a8a' }}>{title}</span>
           </div>
           <button
             type="button"
@@ -1520,7 +1537,7 @@ export default function ClientProfileForm() {
   };
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60 }}>
+    <div className="cp-page" style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60 }}>
       {/* Breadcrumb & Title */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 12.5, color: 'var(--bp-muted, #64748b)', marginBottom: 6 }}>
@@ -1695,7 +1712,7 @@ export default function ClientProfileForm() {
                 transition: 'all 0.15s ease',
               }}
             >
-              <TabIcon name={t.icon} active={isActive} />
+              <span className="cp-tab-ic"><TabIcon name={t.icon} active={isActive} /></span>
               <span>{t.label}</span>
             </button>
           );
@@ -1703,13 +1720,14 @@ export default function ClientProfileForm() {
       </div>
 
       {/* Main Tab Content Card */}
-      <div className="bp-card" style={{ padding: 24, background: '#ffffff', borderRadius: 12, border: '1px solid var(--bp-border, #e2e8f0)' }}>
+      <div className="bp-card cp-panel" style={{ padding: 24, background: '#ffffff', borderRadius: 12, border: '1px solid var(--bp-border, #e2e8f0)' }}>
         {/* Tab 1: Personal Information */}
         {tab === 'personal' && (
           <div>
             {/* Tab Header inside Card */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
+            <div className="cp-tab-head" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
               <div
+                className="cp-tab-head-ic"
                 style={{
                   width: 36,
                   height: 36,
@@ -2104,9 +2122,20 @@ export default function ClientProfileForm() {
         {/* Tab 2: Business Information */}
         {tab === 'business' && (
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1d4ed8', marginBottom: 16 }}>
-              Business Details
-            </h3>
+            <div className="cp-tab-head" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
+              <div className="cp-tab-head-ic" style={{ width: 36, height: 36, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                </svg>
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1d4ed8' }}>Business Details</h3>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748b' }}>
+                  Manage business name, constitution, type, incorporation date, website and registered office address.
+                </p>
+              </div>
+            </div>
             <div className="cp-grid">
               <Field label="Business Name">
                 <input
@@ -2160,9 +2189,7 @@ export default function ClientProfileForm() {
             </div>
 
             {/* Registered Office Address — same shared component and same stored fields as Personal Information */}
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1d4ed8', margin: '24px 0 16px' }}>
-              Registered Office Address
-            </h3>
+            <SectionHead icon="pin" title="Registered Office Address" style={{ margin: '24px 0 12px' }} />
             <AddressFields
               values={form}
               onChange={(k, v) => set(k, v)}
@@ -2176,8 +2203,9 @@ export default function ClientProfileForm() {
         {tab === 'registration' && (
           <div>
             {/* Tab Header Banner */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            <div className="cp-tab-head" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
               <div
+                className="cp-tab-head-ic"
                 style={{
                   width: 36,
                   height: 36,
@@ -2850,7 +2878,7 @@ export default function ClientProfileForm() {
                     <span style={{ fontSize: 13, fontWeight: 700, color: '#1e3a8a' }}>Portal Credentials</span>
                   </div>
 
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <table className="cp-cred-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: 11, textAlign: 'left' }}>
                         <th style={{ padding: '6px 8px', fontWeight: 600, width: '22%' }}>Portal / Service</th>
@@ -3077,6 +3105,7 @@ export default function ClientProfileForm() {
           <div>
             {/* Header Banner */}
             <div
+              className="cp-stack-head"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -4627,8 +4656,8 @@ export default function ClientProfileForm() {
                     Login Activity
                   </div>
 
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
+                  <div className="cp-log-scroll" style={{ overflowX: 'auto' }}>
+                    <table className="cp-compact-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
                       <thead>
                         <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
                           <th style={{ padding: '9px 12px', width: 40, fontWeight: 600, textAlign: 'center' }}>#</th>
@@ -4691,7 +4720,7 @@ export default function ClientProfileForm() {
                       padding: 0,
                     }}
                   >
-                    View All Logs &rarr;
+                    View All Logs
                   </button>
                 </div>
               </div>
@@ -4748,8 +4777,8 @@ export default function ClientProfileForm() {
                 </button>
               </div>
 
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
+              <div className="cp-log-scroll" style={{ overflowX: 'auto' }}>
+                <table className="cp-compact-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
                   <thead>
                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569' }}>
                       <th style={{ padding: '9px 12px', width: 60, fontWeight: 600, textAlign: 'center' }}>S. No.</th>
@@ -5054,7 +5083,7 @@ export default function ClientProfileForm() {
 
             {/* Dynamic Returns Table (4 Columns matching PDF Page 19) */}
             <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+              <table className="cp-compact-table cp-gst-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                     <th style={{ padding: '12px 16px', width: 220, fontWeight: 600, color: '#475569', fontSize: 12.5 }}>GST Return</th>

@@ -24,77 +24,17 @@ class MasterController extends Controller
 
     private const GSTIN_REGEX = '/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/';
 
-    public function gstinLookup(Request $request)
+    /** Verifies a GSTIN through the authorised GST API configured on the server (see GstinLookupService). */
+    public function gstinLookup(Request $request, \App\Services\Lookup\GstinLookupService $gst)
     {
-        $gstin = strtoupper(trim($request->input('gstin', '')));
+        $result = $gst->lookup((string) $request->input('gstin', ''));
 
-        if (!preg_match('/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/', $gstin)) {
-            return response()->json(['error' => 'Invalid GSTIN format. Please enter a valid 15-digit GSTIN.'], 422);
+        if (! $result['ok']) {
+            // `message` is what the app shows; `error` kept for older callers.
+            return response()->json(['message' => $result['message'], 'error' => $result['message']], $result['status']);
         }
 
-        try {
-            // Use the public GST search API (no credentials needed for basic taxpayer lookup).
-            $url = "https://sheet.gst.gov.in/api/getGSTINDetails?gstin={$gstin}";
-            $ch = curl_init($url);
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT        => 10,
-                CURLOPT_HTTPHEADER     => ['Accept: application/json'],
-            ]);
-            $raw    = curl_exec($ch);
-            $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $err    = curl_error($ch);
-            curl_close($ch);
-
-            if ($err) throw new \RuntimeException("Network error: {$err}");
-
-            $body = json_decode($raw, true);
-
-            // Fallback to taxpayer search API if first one fails or returns no data
-            if ($status !== 200 || empty($body) || isset($body['error'])) {
-                $url2 = "https://api.gst.gov.in/commonapi/v1.1/search?action=TP&gstin={$gstin}";
-                $ch2 = curl_init($url2);
-                curl_setopt_array($ch2, [
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_TIMEOUT        => 10,
-                    CURLOPT_HTTPHEADER     => ['Accept: application/json'],
-                ]);
-                $raw2    = curl_exec($ch2);
-                $status2 = curl_getinfo($ch2, CURLINFO_HTTP_CODE);
-                curl_close($ch2);
-                if ($status2 === 200) { $body = json_decode($raw2, true); $status = $status2; }
-            }
-
-            if ($status === 404 || (isset($body['statusCode']) && $body['statusCode'] === '404')) {
-                return response()->json(['error' => 'GSTIN not found. Please check and try again.'], 404);
-            }
-
-            // Normalise across both API response shapes
-            $sts   = strtolower($body['sts'] ?? $body['status'] ?? '');
-            if ($sts && !in_array($sts, ['active', 'act'])) {
-                return response()->json(['error' => "GSTIN status is '{$sts}'. Only active GSTINs are accepted."], 422);
-            }
-
-            $addr  = $body['pradr']['addr'] ?? $body['pradr'] ?? [];
-            $parts = array_filter([$addr['bnm'] ?? '', $addr['st'] ?? '', $addr['loc'] ?? '', $addr['dst'] ?? '', $addr['stcd'] ?? '', $addr['pncd'] ?? '']);
-            $address = implode(', ', $parts);
-
-            $stateCode = substr($gstin, 0, 2);
-            $stateName = $body['pradr']['addr']['stcd'] ?? $body['stj'] ?? '';
-
-            return response()->json([
-                'gstin'        => $gstin,
-                'legal_name'   => $body['lgnm'] ?? $body['taxpayerInfo']['lgnm'] ?? '',
-                'trade_name'   => $body['tradeNam'] ?? $body['tradeName'] ?? '',
-                'status'       => $sts ?: 'active',
-                'state_code'   => $stateCode,
-                'state'        => $stateName,
-                'address'      => $address,
-                'business_type' => $body['ctb'] ?? '',
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => 'GST lookup failed. Please try again or enter details manually.'], 503);
-        }
+        return response()->json($result['data']);
     }
 
     public function parties(Request $request)

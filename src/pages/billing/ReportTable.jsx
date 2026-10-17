@@ -10,6 +10,13 @@ function money(n) {
   return `₹${num.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 }
 
+function moneyFixed(n) {
+  if (n == null || n === '') return '—';
+  const num = Number(n);
+  if (Number.isNaN(num)) return String(n);
+  return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function fmtDate(v) {
   if (!v) return '—';
   return String(v).slice(0, 10);
@@ -56,12 +63,12 @@ export default function ReportTable({ type, payload, detailBasePath, from = '', 
               <td>{r.hsn_sac || '—'}</td>
               <td>{r.description || '—'}</td>
               <td>{r.qty ?? '—'}</td>
-              <td>{money(r.taxable ?? r.taxable_amount)}</td>
+              <td>{moneyFixed(r.taxable ?? r.taxable_amount)}</td>
               <td>{r.gst_rate != null ? Number(r.gst_rate).toFixed(2) : '—'}</td>
-              <td>{money(r.cgst ?? r.cgst_amount)}</td>
-              <td>{money(r.sgst ?? r.sgst_amount)}</td>
-              <td>{money(r.igst ?? r.igst_amount)}</td>
-              <td>{money(r.total ?? r.total_amount)}</td>
+              <td>{moneyFixed(r.cgst ?? r.cgst_amount)}</td>
+              <td>{moneyFixed(r.sgst ?? r.sgst_amount)}</td>
+              <td>{moneyFixed(r.igst ?? r.igst_amount)}</td>
+              <td>{moneyFixed(r.total ?? r.total_amount)}</td>
             </tr>
           ))}
           {!rows.length && <tr><td colSpan={9}>No data for this period</td></tr>}

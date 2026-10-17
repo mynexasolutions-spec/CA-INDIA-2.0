@@ -72,7 +72,7 @@ export default function AdminCmp08List() {
     <div style={{ fontFamily: "'Inter',system-ui,sans-serif", padding: '4px 0 48px', color: '#1e293b' }}>
 
       {/* Header & Breadcrumb */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+      <div className="gst-head gst-head-list" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.3px' }}>
             CMP-08 – Client List <span style={{ fontWeight: 500, color: '#475569', fontSize: 17 }}>(Admin Portal)</span>
@@ -83,7 +83,7 @@ export default function AdminCmp08List() {
         </div>
 
         {/* Top-Right Breadcrumb */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 500 }}>
+        <div className="gst-crumbs gst-crumbs-right" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 500 }}>
           <Link to="/admin/gst-returns" style={{ color: '#2563eb', textDecoration: 'none' }}>
             GST Compliance
           </Link>
@@ -95,7 +95,7 @@ export default function AdminCmp08List() {
       </div>
 
       {/* Filters Strip */}
-      <div style={{
+      <div className="cm-filter" style={{
         background: '#fff',
         border: '1.5px solid #bfdbfe',
         borderRadius: 10,
@@ -227,7 +227,7 @@ export default function AdminCmp08List() {
       </div>
 
       {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 18 }}>
+      <div className="cm-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 18 }}>
         {/* Card 1: Total Composition Clients */}
         <div style={{
           background: '#eff6ff',
@@ -327,7 +327,7 @@ export default function AdminCmp08List() {
       </div>
 
       {/* Table Card */}
-      <div style={{
+      <div className="cm-table-card" style={{
         background: '#fff',
         border: '1.5px solid #bfdbfe',
         borderRadius: 10,

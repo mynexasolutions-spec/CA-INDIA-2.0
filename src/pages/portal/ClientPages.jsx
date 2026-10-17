@@ -4,9 +4,9 @@ import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import PasswordField from '../../components/PasswordField';
 import { LoadingBlock } from '../../components/Spinner';
-import { useClientPortal } from '../../components/portal/PortalShell';
+import { useClientPortal } from '../../components/portal/ClientPortalContext';
 import { billingMode } from '../billing/billingProfile';
-import { currentFyLabel, currentFyRange, fyDateRange, fyQuarterOptions, money } from '../billing/billingUtils';
+import { currentFyLabel, currentFyRange, fyDateRange, fyQuarterOptions, localISODate, money } from '../billing/billingUtils';
 import { ComplianceStatus, DashCard, SalesBarChart, shortMoney } from './ClientDashboardWidgets';
 
 const card = {
@@ -152,18 +152,10 @@ function StatTile({ label, count, value, color, bg, icon, sub }) {
   );
 }
 
-function ArrowRightIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
-    </svg>
-  );
-}
-
 function ViewLink({ to, children }) {
   return (
     <Link to={to} style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-blue)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 'auto', paddingTop: 14 }}>
-      {children} <ArrowRightIcon />
+      {children}
     </Link>
   );
 }
@@ -306,7 +298,7 @@ export function ClientDashboard() {
   const [gstSummary, setGstSummary] = useState(null);
   const [periodSummary, setPeriodSummary] = useState(null); // Billing Overview, scoped to the selected quarter
   const [selectedQuarter, setSelectedQuarter] = useState(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localISODate();
     const opts = fyQuarterOptions(currentFyLabel());
     return opts.find((q) => today >= q.from && today <= q.to)?.value || 'Q1';
   });
@@ -360,7 +352,7 @@ export function ClientDashboard() {
   useEffect(() => {
     if (isQuarterly) {
       // FY changed — re-pick the quarter containing today if this is the current FY, else Q1.
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localISODate();
       const opts = fyQuarterOptions(fy);
       const next = opts.find((q) => today >= q.from && today <= q.to)?.value || 'Q1';
       selectQuarter(next, fy);
@@ -613,10 +605,7 @@ export function ClientDashboard() {
               }}
             >
               Open Billing Workspace
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12" />
-                <polyline points="12 5 19 12 12 19" />
-              </svg>
+
             </Link>
           </div>
         </DashCard>
@@ -678,14 +667,14 @@ export function ClientProfile() {
 
   if (!profile) return <LoadingBlock />;
   return (
-    <div>
-      <div style={{ fontSize: 12, color: 'var(--bp-muted)', marginBottom: 12, fontWeight: 600 }}>
+    <div className="pf-page">
+      <div className="pf-crumbs2" style={{ fontSize: 12, color: 'var(--bp-muted)', marginBottom: 12, fontWeight: 600 }}>
         <Link to="/portal" style={{ color: 'var(--bp-blue)', textDecoration: 'none' }}>Client Portal</Link>
         <span style={{ margin: '0 6px', opacity: 0.5 }}>›</span>
         Profile
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-        <span style={{
+      <div className="pf-head2" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+        <span className="pf-head2-ic" style={{
           width: 44, height: 44, borderRadius: 12, flexShrink: 0,
           background: 'linear-gradient(135deg,#1d4ed8,#2563eb)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -704,7 +693,7 @@ export function ClientProfile() {
         </div>
       </div>
 
-      <div style={{
+      <div className="pf-note2" style={{
         display: 'inline-flex', alignItems: 'center', gap: 8, maxWidth: '100%',
         background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af',
         borderRadius: 14, padding: '8px 16px 8px 10px', marginBottom: 20,
@@ -776,7 +765,28 @@ const PASSWORD_TIPS = [
   'Avoid using easily guessable information.',
 ];
 
+/** Live checks behind the "Password Security Tips" list — same rules the server enforces. */
+const COMMON_PASSWORDS = ['password', 'passw0rd', '12345678', '123456789', 'qwerty', 'qwerty123', 'abcd1234', 'admin', 'welcome', 'letmein', 'iloveyou', 'abc12345'];
+function passwordChecks(pwd, current, user) {
+  const lower = pwd.toLowerCase();
+  const emailLocal = String(user?.email || '').split('@')[0].toLowerCase();
+  const words = [user?.name, user?.client_profile?.business_name]
+    .filter(Boolean)
+    .flatMap((t) => String(t).toLowerCase().split(/[^a-z0-9]+/))
+    .filter((w) => w.length >= 4);
+  const personal = (emailLocal.length >= 4 && lower.includes(emailLocal)) || words.some((w) => lower.includes(w));
+  const common = COMMON_PASSWORDS.some((c) => lower.includes(c));
+  return [
+    pwd.length >= 8,
+    /[A-Z]/.test(pwd) && /[a-z]/.test(pwd),
+    /[0-9]/.test(pwd),
+    /[^A-Za-z0-9]/.test(pwd),
+    pwd.length > 0 && !personal && !common && pwd !== current,
+  ];
+}
+
 export function ClientResetPassword() {
+  const { user: pwUser } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
@@ -809,7 +819,10 @@ export function ClientResetPassword() {
     }
   };
 
-  const canSubmit = currentPassword && newPassword.length >= 8 && newPasswordConfirm.length >= 8;
+  const checks = passwordChecks(newPassword, currentPassword, pwUser);
+  const allRulesMet = checks.every(Boolean);
+  const confirmMismatch = newPasswordConfirm.length > 0 && newPasswordConfirm !== newPassword;
+  const canSubmit = Boolean(currentPassword) && allRulesMet && newPasswordConfirm === newPassword;
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -818,15 +831,18 @@ export function ClientResetPassword() {
         <span style={{ margin: '0 6px', opacity: 0.5 }}>›</span>
         Change Password
       </div>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 22, color: 'var(--bp-navy)' }}>Change Password</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--bp-muted)' }}>
-          Update your account password to keep your account secure.
-        </p>
+      <div className="cp-pw-head" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+        <span className="cp-pw-head-ic" aria-hidden="true"><LockIcon size={26} /></span>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 22, color: 'var(--bp-navy)' }}>Change Password</h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--bp-muted)' }}>
+            Update your account password to keep your account secure.
+          </p>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'minmax(280px, 1.3fr) minmax(220px, 1fr)', alignItems: 'start' }}>
-        <div style={card}>
+      <div className="cp-pw-grid" style={{ display: 'grid', gap: 20, gridTemplateColumns: 'minmax(280px, 1.3fr) minmax(220px, 1fr)', alignItems: 'start' }}>
+        <div className="cp-pw-card" style={card}>
           <h2 style={{ margin: '0 0 20px', fontSize: 15, fontWeight: 800, color: 'var(--bp-navy)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <LockIcon /> Change Your Password
           </h2>
@@ -865,6 +881,7 @@ export function ClientResetPassword() {
               placeholder="Re-enter your new password"
               icon={<LockIcon size={15} />}
             />
+            {confirmMismatch && <span className="pw-mismatch">Passwords do not match.</span>}
 
             {pwdErr && <p className="bp-alert bp-alert-error" style={{ margin: 0 }}>{pwdErr}</p>}
 
@@ -879,17 +896,20 @@ export function ClientResetPassword() {
           </form>
         </div>
 
-        <div style={{ ...card, background: '#eef4fc', border: '1px solid #d7e6f7' }}>
+        <div className="cp-pw-tips" style={{ ...card, background: '#eef4fc', border: '1px solid #d7e6f7' }}>
           <h2 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 800, color: 'var(--bp-navy)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <ShieldIcon /> Password Security Tips
           </h2>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 12 }}>
-            {PASSWORD_TIPS.map((tip) => (
-              <li key={tip} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, color: 'var(--bp-text)', lineHeight: 1.4 }}>
-                <span style={{ color: '#15803d', flexShrink: 0, fontWeight: 800 }}>✓</span>
-                {tip}
-              </li>
-            ))}
+            {PASSWORD_TIPS.map((tip, i) => {
+              const state = !newPassword ? 'idle' : checks[i] ? 'ok' : 'bad';
+              return (
+                <li key={tip} className={`pw-tip is-${state}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12.5, color: 'var(--bp-text)', lineHeight: 1.4 }}>
+                  <span className="pw-tip-mark" style={{ flexShrink: 0, fontWeight: 800 }}>{state === 'bad' ? '✕' : '✓'}</span>
+                  {tip}
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>

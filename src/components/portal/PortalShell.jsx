@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { api } from '../../api/client';
+import { ClientPortalCtx, useClientPortal } from './ClientPortalContext';
 import GstFilingReminderPopup from './GstFilingReminderPopup';
 import Gstr3bRequestNotifier from './Gstr3bRequestNotifier';
 import { LoadingBlock } from '../Spinner';
@@ -13,6 +14,7 @@ import { useAdminFy } from '../../context/AdminFyContext';
 import { CONTACT } from '../../data/nav';
 import '../../pages/billing/billing.css';
 import '../../pages/billing/admin-overview.css';
+import '../../pages/billing/admin-topbar.css';
 
 function HomeIcon() {
   return (
@@ -107,15 +109,11 @@ function NavGearIcon() {
   );
 }
 
-/** Financial Year + Refresh Data are global controls, shared by every Client Portal page via
- * this context (provided by ClientPortalLayout, rendered in the shared topbar) — not owned by
- * any single page. A page that has its own data to refresh calls registerRefresh(fn) in a
- * useEffect; pages that don't just leave the button to fall back to a full reload. */
-const ClientPortalCtx = createContext(null);
-
-export function useClientPortal() {
-  return useContext(ClientPortalCtx);
-}
+/** The Client Portal context (FY + Refresh Data) lives in ClientPortalContext.js so its identity
+ * survives hot reloads of this file. A page that has its own data to refresh calls
+ * registerRefresh(fn) in a useEffect; pages that don't just leave the button to fall back to a
+ * full reload. Re-exported here so existing imports keep working. */
+export { useClientPortal };
 
 const ADMIN_BILLING_NAV = [
   { to: '/admin/firm-billing', label: 'Dashboard', end: true },
@@ -217,6 +215,9 @@ export function ClientNotificationBell() {
   const [unread, setUnread] = useState(0);
   const ref = useOutsideClose(() => setOpen(false));
 
+  const [reminders, setReminders] = useState([]);
+  const navigate = useNavigate();
+
   const load = () => {
     api('/client/dashboard')
       .then((d) => {
@@ -224,6 +225,10 @@ export function ClientNotificationBell() {
         setUnread(d.stats?.unread_notifications ?? 0);
       })
       .catch(() => { });
+    // GST filing reminders stay in the bell until the filing request is submitted.
+    api('/client/gst-filing/reminders')
+      .then((d) => setReminders(d.reminders || []))
+      .catch(() => setReminders([]));
   };
 
   useEffect(() => {
@@ -234,14 +239,22 @@ export function ClientNotificationBell() {
 
   return (
     <div className="bp-dropdown-wrap" ref={ref}>
-      <button type="button" className="bp-topbar-icon-btn" onClick={() => setOpen((v) => !v)} aria-label="Notifications">
-        🔔
-        {unread > 0 && <span className="bp-topbar-badge">{unread > 9 ? '9+' : unread}</span>}
+      <button type="button" className="bp-topbar-icon-btn cl-tb-iconbtn" onClick={() => setOpen((v) => !v)} aria-label="Notifications">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+        {unread + reminders.length > 0 && <span className="bp-topbar-badge">{unread + reminders.length > 9 ? '9+' : unread + reminders.length}</span>}
       </button>
       {open && (
         <div className="bp-dropdown-panel">
           <div className="bp-dropdown-panel-head">Notifications</div>
-          {!notices || notices.length === 0 ? (
+          {reminders.map((r) => (
+            <div key={`${r.return_type}-${r.period_code}`} className="bp-dropdown-item" style={{ cursor: 'pointer', borderLeft: '3px solid #dc2626' }}
+              onClick={() => { setOpen(false); navigate(r.filing_url); }}>
+              <div style={{ fontWeight: 700 }}>GST Filing Reminder</div>
+              <div style={{ color: 'var(--bp-muted)', marginTop: 2 }}>{r.return_type} for {r.period_label} is due on {r.due_date}.</div>
+              <div style={{ marginTop: 6, color: '#1d5fe0', fontWeight: 700, fontSize: 12 }}>Submit Filing Request</div>
+            </div>
+          ))}
+          {(!notices || notices.length === 0) && reminders.length > 0 ? null : !notices || notices.length === 0 ? (
             <div className="bp-dropdown-empty">You're all caught up.</div>
           ) : (
             notices.slice(0, 8).map((n) => (
@@ -311,10 +324,12 @@ function ExitIcon() {
 /** Confirmation modal shown before actually signing out. */
 function LogoutConfirmModal({ onCancel, onConfirm, busy }) {
   return (
-    <div className="bp-modal-backdrop" role="presentation" onClick={onCancel}>
-      <div className="bp-modal" role="dialog" aria-modal="true" aria-label="Logout Confirmation" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="bp-modal-close" onClick={onCancel} disabled={busy} aria-label="Close">×</button>
-        <div className="bp-modal-icon"><ExitIcon /></div>
+    <div className="bp-modal-backdrop bp-logout-backdrop" role="presentation" onClick={onCancel}>
+      <div className="bp-modal bp-logout-modal" role="dialog" aria-modal="true" aria-label="Logout Confirmation" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="bp-modal-close" onClick={onCancel} disabled={busy} aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+        <div className="bp-modal-icon bp-logout-icon"><ExitIcon /></div>
         <p className="bp-modal-title">Logout Confirmation</p>
         <p className="bp-modal-text">
           Are you sure you want to logout?
@@ -324,6 +339,7 @@ function LogoutConfirmModal({ onCancel, onConfirm, busy }) {
         <div className="bp-modal-actions">
           <button type="button" className="bp-btn bp-btn-outline" onClick={onCancel} disabled={busy}>Cancel</button>
           <button type="button" className="bp-btn bp-btn-danger" onClick={onConfirm} disabled={busy}>
+            <ExitIcon />
             {busy ? 'Signing out…' : 'Logout'}
           </button>
         </div>
@@ -351,10 +367,10 @@ export function ClientAvatarMenu() {
   return (
     <>
       <div className="bp-dropdown-wrap" ref={ref}>
-        <button type="button" className="bp-avatar-btn" onClick={() => setOpen((v) => !v)}>
+        <button type="button" className="bp-avatar-btn cl-tb-avatar" onClick={() => setOpen((v) => !v)}>
           <span className="bp-avatar-circle">{initialsOf(user?.name)}</span>
           <span className="bp-avatar-name">{name}</span>
-          <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
+          <svg className="cl-tb-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
         </button>
         {open && (
           <div className="bp-dropdown-panel" style={{ minWidth: 230 }}>
@@ -421,7 +437,7 @@ function ContactSupportModal({ onClose }) {
   return (
     <div className="bp-modal-backdrop" role="presentation" onClick={onClose}>
       <div className="bp-modal bp-contact-modal" role="dialog" aria-modal="true" aria-label="Contact Support" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="bp-modal-close" onClick={onClose} aria-label="Close">×</button>
+        <button type="button" className="bp-modal-close" onClick={onClose} aria-label="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>
         <div className="bp-contact-modal-icon"><HeadsetIcon /></div>
         <p className="bp-modal-title">Contact Support</p>
         <p className="bp-contact-modal-text">
@@ -617,12 +633,13 @@ function ClientTopbarHeader() {
 
   return (
     <div className="bp-topbar-title-block" style={{ minWidth: 0 }}>
-      <h1 className="bp-topbar-title" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Client Portal</h1>
+      <h1 className="bp-topbar-title cl-tb-title">Client Portal</h1>
       <div className="bp-topbar-subtitle" style={{ fontSize: 12, color: 'var(--bp-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={`${name} · (${gstModeLabel(profile)})`}>
         {name} <span style={{ opacity: 0.5 }}>·</span> ({gstModeLabel(profile)})
       </div>
       {profile?.has_gst && profile?.gstin && (
-        <span style={{ display: 'inline-block', marginTop: 6, background: '#dcfce7', color: '#15803d', fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 20, letterSpacing: 0.3, whiteSpace: 'nowrap' }}>
+        <span className="cl-tb-gstin">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
           GSTIN: {profile.gstin}
         </span>
       )}
@@ -647,38 +664,31 @@ function ClientTopbarControls() {
 
   return (
     <>
-      <span className="bp-fy-label" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 17, color: 'var(--bp-text)', fontWeight: 700, whiteSpace: 'nowrap' }}>
-        <CalendarIcon size={22} />
-        Financial Year
-      </span>
-      <div className="bp-fy-select-box" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 52, boxSizing: 'border-box', border: '1px solid var(--bp-border)', borderRadius: 8, padding: '0 14px', lineHeight: 1.3 }}>
-        <select
-          className="bp-select"
-          style={{ border: 'none', padding: 0, fontWeight: 800, fontSize: 15, color: 'var(--bp-navy)', background: 'transparent', height: 'auto', textAlign: 'center' }}
-          value={ctx.fy}
-          onChange={(e) => ctx.setFy(e.target.value)}
-        >
-          {ctx.fyOptions.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
-        <span style={{ fontSize: 10, color: 'var(--bp-muted)', whiteSpace: 'nowrap' }} className="bp-fy-dates">
-          {ddMonYyyy(ctx.range.from)} - {ddMonYyyy(ctx.range.to)}
-        </span>
+      <div className="cl-tb-fy bp-fy-select-box">
+        <span className="cl-tb-fy-ico bp-fy-label"><CalendarIcon size={20} /></span>
+        <div className="cl-tb-fy-body">
+          <span className="cl-tb-fy-label">Financial Year</span>
+          <select
+            className="cl-tb-fy-select"
+            aria-label="Financial Year"
+            value={ctx.fy}
+            onChange={(e) => ctx.setFy(e.target.value)}
+          >
+            {ctx.fyOptions.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
+          <span className="cl-tb-fy-dates bp-fy-dates">
+            {ddMonYyyy(ctx.range.from)} - {ddMonYyyy(ctx.range.to)}
+          </span>
+        </div>
       </div>
       <button
         type="button"
-        className="bp-btn bp-btn-outline bp-refresh-btn"
-        style={{ height: 52, boxSizing: 'border-box', padding: '0 14px', fontSize: 12, whiteSpace: 'nowrap' }}
+        className={`cl-tb-refresh bp-refresh-btn${ctx.refreshing ? ' is-busy' : ''}`}
         onClick={ctx.triggerRefresh}
         disabled={ctx.refreshing}
       >
-        {ctx.refreshing ? (
-          'Refreshing…'
-        ) : (
-          <>
-            <span className="bp-refresh-text">↻ Refresh Data</span>
-            <span className="bp-refresh-icon-only">↻</span>
-          </>
-        )}
+        <RefreshIcon size={15} />
+        <span className="bp-refresh-text">{ctx.refreshing ? 'Refreshing…' : 'Refresh Data'}</span>
       </button>
     </>
   );
@@ -704,9 +714,7 @@ function RefreshIcon({ size = 15 }) {
 
 function AdminTopbarHeader() {
   return (
-    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#1e3a8a', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-      Welcome Back to the Admin Portal
-    </h1>
+    <h1 className="adm-tb-title">Welcome Back to the Admin Portal</h1>
   );
 }
 
@@ -726,6 +734,7 @@ function formatLastLogin(iso) {
 
 /** Real admin bell — polls /admin/notifications every 30 s. */
 function AdminNotificationBell() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [notices, setNotices] = useState(null);
   const [unread, setUnread] = useState(0);
@@ -761,31 +770,16 @@ function AdminNotificationBell() {
 
   return (
     <div className="bp-dropdown-wrap" ref={ref} style={{ position: 'relative' }}>
-      <button
-        type="button"
-        title="Notifications"
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          width: 38, height: 38, borderRadius: '50%',
-          border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', flexShrink: 0,
-        }}
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <button type="button" title="Notifications" aria-label="Notifications" className="adm-tb-iconbtn" onClick={() => setOpen((v) => !v)}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
-        {unread > 0 && (
-          <span style={{
-            position: 'absolute', top: 6, right: 6,
-            width: 8, height: 8, borderRadius: '50%', background: '#ef4444',
-            border: '1.5px solid #fff',
-          }} />
-        )}
+        {unread > 0 && <span className="bp-topbar-badge" style={{ position: 'absolute', top: -4, right: -4 }}>{unread > 9 ? '9+' : unread}</span>}
       </button>
 
       {open && (
-        <div className="bp-dropdown-panel" style={{ right: 0, left: 'auto', minWidth: 300, maxWidth: 360 }}>
+        <div className="bp-dropdown-panel" style={{ right: 0, left: 'auto', minWidth: 320, maxWidth: 380 }}>
           <div className="bp-dropdown-panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Notifications {unread > 0 && <span style={{ background: '#ef4444', color: '#fff', borderRadius: 20, padding: '1px 7px', fontSize: 11, fontWeight: 700, marginLeft: 6 }}>{unread}</span>}</span>
             {unread > 0 && (
@@ -801,11 +795,15 @@ function AdminNotificationBell() {
               <div
                 key={n.id}
                 className="bp-dropdown-item"
-                style={{ opacity: n.read_at ? 0.6 : 1, cursor: n.read_at ? 'default' : 'pointer', borderLeft: n.read_at ? 'none' : '3px solid #2563eb' }}
-                onClick={() => !n.read_at && markRead(n.id)}
+                style={{ opacity: n.read_at ? 0.65 : 1, cursor: n.link ? 'pointer' : (n.read_at ? 'default' : 'pointer'), borderLeft: n.read_at ? 'none' : '3px solid #2563eb' }}
+                onClick={() => {
+                  if (!n.read_at) markRead(n.id);
+                  if (n.link) { setOpen(false); navigate(n.link); }
+                }}
               >
                 <div style={{ fontWeight: 700, fontSize: 13 }}>{n.title}</div>
-                {n.body && <div style={{ color: 'var(--bp-muted)', marginTop: 2, fontSize: 12 }}>{n.body}</div>}
+                {n.body && <div style={{ color: 'var(--bp-muted)', marginTop: 2, fontSize: 12, whiteSpace: 'pre-line' }}>{n.body}</div>}
+                {n.link && <div style={{ marginTop: 6, color: '#1d5fe0', fontWeight: 700, fontSize: 12 }}>View Request</div>}
                 <div style={{ color: 'var(--bp-muted)', fontSize: 11, marginTop: 4 }}>{timeAgo(n.created_at)}</div>
               </div>
             ))
@@ -830,91 +828,40 @@ function AdminTopbarControls() {
   const triggerRefresh = adminFy?.triggerRefresh;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+    <div className="adm-tb-controls">
       {/* Financial Year Selector */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '6px 14px',
-          border: '1px solid #e2e8f0',
-          borderRadius: 8,
-          background: '#fff',
-        }}
-      >
-        <span style={{ color: '#2563eb', display: 'flex', alignItems: 'center' }}>
-          <CalendarIcon size={20} />
-        </span>
-        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-          <span style={{ fontSize: 10, color: '#64748b' }}>Financial Year</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <select
-              value={fy}
-              onChange={(e) => setFy(e.target.value)}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                fontWeight: 700,
-                fontSize: 13,
-                color: '#0f172a',
-                cursor: 'pointer',
-                padding: 0,
-                outline: 'none',
-              }}
-            >
-              {fyOptions.map((f) => (
-                <option key={f} value={f}>{f}</option>
-              ))}
-            </select>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#64748b', pointerEvents: 'none' }}>
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </div>
-          <span style={{ fontSize: 10, color: '#94a3b8', whiteSpace: 'nowrap' }}>
-            {ddMonYyyy(range.from)} - {ddMonYyyy(range.to)}
-          </span>
+      <div className="adm-tb-chip">
+        <span className="adm-tb-ico"><CalendarIcon size={20} /></span>
+        <div className="adm-tb-fy">
+          <span className="adm-tb-label">Financial Year</span>
+          <select className="adm-tb-fy-select" value={fy} onChange={(e) => setFy(e.target.value)} aria-label="Financial Year">
+            {fyOptions.map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
+          <span className="adm-tb-sub">{ddMonYyyy(range.from)} - {ddMonYyyy(range.to)}</span>
         </div>
       </div>
 
-      {/* Refresh Data Button */}
+      {/* Refresh Data */}
       <button
         type="button"
-        onClick={() => {
-          if (triggerRefresh) {
-            triggerRefresh();
-          }
-        }}
+        className={`adm-tb-refresh${refreshing ? ' is-busy' : ''}`}
+        onClick={() => { if (triggerRefresh) triggerRefresh(); }}
         disabled={refreshing}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '10px 16px',
-          border: '1px solid #bfdbfe',
-          borderRadius: 8,
-          background: '#fff',
-          color: '#2563eb',
-          fontWeight: 600,
-          fontSize: 13,
-          cursor: refreshing ? 'default' : 'pointer',
-          whiteSpace: 'nowrap',
-          transition: 'all 0.15s ease',
-          opacity: refreshing ? 0.7 : 1,
-        }}
       >
         <RefreshIcon size={15} />
         {refreshing ? 'Refreshing…' : 'Refresh Data'}
       </button>
 
+      <span className="adm-tb-sep" aria-hidden="true" />
+
       {/* Last Login */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#475569' }}>
-        <ClockIcon size={18} />
-        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-          <span style={{ fontSize: 10, color: '#64748b' }}>Last Login</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap' }}>
-            {formatLastLogin(user?.last_login_at)}
-          </span>
+      <div className="adm-tb-login">
+        <span className="adm-tb-ico" style={{ color: '#475569' }}><ClockIcon size={18} /></span>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span className="adm-tb-label">Last Login</span>
+          <span className="adm-tb-value">{formatLastLogin(user?.last_login_at)}</span>
         </div>
       </div>
 
@@ -922,29 +869,7 @@ function AdminTopbarControls() {
       <AdminNotificationBell />
 
       {/* Logout (power icon) */}
-      <button
-        type="button"
-        title="Logout"
-        aria-label="Logout"
-        onClick={() => setConfirmingLogout(true)}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 38,
-          height: 38,
-          borderRadius: '50%',
-          border: '1px solid #e2e8f0',
-          background: '#fff',
-          color: '#ef4444',
-          cursor: 'pointer',
-          flexShrink: 0,
-          padding: 0,
-          transition: 'all 0.15s ease',
-        }}
-      >
+      <button type="button" title="Logout" aria-label="Logout" className="adm-tb-iconbtn is-danger" onClick={() => setConfirmingLogout(true)}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2v10" />
           <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
@@ -1045,6 +970,7 @@ export function ClientPortalLayout() {
         hasGst && { to: '/portal/reports/gst-summary', label: 'GST Summary' },
         mode === 'regular' && { to: '/portal/reports/gst-liability', label: 'GST Liability / ITC' },
         hasGst && { to: '/portal/reports/hsn-summary', label: 'HSN / SAC Summary' },
+        { to: '/portal/reports/document-numbering', label: 'Document Numbering' },
         { to: '/portal/reports/party-wise', label: 'Party-wise Details' },
         { to: '/portal/reports/outstanding', label: 'Outstanding' },
       ].filter(Boolean),
@@ -1076,9 +1002,10 @@ export function ClientPortalLayout() {
 export function ClientBillingLayout() {
   return (
     <div className="bp-section-wrap">
-      <div className="bp-section-head">
+      <div className="bp-parties-head" style={{ marginBottom: 18 }}>
+        <span className="bp-parties-head-icon" aria-hidden="true"><InvoiceIcon /></span>
         <div>
-          <div className="bp-section-kicker">Billing Section</div>
+          <h2>Billing Section</h2>
           <p className="bp-section-desc">Tax invoices, bill of supply, debit notes, credit notes, and quotations.</p>
         </div>
       </div>

@@ -360,7 +360,7 @@ export default function PartyDocumentsModal({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span>Rows per page</span>
-              <select className="bp-select" style={{ height: 32, width: 70 }} value={pageSize}
+              <select className="bp-select pg-rows" style={{ height: 32, width: 70 }} value={pageSize}
                 onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}>
                 {PAGE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>

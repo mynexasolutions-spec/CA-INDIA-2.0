@@ -24,11 +24,6 @@ export default function AdminBillingDocumentEdit() {
   const backPath = `/admin/billing/${clientId}/${docTypeSlug}/${id}`;
 
   useEffect(() => {
-    if (docTypeKey !== 'tax_invoice') {
-      setLoading(false);
-      return undefined;
-    }
-
     let cancelled = false;
     setLoading(true);
     setError('');
@@ -107,8 +102,8 @@ export default function AdminBillingDocumentEdit() {
     }
   };
 
-  // Only tax_invoice is supported; any other docType shows a "not available yet" message
-  if (docTypeKey !== 'tax_invoice') {
+  // Unknown document type
+  if (!docConfig) {
     return (
       <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60 }}>
         <div style={{ fontSize: 13, color: '#2563eb', marginBottom: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -124,7 +119,7 @@ export default function AdminBillingDocumentEdit() {
         <div className="bp-card" style={{ padding: '24px 28px', background: '#ffffff', borderRadius: 10, border: '1px solid #e2e8f0' }}>
           <h2 style={{ marginTop: 0, fontSize: 18, color: '#1e293b' }}>Edit Document</h2>
           <p style={{ color: '#b91c1c', fontSize: 14, margin: '12px 0 20px' }}>
-            Editing is not available yet for this document type. Only Tax Invoices can be edited.
+            This document type could not be found.
           </p>
           <Link
             className="bp-btn bp-btn-outline"
@@ -224,7 +219,7 @@ export default function AdminBillingDocumentEdit() {
         <span style={{ color: '#94a3b8' }}>&gt;</span>
         <Link to={`/admin/billing/${clientId}`} style={{ color: '#2563eb', textDecoration: 'none' }}>Client Dashboard</Link>
         <span style={{ color: '#94a3b8' }}>&gt;</span>
-        <Link to={`/admin/billing/${clientId}/${docTypeSlug}`} style={{ color: '#2563eb', textDecoration: 'none' }}>{docConfig?.pluralLabel || 'Tax Invoices'}</Link>
+        <Link to={`/admin/billing/${clientId}/${docTypeSlug}`} style={{ color: '#2563eb', textDecoration: 'none' }}>{docConfig?.pluralLabel || 'Documents'}</Link>
         <span style={{ color: '#94a3b8' }}>&gt;</span>
         <Link to={backPath} style={{ color: '#2563eb', textDecoration: 'none' }}>{docData?.document?.number || 'Document'}</Link>
         <span style={{ color: '#94a3b8' }}>&gt;</span>
@@ -265,7 +260,7 @@ export default function AdminBillingDocumentEdit() {
             }}
             aria-label="Dismiss error"
           >
-            ✕
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
         </div>
       )}
@@ -273,7 +268,7 @@ export default function AdminBillingDocumentEdit() {
       {initialDocument && (
         <InvoiceForm
           docType={docTypeKey}
-          title="Edit Tax Invoice"
+          title={`Edit ${docConfig?.label || 'Document'}`}
           clientProfile={clientProfile}
           initialDocument={initialDocument}
           readOnlyNumber={docData?.document?.number || ''}

@@ -5,8 +5,10 @@ import App from './App.jsx';
 import { AuthProvider } from './auth/AuthContext.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import AdminSelectEnhancer from './components/AdminSelectEnhancer.jsx';
+import DatePickerEnhancer from './components/DatePickerEnhancer.jsx';
 import './index.css';
 import './admin-select.css';
+import './datepicker.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -15,6 +17,7 @@ createRoot(document.getElementById('root')).render(
         <AuthProvider>
           <App />
           <AdminSelectEnhancer />
+          <DatePickerEnhancer />
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>

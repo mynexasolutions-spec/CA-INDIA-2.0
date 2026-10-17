@@ -44,6 +44,9 @@ class GstLiabilityReportTest extends TestCase
             ]);
         }
 
+        // The GST period counts by the day the document was created in the portal.
+        CommercialDocument::query()->update(['created_at' => '2026-04-15 10:00:00']);
+
         $record = ClientGstr2bRecord::create([
             'client_profile_id' => $profile->id,
             'financial_year' => '2026-27',
@@ -71,7 +74,7 @@ class GstLiabilityReportTest extends TestCase
 
         Sanctum::actingAs($user);
 
-        $monthQuery = 'type=gst_liability&period_type=month&financial_year=2026-27&month=2026-04';
+        $monthQuery = 'type=gst_liability&from=2026-04-01&to=2026-04-30';
         $this->getJson('/api/billing/reports?'.$monthQuery)
             ->assertOk()
             ->assertJsonPath('from', '2026-04-01')
@@ -83,7 +86,7 @@ class GstLiabilityReportTest extends TestCase
             ->assertJsonPath('data.gst_payable', 275.25)
             ->assertJsonPath('data.itc_carry_forward', 0);
 
-        $quarterQuery = 'type=gst_liability&period_type=quarter&financial_year=2026-27&quarter=Q1';
+        $quarterQuery = 'type=gst_liability&from=2026-04-01&to=2026-06-30';
         $this->getJson('/api/billing/reports?'.$quarterQuery)
             ->assertOk()
             ->assertJsonPath('from', '2026-04-01')
@@ -102,10 +105,6 @@ class GstLiabilityReportTest extends TestCase
         $this->get('/api/billing/reports/export?'.$monthQuery.'&format=pdf')
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
-
-        $this->getJson('/api/billing/reports?type=gst_liability&period_type=month&financial_year=2026-27&month=2027-04')
-            ->assertUnprocessable()
-            ->assertJsonPath('message', 'The selected month is outside the financial year.');
     }
 
     public function test_composition_client_cannot_access_the_liability_report(): void

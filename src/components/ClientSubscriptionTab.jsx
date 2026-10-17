@@ -495,9 +495,9 @@ export default function ClientSubscriptionTab({
           style={{
             background: '#ffffff',
             border: '1px solid #e2e8f0',
-            borderRadius: 8,
-            padding: '18px 20px',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+            borderRadius: 14,
+            padding: '20px 22px',
+            boxShadow: '0 14px 30px -24px rgba(15,42,95,0.45)',
             display: 'flex',
             flexDirection: 'column',
             gap: 16,
@@ -507,10 +507,11 @@ export default function ClientSubscriptionTab({
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                background: '#2563eb',
+                width: 32,
+                height: 32,
+                borderRadius: 9,
+                background: 'linear-gradient(135deg, #2f6fe8, #0f2a5f)',
+                boxShadow: '0 8px 14px -8px rgba(29,95,224,0.8)',
                 color: '#ffffff',
                 display: 'flex',
                 alignItems: 'center',
@@ -523,7 +524,7 @@ export default function ClientSubscriptionTab({
                 <line x1="1" y1="10" x2="23" y2="10" />
               </svg>
             </div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#0f2a5f', letterSpacing: '-0.2px' }}>
               Subscription Details
             </h3>
           </div>
@@ -859,9 +860,9 @@ export default function ClientSubscriptionTab({
           style={{
             background: '#ffffff',
             border: '1px solid #e2e8f0',
-            borderRadius: 8,
-            padding: '18px 20px',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+            borderRadius: 14,
+            padding: '20px 22px',
+            boxShadow: '0 14px 30px -24px rgba(15,42,95,0.45)',
             display: 'flex',
             flexDirection: 'column',
             gap: 16,
@@ -876,7 +877,7 @@ export default function ClientSubscriptionTab({
                 <line x1="6" y1="20" x2="6" y2="14" />
               </svg>
             </div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#0f2a5f', letterSpacing: '-0.2px' }}>
               Usage
             </h3>
           </div>
@@ -887,9 +888,10 @@ export default function ClientSubscriptionTab({
             <div
               style={{
                 background: '#ffffff',
-                border: '1px solid #f1f5f9',
-                borderRadius: 8,
-                padding: '12px 14px',
+                border: '1px solid #dbe7f7',
+                borderRadius: 12,
+                background: '#f8fbff',
+                padding: '14px 16px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -929,9 +931,10 @@ export default function ClientSubscriptionTab({
             <div
               style={{
                 background: '#ffffff',
-                border: '1px solid #f1f5f9',
-                borderRadius: 8,
-                padding: '12px 14px',
+                border: '1px solid #dbe7f7',
+                borderRadius: 12,
+                background: '#f8fbff',
+                padding: '14px 16px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -974,9 +977,9 @@ export default function ClientSubscriptionTab({
         style={{
           background: '#ffffff',
           border: '1px solid #e2e8f0',
-          borderRadius: 8,
-          padding: '18px 20px',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+          borderRadius: 14,
+          padding: '20px 22px',
+          boxShadow: '0 14px 30px -24px rgba(15,42,95,0.45)',
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
@@ -991,7 +994,7 @@ export default function ClientSubscriptionTab({
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
               </svg>
             </div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#0f2a5f', letterSpacing: '-0.2px' }}>
               Service Access
             </h3>
           </div>
@@ -1001,17 +1004,17 @@ export default function ClientSubscriptionTab({
         </div>
 
         {/* Table of 6 Services */}
-        <div style={{ overflowX: 'auto', border: '1px solid #f1f5f9', borderRadius: 6 }}>
+        <div style={{ overflowX: 'auto', border: '1px solid #d9e5f6', borderRadius: 10 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                <th style={{ padding: '10px 14px', fontSize: 12, fontWeight: 600, color: '#475569', width: '35%' }}>
+              <tr style={{ background: '#e8f1fd', borderBottom: '1px solid #cfe0f8' }}>
+                <th style={{ padding: '10px 14px', fontSize: 12, fontWeight: 800, color: '#0f2a5f', width: '35%' }}>
                   Service
                 </th>
-                <th style={{ padding: '10px 14px', fontSize: 12, fontWeight: 600, color: '#475569', width: '15%', textAlign: 'center' }}>
+                <th style={{ padding: '10px 14px', fontSize: 12, fontWeight: 800, color: '#0f2a5f', width: '15%', textAlign: 'center' }}>
                   Access
                 </th>
-                <th style={{ padding: '10px 14px', fontSize: 12, fontWeight: 600, color: '#475569', width: '50%' }}>
+                <th style={{ padding: '10px 14px', fontSize: 12, fontWeight: 800, color: '#0f2a5f', width: '50%' }}>
                   Remarks
                 </th>
               </tr>
@@ -1056,7 +1059,7 @@ export default function ClientSubscriptionTab({
                   <tr
                     key={sKey}
                     style={{
-                      borderBottom: '1px solid #f1f5f9',
+                      borderBottom: '1px solid #e8eef7',
                       transition: 'background 0.15s ease',
                     }}
                   >
@@ -1100,7 +1103,7 @@ export default function ClientSubscriptionTab({
                     </td>
 
                     {/* Remarks Column */}
-                    <td style={{ padding: '12px 14px', fontSize: 12.5, color: '#64748b' }}>
+                    <td style={{ padding: '12px 14px', fontSize: 12.5, color: '#2563eb', fontWeight: 500 }}>
                       {remarks}
                     </td>
                   </tr>
@@ -1128,10 +1131,10 @@ export default function ClientSubscriptionTab({
             disabled={isNewClient || loading}
             onClick={handleStartEdit}
             style={{
-              padding: '8px 24px',
-              fontSize: 13,
-              fontWeight: 600,
-              borderRadius: 6,
+              padding: '10px 28px',
+              fontSize: 13.5,
+              fontWeight: 700,
+              borderRadius: 10,
               cursor: isNewClient || loading ? 'not-allowed' : 'pointer',
               opacity: isNewClient || loading ? 0.6 : 1,
             }}
@@ -1146,10 +1149,10 @@ export default function ClientSubscriptionTab({
               disabled={saving}
               onClick={handleCancel}
               style={{
-                padding: '8px 20px',
-                fontSize: 13,
-                fontWeight: 600,
-                borderRadius: 6,
+                padding: '10px 24px',
+                fontSize: 13.5,
+                fontWeight: 700,
+                borderRadius: 10,
                 color: '#334155',
                 borderColor: '#cbd5e1',
                 background: '#ffffff',
@@ -1163,10 +1166,10 @@ export default function ClientSubscriptionTab({
               disabled={saving}
               onClick={handleSave}
               style={{
-                padding: '8px 22px',
-                fontSize: 13,
-                fontWeight: 600,
-                borderRadius: 6,
+                padding: '10px 26px',
+                fontSize: 13.5,
+                fontWeight: 700,
+                borderRadius: 10,
                 cursor: saving ? 'not-allowed' : 'pointer',
                 opacity: saving ? 0.75 : 1,
               }}

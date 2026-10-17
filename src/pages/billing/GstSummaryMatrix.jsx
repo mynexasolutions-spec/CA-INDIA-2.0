@@ -1,4 +1,4 @@
-import { money } from './billingUtils';
+import { moneyFixed as money } from './billingUtils';
 import { billingMode } from './billingProfile';
 
 export const GST_MATRIX_ROWS = [

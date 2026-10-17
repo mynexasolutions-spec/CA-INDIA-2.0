@@ -60,6 +60,7 @@ class ChangeRequestController extends Controller
 
         return [
             'text' => $text,
+            'layout' => ['layout_id' => (int) ($profile->default_layout_id ?: 1), 'colour_scheme' => (string) ($profile->default_colour_scheme ?: 'slate_blue')],
             'logo_path' => $profile->logo_path,
             'signature_path' => $profile->signature_path,
             'seal_path' => $profile->seal_path,
@@ -77,6 +78,10 @@ class ChangeRequestController extends Controller
 
         return [
             'text' => $text,
+            'layout' => [
+                'layout_id' => (int) ($payload['layout_id'] ?? ($profile->default_layout_id ?: 1)),
+                'colour_scheme' => (string) ($payload['colour_scheme'] ?? ($profile->default_colour_scheme ?: 'slate_blue')),
+            ],
             'logo_path' => $req->logo_path ?: $profile->logo_path,
             'signature_path' => $req->signature_path ?: $profile->signature_path,
             'seal_path' => $req->seal_path ?: $profile->seal_path,
@@ -94,6 +99,7 @@ class ChangeRequestController extends Controller
     {
         $status = $request->input('status', 'pending');
         $q = ClientChangeRequest::with(['clientProfile:id,business_name,client_name,client_code', 'submitter:id,name,email'])
+            ->where('status', '!=', ClientChangeRequest::STATUS_DRAFT)
             ->latest('id');
 
         if ($status && $status !== 'all') {
@@ -155,8 +161,33 @@ class ChangeRequestController extends Controller
             }
         }
 
+        // An approved prefix must beat the per-type numbering settings (document_numbering_settings),
+        // which are what the next document number is actually built from.
+        $prefixTypes = [
+            'invoice_prefix' => 'tax_invoice', 'bill_of_supply_prefix' => 'bill_of_supply',
+            'credit_note_prefix' => 'credit_note', 'debit_note_prefix' => 'debit_note',
+            'quotation_prefix' => 'quotation', 'delivery_challan_prefix' => 'delivery_challan',
+        ];
+        $settings = is_array($profile->document_numbering_settings) ? $profile->document_numbering_settings : [];
+        $settingsChanged = false;
+        foreach ($prefixTypes as $column => $type) {
+            if (array_key_exists($column, $updates) && trim((string) $updates[$column]) !== '') {
+                $key = \App\Services\Billing\InvoiceService::typeToSettingsKey($type);
+                $settings[$key] = is_array($settings[$key] ?? null) ? $settings[$key] : [];
+                $settings[$key]['prefix'] = trim((string) $updates[$column]);
+                $settingsChanged = true;
+            }
+        }
+        if ($settingsChanged) {
+            $updates['document_numbering_settings'] = $settings;
+        }
+
         if ($updates) {
             $profile->update($updates);
+        }
+
+        if ($req->section === ClientChangeRequest::SECTION_LAYOUT && ! empty($payload['layout_id']) && ! empty($payload['colour_scheme'])) {
+            ClientLayoutController::applyLayout($profile, (int) $payload['layout_id'], (string) $payload['colour_scheme']);
         }
 
         $req->update([

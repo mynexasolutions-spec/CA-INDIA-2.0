@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { INDIAN_STATES } from '../../data/indianStates';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 const AVATAR_COLORS = [
   { bg: '#e3ecfb', fg: '#1c4b9c' },
@@ -54,15 +55,23 @@ export default function PartiesPage() {
 
   const changeStatus = (s) => { setStatus(s); setPage(1); setNotice(''); load(1, s); };
 
-  const removeParty = async (p) => {
-    // eslint-disable-next-line no-alert
-    if (!window.confirm(`Delete "${p.name}"? If it already has invoices/documents it will be archived instead.`)) return;
+  const [deleting, setDeleting] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const removeParty = (p) => setDeleting(p);
+
+  const confirmRemove = async () => {
+    if (!deleting) return;
+    setDeleteBusy(true);
     try {
-      const r = await api(`/billing/parties/${p.id}`, { method: 'DELETE' });
-      setNotice(r.message || '');
+      const r = await api(`/billing/parties/${deleting.id}`, { method: 'DELETE' });
+      setNotice(r.message || `"${deleting.name}" deleted.`);
       load(page);
     } catch (e) {
       setNotice(e.message || 'Could not delete this party.');
+    } finally {
+      setDeleteBusy(false);
+      setDeleting(null);
     }
   };
 
@@ -133,7 +142,7 @@ export default function PartiesPage() {
 
       <div className="bp-card">
         {notice && <p className="bp-alert">{notice}</p>}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <div className="bp-parties-tabs" style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <button type="button" className={`bp-btn ${status === 'active' ? 'bp-btn-blue' : 'bp-btn-outline'}`} onClick={() => changeStatus('active')}>Active</button>
           <button type="button" className={`bp-btn ${status === 'archived' ? 'bp-btn-blue' : 'bp-btn-outline'}`} onClick={() => changeStatus('archived')}>Archived</button>
         </div>
@@ -241,6 +250,16 @@ export default function PartiesPage() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        title="Delete this company?"
+        message={deleting ? `"${deleting.name}" will be removed from your parties.` : ''}
+        detail="If this company already has invoices or documents, it is archived instead of deleted, so your records stay safe. You can restore it later from the Archived tab."
+        confirmLabel="Yes, Delete"
+        busy={deleteBusy}
+        onConfirm={confirmRemove}
+        onCancel={() => { if (!deleteBusy) setDeleting(null); }}
+      />
     </div>
   );
 }

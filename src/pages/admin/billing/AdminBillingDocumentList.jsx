@@ -230,7 +230,7 @@ export default function AdminBillingDocumentList() {
             margin: '40px auto',
           }}
         >
-          <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+          <div style={{ marginBottom: 12, color: '#dc2626', display: 'flex', justifyContent: 'center' }}><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg></div>
           <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>
             Unknown Document Type
           </h2>
@@ -281,7 +281,7 @@ export default function AdminBillingDocumentList() {
             margin: '40px auto',
           }}
         >
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+          <div style={{ marginBottom: 12, color: '#64748b', display: 'flex', justifyContent: 'center' }}><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg></div>
           <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>
             Client Not Found
           </h2>
@@ -471,12 +471,13 @@ export default function AdminBillingDocumentList() {
       >
         {/* Card 1: Total */}
         <div
-          className="bp-card"
+          className="bp-card" role="button" tabIndex={0} onClick={() => setActiveTab('all')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab('all'); } }}
           style={{
             background: '#eff6ff',
             border: '1px solid #dbeafe',
             borderRadius: 8,
             padding: '12px 14px',
+            cursor: 'pointer',
           }}
         >
           <div style={{ fontSize: 11.5, fontWeight: 700, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
@@ -489,12 +490,13 @@ export default function AdminBillingDocumentList() {
 
         {/* Card 2: B2B */}
         <div
-          className="bp-card"
+          className="bp-card" role="button" tabIndex={0} onClick={() => setActiveTab('b2b')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab('b2b'); } }}
           style={{
             background: '#ecfdf5',
             border: '1px solid #d1fae5',
             borderRadius: 8,
             padding: '12px 14px',
+            cursor: 'pointer',
           }}
         >
           <div style={{ fontSize: 11.5, fontWeight: 700, color: '#065f46', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
@@ -507,12 +509,13 @@ export default function AdminBillingDocumentList() {
 
         {/* Card 3: B2C */}
         <div
-          className="bp-card"
+          className="bp-card" role="button" tabIndex={0} onClick={() => setActiveTab('b2c')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab('b2c'); } }}
           style={{
             background: '#f5f3ff',
             border: '1px solid #ede9fe',
             borderRadius: 8,
             padding: '12px 14px',
+            cursor: 'pointer',
           }}
         >
           <div style={{ fontSize: 11.5, fontWeight: 700, color: '#5b21b6', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
@@ -525,12 +528,13 @@ export default function AdminBillingDocumentList() {
 
         {/* Card 4: Cancelled */}
         <div
-          className="bp-card"
+          className="bp-card" role="button" tabIndex={0} onClick={() => setActiveTab('cancelled')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab('cancelled'); } }}
           style={{
             background: '#fef2f2',
             border: '1px solid #fee2e2',
             borderRadius: 8,
             padding: '12px 14px',
+            cursor: 'pointer',
           }}
         >
           <div style={{ fontSize: 11.5, fontWeight: 700, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
@@ -543,12 +547,13 @@ export default function AdminBillingDocumentList() {
 
         {/* Card 5: Deleted */}
         <div
-          className="bp-card"
+          className="bp-card" role="button" tabIndex={0} onClick={() => setActiveTab('deleted')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveTab('deleted'); } }}
           style={{
             background: '#f8fafc',
             border: '1px solid #e2e8f0',
             borderRadius: 8,
             padding: '12px 14px',
+            cursor: 'pointer',
           }}
         >
           <div style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
@@ -560,16 +565,8 @@ export default function AdminBillingDocumentList() {
         </div>
       </div>
 
-      {/* 4. Five Tabs Bar with Counts */}
-      <div
-        style={{
-          display: 'flex',
-          borderBottom: '2px solid #e2e8f0',
-          marginBottom: 16,
-          gap: 6,
-          overflowX: 'auto',
-        }}
-      >
+      {/* 4. Five Tabs Bar with Counts (pills; active tab = blue background) */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
         {[
           { key: 'all', label: 'All', count: cards.total },
           { key: 'b2b', label: 'B2B', count: cards.b2b },
@@ -584,34 +581,18 @@ export default function AdminBillingDocumentList() {
               type="button"
               onClick={() => setActiveTab(tab.key)}
               style={{
-                background: 'none',
-                border: 'none',
-                borderBottom: isActive ? '3px solid #2563eb' : '3px solid transparent',
-                marginBottom: -2,
-                padding: '9px 16px',
+                background: isActive ? '#2563eb' : '#ffffff',
+                color: isActive ? '#ffffff' : '#1e293b',
+                border: `1px solid ${isActive ? '#2563eb' : '#cbd5e1'}`,
+                borderRadius: 8,
+                padding: '7px 20px',
                 fontSize: 13,
-                fontWeight: isActive ? 700 : 500,
-                color: isActive ? '#2563eb' : '#64748b',
+                fontWeight: isActive ? 700 : 600,
                 cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
                 transition: 'all 0.15s ease',
               }}
             >
-              <span>{tab.label}</span>
-              <span
-                style={{
-                  padding: '2px 7px',
-                  borderRadius: 999,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  background: isActive ? '#eff6ff' : '#f1f5f9',
-                  color: isActive ? '#2563eb' : '#64748b',
-                }}
-              >
-                {Number(tab.count || 0).toLocaleString('en-IN')}
-              </span>
+              {tab.label} ({Number(tab.count || 0).toLocaleString('en-IN')})
             </button>
           );
         })}
@@ -858,7 +839,7 @@ export default function AdminBillingDocumentList() {
           </div>
         ) : paginator.data.length === 0 ? (
           <div style={{ padding: '50px 20px', textAlign: 'center', color: '#64748b' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>📄</div>
+            <div style={{ marginBottom: 12, color: '#64748b', display: 'flex', justifyContent: 'center' }}><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg></div>
             <div style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
               No {docConfig.pluralLabel.toLowerCase()} found
             </div>
@@ -872,17 +853,17 @@ export default function AdminBillingDocumentList() {
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
                   <th style={{ padding: '8px 6px', width: 32, textAlign: 'center' }}>#</th>
-                  <th style={{ padding: '8px 8px', fontWeight: 700 }}>{docConfig.numberLabel}</th>
-                  <th style={{ padding: '8px 8px', fontWeight: 700 }}>{docConfig.dateLabel}</th>
-                  <th style={{ padding: '8px 8px', fontWeight: 700 }}>Creation Date</th>
-                  <th style={{ padding: '8px 8px', fontWeight: 700 }}>Customer Name</th>
-                  <th style={{ padding: '8px 8px', fontWeight: 700 }}>GSTIN</th>
+                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>{docConfig.numberLabel}</th>
+                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>{docConfig.dateLabel}</th>
+                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>Creation Date</th>
+                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>Customer Name</th>
+                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>GSTIN</th>
                   <th style={{ padding: '8px 6px', fontWeight: 700, textAlign: 'center' }}>Type</th>
-                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'right' }}>Taxable Value</th>
-                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'right' }}>IGST</th>
-                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'right' }}>CGST</th>
-                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'right' }}>SGST</th>
-                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'right' }}>Total Amount</th>
+                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>Taxable Value</th>
+                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>IGST</th>
+                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>CGST</th>
+                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>SGST</th>
+                  <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>Total Amount</th>
                   <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>Status</th>
                   <th style={{ padding: '8px 8px', fontWeight: 700, textAlign: 'center' }}>Action</th>
                 </tr>

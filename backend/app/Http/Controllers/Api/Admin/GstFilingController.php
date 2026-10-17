@@ -22,8 +22,21 @@ class GstFilingController extends Controller
     {
         $filingRequest = GstFilingRequest::with(['clientProfile.user', 'documents'])
             ->findOrFail($id);
-            
-        return response()->json($filingRequest);
+
+        $profile = $filingRequest->clientProfile;
+        $due = $profile
+            ? \App\Services\Billing\GstDueDate::dueDate($profile, (string) $filingRequest->return_type, (string) $filingRequest->filing_period)
+            : null;
+
+        return response()->json(array_merge($filingRequest->toArray(), [
+            'meta' => [
+                'taxpayer_type'    => $profile ? \App\Services\Billing\GstDueDate::taxpayerType($profile) : null,
+                'filing_frequency' => $profile ? \App\Services\Billing\GstDueDate::frequencyLabel($profile, (string) $filingRequest->return_type) : null,
+                'period_label'     => \App\Services\Billing\GstDueDate::periodLabel((string) $filingRequest->filing_period),
+                'due_date'         => $due?->format('d F Y'),
+                'request_date'     => $filingRequest->created_at?->format('d F Y'),
+            ],
+        ]));
     }
 
     public function updateStatus(Request $request, $id)

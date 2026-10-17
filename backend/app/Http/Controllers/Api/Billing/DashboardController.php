@@ -165,8 +165,14 @@ class DashboardController extends Controller
         $bos = (clone $base)->where('type', 'bill_of_supply')->whereIn('status', self::ISSUED_STATUSES);
         $dn = (clone $base)->where('type', 'debit_note');
         $cn = (clone $base)->where('type', 'credit_note');
-        $cancelled = CommercialDocument::where('client_profile_id', $pid)->where('status', 'cancelled');
+        // "Cancelled Invoices" counts cancelled invoice-type documents only (not quotations / challans),
+        // and they are never part of the active Tax Invoice count above.
+        $cancelled = CommercialDocument::where('client_profile_id', $pid)
+            ->where('status', 'cancelled')
+            ->whereIn('type', ['tax_invoice', 'bill_of_supply', 'debit_note', 'credit_note']);
         $this->applyPeriod($cancelled, $from, $to);
+        $quo = (clone $base)->where('type', 'quotation')->whereIn('status', self::ISSUED_STATUSES);
+        $dc = (clone $base)->where('type', 'delivery_challan')->whereIn('status', self::ISSUED_STATUSES);
 
         $gstBucket = function (Builder $q): array {
             $scope = (clone $q)->whereIn('status', self::ISSUED_STATUSES);
@@ -229,6 +235,10 @@ class DashboardController extends Controller
                 'credit_notes' => (clone $cn)->whereIn('status', self::ISSUED_STATUSES)->count(),
                 'credit_notes_value' => (float) (clone $cn)->whereIn('status', self::ISSUED_STATUSES)->sum(DB::raw('COALESCE(NULLIF(grand_total,0), total_amount)')),
                 'cancelled_invoices' => (clone $cancelled)->count(),
+                'quotations' => (clone $quo)->count(),
+                'quotations_value' => (float) (clone $quo)->sum(DB::raw('COALESCE(NULLIF(grand_total,0), total_amount)')),
+                'delivery_challans' => (clone $dc)->count(),
+                'delivery_challans_value' => (float) (clone $dc)->sum(DB::raw('COALESCE(NULLIF(grand_total,0), total_amount)')),
             ],
             'gst' => [
                 'taxable_value' => $gstTax['taxable_value'],

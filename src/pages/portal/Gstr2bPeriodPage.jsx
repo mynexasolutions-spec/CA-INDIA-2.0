@@ -1,15 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { api } from '../../api/client';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { api, getAuthToken } from '../../api/client';
 import { LoadingBlock } from '../../components/Spinner';
 import NumberedPagination from '../billing/NumberedPagination';
 
-function money(n) {
-  return `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-}
+/** "2026-08-01…" -> "01-08-2026" */
 function fmt(d) {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-IN');
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d));
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : new Date(d).toLocaleDateString('en-GB').replace(/\//g, '-');
+}
+const inr = (n) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+
+function saveBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+/** Excel-readable file from rows (header + body), no extra library. */
+function exportXls(name, headers, rows) {
+  const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const html = `<html><head><meta charset="utf-8"></head><body><table border="1"><thead><tr>${headers.map((h) => `<th style="background:#e8f0fe">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></body></html>`;
+  saveBlob(new Blob([html], { type: 'application/vnd.ms-excel' }), `${name}.xls`);
+}
+/** Authenticated file download (a plain link can't send the login token). */
+async function downloadWithAuth(url, filename) {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${getAuthToken()}`, Accept: '*/*' } });
+  if (!res.ok) throw new Error('Download failed. Please try again.');
+  saveBlob(await res.blob(), filename);
 }
 
 const BADGE = {
@@ -29,36 +48,14 @@ function Pill({ label, tone }) {
 /** Reconciliation status — new documents are Pending until marked Matched / Unmatched. */
 function MatchBadge({ status }) {
   if (status === 'matched') return <Pill label="Matched" tone="green" />;
-  if (status === 'unmatched') return <Pill label="Unmatched" tone="red" />;
-  return <Pill label="Pending" tone="grey" />;
-}
-
-/** ITC Eligibility is decided by the Admin only — read-only here ("Select" = not reviewed yet). */
-function EligibilityBadge({ value }) {
-  if (value === 'eligible') return <Pill label="Yes" tone="green" />;
-  if (value === 'ineligible') return <Pill label="No" tone="red" />;
-  return <Pill label="Select" tone="grey" />;
-}
-
-function KpiCard({ label, value, color, bg, border, icon }) {
-  return (
-    <div style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ width: 34, height: 34, borderRadius: 8, background: '#fff', border: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
-        {icon}
-      </span>
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 2 }}>{label}</div>
-        <div style={{ fontSize: 16, fontWeight: 850, color, lineHeight: 1.1 }}>{value}</div>
-      </div>
-    </div>
-  );
+  return <Pill label="Unmatched" tone="red" />;
 }
 
 // ── Tax-aware Invoice Form (shared by Add + Edit) ────────────────────────────
 
 function InvoiceForm({ initial = {}, period, onClose, onSaved, title, submitUrl, method = 'POST' }) {
   const [base, setBase] = useState({
-    invoice_date:   initial.invoice_date   || '',
+    invoice_date:   initial.invoice_date   ? String(initial.invoice_date).slice(0, 10) : '',
     invoice_number: initial.invoice_number || '',
     party_name:     initial.party_name     || '',
     gstin:          initial.gstin          || '',
@@ -70,98 +67,44 @@ function InvoiceForm({ initial = {}, period, onClose, onSaved, title, submitUrl,
   const [cgst, setCgstRaw]   = useState(String(initial.cgst        || ''));
   const [sgst, setSgstRaw]   = useState(String(initial.sgst_utgst  || ''));
 
-  // 'igst' | 'cgst_sgst' | null
-  const [taxMode, setTaxMode] = useState(() => {
-    const ig = parseFloat(initial.igst || 0);
-    const cg = parseFloat(initial.cgst || 0);
-    if (ig > 0) return 'igst';
-    if (cg > 0) return 'cgst_sgst';
-    return null;
-  });
-
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState('');
-  const [scanning, setScanning] = useState(false);
-  const fileRef = useRef(null);
 
   const igstVal = parseFloat(igst) || 0;
   const cgstVal = parseFloat(cgst) || 0;
   const sgstVal = parseFloat(sgst) || 0;
   const itcAmount = (igstVal + cgstVal + sgstVal).toFixed(2);
 
-  // ── Rule handlers ──────────────────────────────────────────────────────
-  const handleIgst = (v) => {
-    setIgstRaw(v);
+  // ── Tax rules ──────────────────────────────────────────────────────────
+  // IGST entered  -> CGST and SGST/UTGST are disabled (and empty).
+  // CGST entered  -> IGST disabled; SGST/UTGST = same amount, locked.
+  // SGST entered  -> IGST disabled; CGST = same amount, locked.
+  // The field the user typed in stays editable; ITC = IGST + CGST + SGST/UTGST.
+  const [driver, setDriver] = useState(() => {
+    if (parseFloat(initial.igst || 0) > 0) return 'igst';
+    if (parseFloat(initial.cgst || 0) > 0) return 'cgst';
+    if (parseFloat(initial.sgst_utgst || 0) > 0) return 'sgst';
+    return null;
+  });
+  const apply = (field, v) => {
     const n = parseFloat(v) || 0;
-    if (n > 0) {
-      setTaxMode('igst');
-      setCgstRaw('');
-      setSgstRaw('');
-    } else if (v === '' || v === '0') {
-      setTaxMode(null);
-    }
-  };
-
-  const handleCgst = (v) => {
-    setCgstRaw(v);
-    const n = parseFloat(v) || 0;
-    if (n > 0) {
-      setTaxMode('cgst_sgst');
-      setSgstRaw(v);   // mirror SGST = CGST
-      setIgstRaw('');
-    } else if (v === '' || v === '0') {
-      if (sgstVal === 0) setTaxMode(null);
-      setSgstRaw(v);
-    }
-  };
-
-  const handleSgst = (v) => {
-    setSgstRaw(v);
-    const n = parseFloat(v) || 0;
-    if (n > 0) {
-      setTaxMode('cgst_sgst');
-      setCgstRaw(v);   // mirror CGST = SGST
-      setIgstRaw('');
-    } else if (v === '' || v === '0') {
-      if (cgstVal === 0) setTaxMode(null);
+    if (field === 'igst') {
+      setIgstRaw(v);
+      if (n > 0) { setDriver('igst'); setCgstRaw(''); setSgstRaw(''); } else if (driver === 'igst') setDriver(null);
+    } else if (field === 'cgst') {
       setCgstRaw(v);
+      if (n > 0) { setDriver('cgst'); setIgstRaw(''); setSgstRaw(v); } else if (driver === 'cgst') { setDriver(null); setSgstRaw(''); }
+    } else {
+      setSgstRaw(v);
+      if (n > 0) { setDriver('sgst'); setIgstRaw(''); setCgstRaw(v); } else if (driver === 'sgst') { setDriver(null); setCgstRaw(''); }
     }
   };
-
-  // ── OCR upload ─────────────────────────────────────────────────────────
-  const handleScan = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setScanning(true);
-    setErr('');
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await api(`/client/gstr2b/period/${period}/projected/extract`, {
-        method: 'POST',
-        body: fd,
-      });
-      setBase({
-        invoice_date:   res.invoice_date   || base.invoice_date,
-        invoice_number: res.invoice_number || base.invoice_number,
-        party_name:     res.party_name     || base.party_name,
-        gstin:          res.gstin          || base.gstin,
-        taxable_value:  res.taxable_value  || base.taxable_value,
-      });
-      if (parseFloat(res.igst || 0) > 0) {
-        handleIgst(String(res.igst));
-      } else if (parseFloat(res.cgst || 0) > 0) {
-        handleCgst(String(res.cgst));
-      } else if (parseFloat(res.sgst_utgst || 0) > 0) {
-        handleSgst(String(res.sgst_utgst));
-      }
-    } catch (ex) {
-      setErr('OCR extraction failed: ' + ex.message);
-    } finally {
-      setScanning(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
-  };
+  const handleIgst = (v) => apply('igst', v);
+  const handleCgst = (v) => apply('cgst', v);
+  const handleSgst = (v) => apply('sgst', v);
+  const igstLocked = driver === 'cgst' || driver === 'sgst';
+  const cgstLocked = driver === 'igst' || driver === 'sgst';
+  const sgstLocked = driver === 'igst' || driver === 'cgst';
 
   const handleSave = async (ev) => {
     ev.preventDefault();
@@ -187,9 +130,6 @@ function InvoiceForm({ initial = {}, period, onClose, onSaved, title, submitUrl,
     }
   };
 
-  const igstDisabled = taxMode === 'cgst_sgst';
-  const cgstDisabled = taxMode === 'igst';
-  const sgstDisabled = taxMode === 'igst' || taxMode === 'cgst_sgst'; // always locked when cgst_sgst (auto-filled)
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -199,34 +139,10 @@ function InvoiceForm({ initial = {}, period, onClose, onSaved, title, submitUrl,
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--bp-navy)' }}>{title}</h3>
-            <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--bp-muted)' }}>Projected ITC — not for GST filing.</p>
+            <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--bp-muted)' }}>Projected ITC is for internal planning only — it is not final and is not used for GST filing.</p>
           </div>
           <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-
-        {/* OCR Scan Button */}
-        <div style={{ marginBottom: 16 }}>
-          <input ref={fileRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleScan} />
-          <button
-            type="button"
-            disabled={scanning}
-            onClick={() => fileRef.current?.click()}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-              background: scanning ? '#f8fafc' : 'linear-gradient(135deg,#eff6ff 0%,#f0fdf4 100%)',
-              border: '1.5px dashed #2563eb', borderRadius: 10, padding: '10px 16px',
-              cursor: scanning ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, color: '#1d4ed8',
-            }}
-          >
-            {scanning ? (
-              <svg className="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h.01M15 9h.01M9 15h6"/></svg>
-            )}
-            <span>{scanning ? 'Extracting invoice data with AI…' : 'Scan Invoice with AI (Upload Image or PDF)'}</span>
-            {!scanning && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: '#6d28d9', background: '#ede9fe', padding: '2px 8px', borderRadius: 6 }}>AI / OCR</span>}
           </button>
         </div>
 
@@ -236,11 +152,11 @@ function InvoiceForm({ initial = {}, period, onClose, onSaved, title, submitUrl,
           {/* Basic fields */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px', marginBottom: 16 }}>
             {[
-              { k: 'invoice_date',   label: 'Invoice Date',   type: 'date',   span: 1 },
-              { k: 'invoice_number', label: 'Invoice No.',    type: 'text',   span: 1 },
-              { k: 'party_name',     label: 'Party Name',     type: 'text',   span: 2 },
-              { k: 'gstin',          label: 'GSTIN',          type: 'text',   span: 2 },
-              { k: 'taxable_value',  label: 'Taxable Value (₹)', type: 'number', span: 2 },
+              { k: 'invoice_date',   label: 'Invoice Date *',   type: 'date',   span: 1 },
+              { k: 'invoice_number', label: 'Invoice No. *',    type: 'text',   span: 1 },
+              { k: 'party_name',     label: 'Party Name *',     type: 'text',   span: 2 },
+              { k: 'gstin',          label: 'GSTIN *',          type: 'text',   span: 2 },
+              { k: 'taxable_value',  label: 'Taxable Value (₹) *', type: 'number', span: 2 },
             ].map((f) => (
               <div key={f.k} style={{ gridColumn: `span ${f.span}`, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-navy)' }}>{f.label}</label>
@@ -250,90 +166,56 @@ function InvoiceForm({ initial = {}, period, onClose, onSaved, title, submitUrl,
                   step={f.type === 'number' ? '0.01' : undefined}
                   min={f.type === 'number' ? '0' : undefined}
                   value={base[f.k]}
-                  onChange={(e) => setBase((b) => ({ ...b, [f.k]: e.target.value }))}
+                  required
+                  maxLength={f.k === 'gstin' ? 15 : undefined}
+                  onChange={(e) => setBase((b) => ({ ...b, [f.k]: f.k === 'gstin' ? e.target.value.toUpperCase() : e.target.value }))}
                   style={{ height: 36 }}
                 />
               </div>
             ))}
           </div>
 
-          {/* Tax fields with business rules */}
-          <div style={{ background: '#f8fafc', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--bp-navy)', marginBottom: 10 }}>
-              Tax Amounts
-              <span style={{ marginLeft: 8, fontWeight: 500, color: '#64748b', fontSize: 11 }}>
-                Enter either IGST (inter-state) or CGST (intra-state). The other will be disabled automatically.
-              </span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px 12px' }}>
-              {/* IGST */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: igstDisabled ? '#94a3b8' : 'var(--bp-navy)' }}>
-                  IGST (₹)
-                  {igstDisabled && <span style={{ marginLeft: 4, fontSize: 10, color: '#94a3b8' }}>(disabled)</span>}
-                </label>
-                <input
-                  className="bp-input"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={igst}
-                  disabled={igstDisabled}
-                  onChange={(e) => handleIgst(e.target.value)}
-                  style={{ height: 36, background: igstDisabled ? '#f1f5f9' : undefined, color: igstDisabled ? '#94a3b8' : undefined }}
-                />
+          {/* Tax fields: strict business rules (see apply()) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '6px 14px', marginBottom: 14 }}>
+            {[
+              { key: 'igst', label: 'IGST (₹)', val: igst, locked: igstLocked, on: handleIgst, note: 'When IGST is entered, CGST and SGST/UTGST will be disabled.', tone: 'blue' },
+              { key: 'cgst', label: 'CGST (₹)', val: cgst, locked: cgstLocked, on: handleCgst, note: 'SGST/UTGST will be auto-filled with the same amount as CGST.', tone: 'green' },
+              { key: 'sgst', label: 'SGST / UTGST (₹)', val: sgst, locked: sgstLocked, on: handleSgst, note: null, tone: 'green' },
+            ].map((f) => (
+              <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: f.locked ? '#94a3b8' : 'var(--bp-navy)' }}>{f.label}</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    className="bp-input" type="number" step="0.01" min="0"
+                    value={f.val} readOnly={f.locked} disabled={f.locked && driver === 'igst'}
+                    onChange={(e) => !f.locked && f.on(e.target.value)}
+                    style={{ height: 38, width: '100%', paddingRight: f.locked ? 34 : undefined, background: f.locked ? '#eef2f7' : undefined, color: f.locked ? '#64748b' : undefined, fontWeight: f.locked && driver !== 'igst' ? 700 : undefined }}
+                  />
+                  {f.locked && driver !== 'igst' && (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', right: 11, top: 12 }} aria-label="Locked (auto-filled)"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                  )}
+                </div>
               </div>
-              {/* CGST */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: cgstDisabled ? '#94a3b8' : 'var(--bp-navy)' }}>
-                  CGST (₹)
-                  {cgstDisabled && <span style={{ marginLeft: 4, fontSize: 10, color: '#94a3b8' }}>(disabled)</span>}
-                </label>
-                <input
-                  className="bp-input"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={cgst}
-                  disabled={cgstDisabled}
-                  onChange={(e) => handleCgst(e.target.value)}
-                  style={{ height: 36, background: cgstDisabled ? '#f1f5f9' : undefined, color: cgstDisabled ? '#94a3b8' : undefined }}
-                />
+            ))}
+            {[
+              { note: 'When IGST is entered, CGST and SGST/UTGST will be disabled.', bg: '#eaf3ff', fg: '#1e40af', dot: '#2563eb' },
+              { note: 'SGST/UTGST will be auto-filled with the same amount as CGST.', bg: '#e8f8ee', fg: '#166534', dot: '#16a34a' },
+              { note: 'CGST will be auto-filled when you enter SGST/UTGST.', bg: '#e8f8ee', fg: '#166534', dot: '#16a34a' },
+            ].map((n) => (
+              <div key={n.note} style={{ display: 'flex', gap: 7, alignItems: 'flex-start', background: n.bg, color: n.fg, borderRadius: 9, padding: '7px 9px', fontSize: 11, lineHeight: 1.35 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill={n.dot} style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="11" x2="12" y2="16" stroke="white" strokeWidth="2.4" strokeLinecap="round" /><line x1="12" y1="7.5" x2="12.01" y2="7.5" stroke="white" strokeWidth="2.6" strokeLinecap="round" /></svg>
+                {n.note}
               </div>
-              {/* SGST */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: sgstDisabled ? '#94a3b8' : 'var(--bp-navy)' }}>
-                  SGST/UTGST (₹)
-                  {taxMode === 'cgst_sgst' && <span style={{ marginLeft: 4, fontSize: 10, color: '#2563eb' }}>(auto)</span>}
-                  {taxMode === 'igst' && <span style={{ marginLeft: 4, fontSize: 10, color: '#94a3b8' }}>(disabled)</span>}
-                </label>
-                <input
-                  className="bp-input"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={sgst}
-                  readOnly={taxMode === 'cgst_sgst'}
-                  disabled={taxMode === 'igst'}
-                  onChange={(e) => taxMode !== 'cgst_sgst' && handleSgst(e.target.value)}
-                  style={{
-                    height: 36,
-                    background: (taxMode === 'igst' || taxMode === 'cgst_sgst') ? '#f1f5f9' : undefined,
-                    color: taxMode === 'igst' ? '#94a3b8' : taxMode === 'cgst_sgst' ? '#2563eb' : undefined,
-                    fontWeight: taxMode === 'cgst_sgst' ? 600 : undefined,
-                  }}
-                />
-              </div>
-            </div>
+            ))}
+          </div>
 
-            {/* ITC Amount (auto, read-only) */}
-            <div style={{ marginTop: 12, padding: '10px 14px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#1e40af' }}>
-                ITC Amount (Auto-calculated)
-                <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: '#3b82f6' }}>= IGST + CGST + SGST</span>
-              </span>
-              <span style={{ fontSize: 18, fontWeight: 800, color: '#1d4ed8' }}>₹{Number(itcAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+          {/* ITC Amount — never editable, always IGST + CGST + SGST/UTGST */}
+          <div style={{ marginBottom: 16, padding: '12px 16px', background: '#eaf3ff', borderRadius: 12, border: '1px solid #cfe2ff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1e40af' }}>ITC Amount (₹) <span style={{ fontWeight: 600, color: '#3b82f6' }}>(Auto-calculated)</span></div>
+              <div style={{ fontSize: 11, color: '#3b82f6', marginTop: 2 }}>ITC Amount = IGST + CGST + SGST/UTGST</div>
             </div>
+            <span style={{ fontSize: 22, fontWeight: 800, color: '#1d4ed8' }}>{Number(itcAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
           </div>
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
@@ -348,9 +230,72 @@ function InvoiceForm({ initial = {}, period, onClose, onSaved, title, submitUrl,
   );
 }
 
+// ── shared pieces ────────────────────────────────────────────────────────────
+
+const SVG = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+const IcDoc = () => <svg {...SVG}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="13" y2="17" /></svg>;
+const IcCheckDoc = () => <svg {...SVG}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="9 15 11 17 15 13" /></svg>;
+const IcCrossDoc = () => <svg {...SVG}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><line x1="9" y1="13" x2="15" y2="19" /><line x1="15" y1="13" x2="9" y2="19" /></svg>;
+const IcRupee = () => <svg {...SVG}><path d="M6 4h12M6 9h12M9 4c6 0 6 9 0 9H6l8 7" /></svg>;
+const IcSearch = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>;
+const IcFilter = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>;
+const IcDownload = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>;
+const IcUpload = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>;
+const IcPlus = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>;
+
+/** Summary tile: icon box, label, big value and a small sub-line. */
+function Tile({ label, value, sub, tone, icon }) {
+  const T = {
+    blue:   { bg: 'linear-gradient(135deg,#eef5ff,#e2edff)', bd: '#d2e2fb', ic: '#cfe0ff', fg: '#1d4ed8' },
+    green:  { bg: 'linear-gradient(135deg,#f0fbf4,#e0f6e8)', bd: '#cdeed9', ic: '#c9efd7', fg: '#15803d' },
+    red:    { bg: 'linear-gradient(135deg,#fff3f3,#fde6e6)', bd: '#f8d2d2', ic: '#fbd5d5', fg: '#dc2626' },
+    purple: { bg: 'linear-gradient(135deg,#f6f2ff,#ece5fd)', bd: '#e0d4fa', ic: '#e4d9fb', fg: '#7c3aed' },
+    orange: { bg: 'linear-gradient(135deg,#fff8ec,#fef0d6)', bd: '#f9e3bc', ic: '#fde4b8', fg: '#d97706' },
+  }[tone];
+  return (
+    <div style={{ background: T.bg, border: `1px solid ${T.bd}`, borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+      <span style={{ width: 44, height: 44, borderRadius: 12, background: T.ic, color: T.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</span>
+      <div style={{ minWidth: 0, lineHeight: 1.25 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: '#334155' }}>{label}</div>
+        <div style={{ fontSize: 21, fontWeight: 800, color: T.fg, whiteSpace: 'nowrap' }}>{value}</div>
+        {sub && <div style={{ fontSize: 11, color: '#64748b' }}>{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+const CARD = { background: '#fff', border: '1px solid #e3ebf6', borderRadius: 16, padding: '18px 20px', boxShadow: '0 12px 28px -24px rgba(15,42,95,.55)' };
+const CTRL = { height: 38, borderRadius: 10, border: '1px solid #d7e1ef', background: '#fff', padding: '0 12px', fontSize: 13, color: '#1e293b' };
+const BTN_OUT = { height: 38, padding: '0 16px', borderRadius: 10, border: '1px solid #bfd3f6', background: '#fff', color: '#1d4ed8', fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' };
+const BTN_SOLID = { ...BTN_OUT, border: 'none', background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', color: '#fff', boxShadow: '0 10px 16px -10px rgba(29,78,216,.85)' };
+
+/** Search box + Filter + Export controls shared by both tables. */
+function Toolbar({ q, setQ, filterOpen, setFilterOpen, onExport, exporting, children }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ position: 'relative' }}>
+        <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}><IcSearch /></span>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by invoice no., supplier name or GSTIN…" style={{ ...CTRL, width: 300, paddingLeft: 34 }} />
+      </div>
+      <div style={{ position: 'relative' }}>
+        <button type="button" style={BTN_OUT} onClick={() => setFilterOpen((v) => !v)}><IcFilter /> Filter</button>
+        {filterOpen && (
+          <div style={{ position: 'absolute', right: 0, top: 44, zIndex: 20, width: 220, background: '#fff', border: '1px solid #dfe8f5', borderRadius: 12, padding: 14, boxShadow: '0 20px 40px -18px rgba(15,42,95,.45)' }}>
+            {children}
+          </div>
+        )}
+      </div>
+      <button type="button" style={BTN_SOLID} onClick={onExport} disabled={exporting}><IcDownload /> {exporting ? 'Exporting…' : 'Export'}</button>
+    </div>
+  );
+}
+
+const TH = { background: '#e9f0fb', color: '#0f2a5f', fontWeight: 800, fontSize: 11.5, padding: '11px 10px', textAlign: 'center', borderBottom: '1px solid #d6e3f7', whiteSpace: 'nowrap' };
+const TD = { padding: '11px 10px', textAlign: 'center', fontSize: 12.5, color: '#1e293b', borderBottom: '1px solid #eef3fa', whiteSpace: 'nowrap' };
+
 // ── GSTR-2B Invoices Tab ─────────────────────────────────────────────────────
 
-function InvoicesTab({ period }) {
+function InvoicesTab({ period, label }) {
   const [result, setResult]     = useState(null);
   const [loading, setLoading]   = useState(true);
   const [err, setErr]           = useState('');
@@ -358,9 +303,12 @@ function InvoicesTab({ period }) {
   const [perPage, setPerPage]   = useState(10);
   const [matchStatus, setMatchStatus] = useState('');
   const [q, setQ]               = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [selected, setSelected] = useState([]);
-  const [action, setAction] = useState('');
+  const [action, setAction]     = useState('');
   const [applying, setApplying] = useState(false);
+  const [detail, setDetail] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -374,138 +322,151 @@ function InvoicesTab({ period }) {
       .finally(() => setLoading(false));
   }, [period, page, perPage, matchStatus, q]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { const t = setTimeout(load, q ? 300 : 0); return () => clearTimeout(t); }, [load, q]);
   useEffect(() => { setSelected([]); }, [page, perPage, matchStatus, q, period]);
 
-  // Select invoices -> choose Matched / Unmatched -> Apply (one or many).
   const handleApply = async () => {
     if (!selected.length || !action) return;
-    setApplying(true);
-    setErr('');
+    setApplying(true); setErr('');
     try {
       await api('/client/gstr2b/invoices/bulk-match-status', { method: 'POST', body: { ids: selected, match_status: action } });
-      setSelected([]);
-      setAction('');
+      setSelected([]); setAction('');
       await load();
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setApplying(false);
-    }
+    } catch (e) { setErr(e.message); } finally { setApplying(false); }
   };
 
-  const toggleOne = (id) => setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
-  const toggleAllRows = (ids) => setSelected((cur) => (ids.length > 0 && ids.every((id) => cur.includes(id)) ? [] : ids));
-  const actionLabel = (verb) => (selected.length > 1 ? `Mark Selected as ${verb}` : `Mark as ${verb}`);
+  const doExport = async () => {
+    setExporting(true);
+    try {
+      const qs = new URLSearchParams({ page: 1, per_page: 100 });
+      if (matchStatus) qs.set('match_status', matchStatus);
+      if (q) qs.set('q', q);
+      let all = [];
+      let pg = 1;
+      let last = 1;
+      do {
+        qs.set('page', pg);
+        // eslint-disable-next-line no-await-in-loop
+        const d = await api(`/client/gstr2b/period/${period}/invoices?${qs}`);
+        all = all.concat(d.data || []);
+        last = d.last_page || 1;
+        pg += 1;
+      } while (pg <= last);
+      exportXls(`gstr2b_${period}_invoices`,
+        ['S. No.', 'Invoice Date', 'Invoice No.', 'Supplier Name', 'Supplier GSTIN', 'Taxable Value', 'IGST', 'CGST', 'SGST', 'ITC Amount', 'Match Status', 'Source'],
+        all.map((r, i) => [i + 1, fmt(r.invoice_date), r.invoice_number, r.supplier_name, r.supplier_gstin, r.taxable_value, r.igst, r.cgst, r.sgst, r.total_gst, r.match_status === 'matched' ? 'Matched' : 'Unmatched', 'GST Portal']));
+    } catch (e) { setErr(e.message); } finally { setExporting(false); }
+  };
 
-  const summary = result?.summary || {};
-  const rows    = result?.data    || [];
-
-  const kpis = [
-    { label: 'Total Invoices',    value: summary.total_invoices    ?? 0,  color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe', icon: <InvIcon /> },
-    { label: 'Matched Invoices',  value: summary.matched_invoices  ?? 0,  color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0', icon: <MatchIcon /> },
-    { label: 'Unmatched Invoices',value: summary.unmatched_invoices ?? 0, color: '#dc2626', bg: '#fef2f2', border: '#fecaca', icon: <UnmatchIcon /> },
-    { label: 'Matched ITC',       value: money(summary.matched_itc),      color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0', icon: <ChartIcon /> },
-    { label: 'Unmatched ITC',     value: money(summary.unmatched_itc),    color: '#dc2626', bg: '#fef2f2', border: '#fecaca', icon: <ChartIcon /> },
-    { label: 'Total ITC',         value: money(summary.total_itc),        color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', icon: <ChartIcon /> },
-  ];
+  const sm   = result?.summary || {};
+  const rows = result?.data || [];
+  const total = sm.total_invoices ?? 0;
+  const matched = sm.matched_invoices ?? 0;
+  const unmatched = total - matched;
+  const totalItc = sm.total_itc ?? 0;
+  const matchedItc = sm.matched_itc ?? 0;
+  const unmatchedItc = totalItc - matchedItc;
+  const pct = (n, d) => (d > 0 ? `${((n / d) * 100).toFixed(2)}% of total${d === totalItc && d !== total ? ' ITC' : ''}` : '0% of total');
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 16 }}>
-        {kpis.map((k) => <KpiCard key={k.label} {...k} />)}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12, marginBottom: 18 }} className="g2b-tiles">
+        <Tile tone="blue"   icon={<IcDoc />}      label="Total Invoices"     value={total}     sub="All documents" />
+        <Tile tone="green"  icon={<IcCheckDoc />} label="Matched Invoices"   value={matched}   sub={pct(matched, total)} />
+        <Tile tone="red"    icon={<IcCrossDoc />} label="Unmatched Invoices" value={unmatched} sub={pct(unmatched, total)} />
+        <Tile tone="purple" icon={<IcRupee />}     label="Matched ITC Amount" value={`₹ ${inr(matchedItc)}`}   sub={totalItc ? `${((matchedItc / totalItc) * 100).toFixed(2)}% of total ITC` : '0% of total ITC'} />
+        <Tile tone="orange" icon={<IcRupee />}     label="Unmatched ITC Amount" value={`₹ ${inr(unmatchedItc)}`} sub={totalItc ? `${((unmatchedItc / totalItc) * 100).toFixed(2)}% of total ITC` : '0% of total ITC'} />
+        <Tile tone="blue"   icon={<IcRupee />}     label="Total ITC as per GSTR-2B" value={`₹ ${inr(totalItc)}`} />
       </div>
-      <div className="bp-card no-print" style={{ padding: '12px 16px', marginBottom: 12 }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-navy)' }}>Search</span>
-            <input className="bp-input" style={{ height: 36, width: 220 }} placeholder="Supplier, GSTIN or Invoice #"
-              value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
+
+      <div style={CARD}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 800, fontSize: 15, color: '#0f2a5f' }}>
+              <span style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg,#2563eb,#1d4ed8)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IcDoc /></span>
+              Invoices / Documents (Uploaded by Admin)
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>Below are the invoices/documents available for {label}. These are uploaded by the Admin user from GSTR-2B or other sources.</div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-navy)' }}>Match Status</span>
-            <select className="bp-select" style={{ height: 36, minWidth: 120 }} value={matchStatus}
-              onChange={(e) => { setMatchStatus(e.target.value); setPage(1); }}>
+          <Toolbar q={q} setQ={(v) => { setQ(v); setPage(1); }} filterOpen={filterOpen} setFilterOpen={setFilterOpen} onExport={doExport} exporting={exporting}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>Match Status</label>
+            <select style={{ ...CTRL, width: '100%' }} value={matchStatus} onChange={(e) => { setMatchStatus(e.target.value); setPage(1); setFilterOpen(false); }}>
               <option value="">All</option>
-              <option value="pending">Pending</option>
               <option value="matched">Matched</option>
               <option value="unmatched">Unmatched</option>
             </select>
+          </Toolbar>
+        </div>
+
+        {selected.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#eef4ff', border: '1px solid #d6e3fa', borderRadius: 10, padding: '8px 12px', marginBottom: 12, flexWrap: 'wrap' }}>
+            <b style={{ fontSize: 12.5, color: '#0f2a5f' }}>{selected.length} selected</b>
+            <select style={{ ...CTRL, height: 34 }} value={action} onChange={(e) => setAction(e.target.value)} disabled={applying}>
+              <option value="">Select Action</option>
+              <option value="matched">Mark as Matched</option>
+              <option value="unmatched">Mark as Unmatched</option>
+            </select>
+            <button type="button" style={{ ...BTN_SOLID, height: 34 }} disabled={!action || applying} onClick={handleApply}>{applying ? 'Applying…' : 'Apply'}</button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--bp-navy)' }}>
-              Reconciliation{selected.length > 0 ? ` · ${selected.length} selected` : ''}
-            </span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <select className="bp-select" style={{ height: 36, minWidth: 190 }} value={action}
-                disabled={!selected.length || applying} onChange={(e) => setAction(e.target.value)}>
-                <option value="">Select Action</option>
-                <option value="matched">{actionLabel('Matched')}</option>
-                <option value="unmatched">{actionLabel('Unmatched')}</option>
-              </select>
-              <button type="button" className="bp-btn bp-btn-primary" style={{ height: 36, borderRadius: 8 }}
-                disabled={!selected.length || !action || applying} onClick={handleApply}>
-                {applying ? 'Applying…' : 'Apply'}
-              </button>
+        )}
+
+        {err && <p className="bp-alert bp-alert-error" style={{ marginBottom: 10 }}>{err}</p>}
+        {loading && !rows.length ? <LoadingBlock /> : (
+          <>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...TH, width: 34 }}>
+                      <input type="checkbox" aria-label="Select all invoices" checked={rows.length > 0 && rows.every((r) => selected.includes(r.id))}
+                        onChange={() => setSelected((cur) => (rows.length > 0 && rows.every((r) => cur.includes(r.id)) ? [] : rows.map((r) => r.id)))} />
+                    </th>
+                    {['S. No.', 'Invoice Date', 'Invoice No.', 'Supplier Name', 'Supplier GSTIN', 'Taxable Value (₹)', 'IGST (₹)', 'CGST (₹)', 'SGST (₹)', 'ITC Amount (₹)', 'Match Status', 'Source'].map((h) => <th key={h} style={TH}>{h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={r.id} style={selected.includes(r.id) ? { background: '#eff6ff' } : (i % 2 ? { background: '#f9fbff' } : undefined)}>
+                      <td style={TD}><input type="checkbox" aria-label={`Select invoice ${r.invoice_number || r.id}`} checked={selected.includes(r.id)} onChange={() => setSelected((cur) => (cur.includes(r.id) ? cur.filter((x) => x !== r.id) : [...cur, r.id]))} /></td>
+                      <td style={{ ...TD, color: '#64748b' }}>{(page - 1) * perPage + i + 1}</td>
+                      <td style={TD}>{fmt(r.invoice_date)}</td>
+                      <td style={TD}><button type="button" onClick={() => setDetail(r)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#1d4ed8', fontWeight: 700, textDecoration: 'underline', font: 'inherit' }}>{r.invoice_number || '—'}</button></td>
+                      <td style={TD}>{r.supplier_name || '—'}</td>
+                      <td style={{ ...TD, fontFamily: 'monospace', fontSize: 12 }}>{r.supplier_gstin || '—'}</td>
+                      <td style={TD}>{inr(r.taxable_value)}</td>
+                      <td style={TD}>{inr(r.igst)}</td>
+                      <td style={TD}>{inr(r.cgst)}</td>
+                      <td style={TD}>{inr(r.sgst)}</td>
+                      <td style={{ ...TD, fontWeight: 800, color: '#0f2a5f' }}>{inr(r.total_gst)}</td>
+                      <td style={TD}><MatchBadge status={r.match_status} /></td>
+                      <td style={TD}>GST Portal</td>
+                    </tr>
+                  ))}
+                  {!rows.length && <tr><td colSpan={13} style={{ ...TD, padding: '40px 16px', color: '#94a3b8' }}>No invoices found for this period.</td></tr>}
+                </tbody>
+              </table>
             </div>
+            <NumberedPagination meta={result} perPage={perPage} onPerPage={(v) => { setPerPage(v); setPage(1); }} onPage={setPage} itemLabel="documents" perPageOptions={[10, 25, 50]} />
+          </>
+        )}
+      </div>
+
+      {detail && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,.45)' }} onClick={() => setDetail(null)} />
+          <div style={{ position: 'relative', background: '#fff', borderRadius: 18, width: '100%', maxWidth: 460, padding: '22px 24px', boxShadow: '0 30px 60px -20px rgba(15,42,95,.5)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f2a5f' }}>Invoice {detail.invoice_number}</h3>
+              <button type="button" onClick={() => setDetail(null)} aria-label="Close" style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: '#eef2f8', cursor: 'pointer', color: '#475569' }}>×</button>
+            </div>
+            {[['Invoice Date', fmt(detail.invoice_date)], ['Supplier Name', detail.supplier_name], ['Supplier GSTIN', detail.supplier_gstin], ['Taxable Value (₹)', inr(detail.taxable_value)], ['IGST (₹)', inr(detail.igst)], ['CGST (₹)', inr(detail.cgst)], ['SGST (₹)', inr(detail.sgst)], ['ITC Amount (₹)', inr(detail.total_gst)], ['Match Status', detail.match_status === 'matched' ? 'Matched' : 'Unmatched'], ['Source', 'GST Portal']].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: '1px solid #eef3fa', fontSize: 13 }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>{k}</span>
+                <b style={{ color: '#0f2a5f', textAlign: 'right' }}>{v || '—'}</b>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
-      {err && <p className="bp-alert bp-alert-error" style={{ marginBottom: 10 }}>{err}</p>}
-      {loading ? <div className="bp-card"><LoadingBlock /></div> : (
-        <>
-          <div className="bp-table-wrapper" style={{ overflowX: 'auto' }}>
-            <table className="bp-table bp-doc-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 36 }}>
-                    <input type="checkbox" aria-label="Select all invoices"
-                      checked={rows.length > 0 && rows.every((r) => selected.includes(r.id))}
-                      onChange={() => toggleAllRows(rows.map((r) => r.id))} />
-                  </th>
-                  <th>S.No</th><th>Invoice Date</th><th>Invoice No.</th><th>Supplier Name</th>
-                  <th>Supplier GSTIN</th><th style={{ textAlign: 'right' }}>Taxable Value</th>
-                  <th style={{ textAlign: 'right' }}>IGST</th><th style={{ textAlign: 'right' }}>CGST</th>
-                  <th style={{ textAlign: 'right' }}>SGST</th><th style={{ textAlign: 'right' }}>ITC Amount</th>
-                  <th>ITC Eligibility</th><th>Reconciliation Status</th><th>Source</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={r.id} style={selected.includes(r.id) ? { background: '#eff6ff' } : undefined}>
-                    <td>
-                      <input type="checkbox" aria-label={`Select invoice ${r.invoice_number || r.id}`}
-                        checked={selected.includes(r.id)} onChange={() => toggleOne(r.id)} />
-                    </td>
-                    <td style={{ color: '#94a3b8', fontSize: 12 }}>{(page - 1) * perPage + i + 1}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{fmt(r.invoice_date)}</td>
-                    <td style={{ fontWeight: 600 }}>{r.invoice_number || '—'}</td>
-                    <td>{r.supplier_name || '—'}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{r.supplier_gstin || '—'}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{money(r.taxable_value)}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{money(r.igst)}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{money(r.cgst)}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{money(r.sgst)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#2563eb', whiteSpace: 'nowrap' }}>{money(r.total_gst)}</td>
-                    <td><EligibilityBadge value={r.itc_eligibility} /></td>
-                    <td><MatchBadge status={r.match_status} /></td>
-                    <td>
-                      <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' }}>
-                        GST Portal
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-                {!rows.length && (
-                  <tr><td colSpan={14} style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--bp-muted)' }}>No invoices found for this period.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <NumberedPagination meta={result} perPage={perPage}
-            onPerPage={(v) => { setPerPage(v); setPage(1); }}
-            onPage={setPage} itemLabel="invoices" perPageOptions={[10, 25, 50]} />
-        </>
       )}
     </div>
   );
@@ -517,9 +478,18 @@ function ProjectedTab({ period }) {
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr]         = useState('');
+  const [ok, setOk]           = useState('');
+  const [importErrors, setImportErrors] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [q, setQ]             = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [taxFilter, setTaxFilter] = useState('');
+  const [page, setPage]       = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -537,206 +507,170 @@ function ProjectedTab({ period }) {
     try {
       await api(`/client/gstr2b/period/${period}/projected/${id}`, { method: 'DELETE' });
       setRows((r) => r.filter((x) => x.id !== id));
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setDeleting(null);
-    }
+    } catch (e) { setErr(e.message); } finally { setDeleting(null); }
   };
 
-  // Summary totals
-  const totals = rows.reduce((acc, r) => ({
-    count:         acc.count + 1,
-    taxable_value: acc.taxable_value + Number(r.taxable_value || 0),
-    igst:          acc.igst          + Number(r.igst          || 0),
-    cgst:          acc.cgst          + Number(r.cgst          || 0),
-    sgst:          acc.sgst          + Number(r.sgst_utgst    || 0),
-    itc:           acc.itc           + Number(r.itc_amount    || 0),
-  }), { count: 0, taxable_value: 0, igst: 0, cgst: 0, sgst: 0, itc: 0 });
+  const downloadTemplate = async () => {
+    setErr('');
+    try { await downloadWithAuth(`/api/client/gstr2b/period/${period}/projected/template`, 'gstr2b_projected_itc_template.xlsx'); }
+    catch (e) { setErr(e.message); }
+  };
 
-  const summaryKpis = [
-    { label: 'Total Projected Invoices',   value: totals.count,         color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe', icon: <InvIcon /> },
-    { label: 'Projected Taxable Value',    value: money(totals.taxable_value), color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: <ChartIcon /> },
-    { label: 'Projected IGST',             value: money(totals.igst),   color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: <ChartIcon /> },
-    { label: 'Projected CGST',             value: money(totals.cgst),   color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: <ChartIcon /> },
-    { label: 'Projected SGST',             value: money(totals.sgst),   color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd', icon: <ChartIcon /> },
-    { label: 'Total Projected ITC',        value: money(totals.itc),    color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0', icon: <ChartIcon /> },
-  ];
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (fileRef.current) fileRef.current.value = '';
+    if (!file) return;
+    setUploading(true); setErr(''); setOk(''); setImportErrors([]);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api(`/client/gstr2b/period/${period}/projected/import`, { method: 'POST', body: fd });
+      setOk(res.message || 'Invoices imported.');
+      await load();
+    } catch (ex) {
+      setErr(ex.message);
+      setImportErrors(ex.data?.errors || []);
+    } finally { setUploading(false); }
+  };
+
+  const shown = rows.filter((r) => {
+    const t = q.trim().toLowerCase();
+    if (t && ![r.invoice_number, r.party_name, r.gstin].some((v) => String(v || '').toLowerCase().includes(t))) return false;
+    if (taxFilter === 'igst' && !(Number(r.igst) > 0)) return false;
+    if (taxFilter === 'cgst' && !(Number(r.cgst) > 0 || Number(r.sgst_utgst) > 0)) return false;
+    return true;
+  });
+  const lastPage = Math.max(1, Math.ceil(shown.length / perPage));
+  const curPage = Math.min(page, lastPage);
+  const pageRows = shown.slice((curPage - 1) * perPage, curPage * perPage);
+
+  const totals = rows.reduce((acc, r) => ({
+    count: acc.count + 1,
+    taxable: acc.taxable + Number(r.taxable_value || 0),
+    igst: acc.igst + Number(r.igst || 0),
+    cgst: acc.cgst + Number(r.cgst || 0),
+    sgst: acc.sgst + Number(r.sgst_utgst || 0),
+    itc: acc.itc + Number(r.itc_amount || 0),
+  }), { count: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, itc: 0 });
+
+  const doExport = () => exportXls(`gstr2b_${period}_projected_itc`,
+    ['S. No.', 'Invoice Date', 'Invoice No.', 'Supplier Name', 'Supplier GSTIN', 'Taxable Value', 'IGST', 'CGST', 'SGST', 'ITC Amount'],
+    shown.map((r, i) => [i + 1, fmt(r.invoice_date), r.invoice_number, r.party_name, r.gstin, r.taxable_value, r.igst, r.cgst, r.sgst_utgst, r.itc_amount]));
 
   return (
     <div>
-      {/* Summary KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 16 }}>
-        {summaryKpis.map((k) => <KpiCard key={k.label} {...k} />)}
-      </div>
-
-      {/* Info Banner */}
-      <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 16 }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
-          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 13, color: '#92400e', marginBottom: 2 }}>Projected ITC — Not for Filing</div>
-          <div style={{ fontSize: 12, color: '#78350f' }}>
-            Invoices added here are for internal planning and estimation purposes only. They are not part of the official GSTR-2B data from the GST portal and cannot be used for GST return filing.
+      <div style={{ ...CARD, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16, background: '#f5f9ff' }}>
+        <span style={{ width: 40, height: 40, borderRadius: '50%', background: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="12" y1="11" x2="12" y2="17" /><line x1="12" y1="7" x2="12.01" y2="7" /></svg>
+        </span>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ fontWeight: 800, fontSize: 15, color: '#0f2a5f' }}>Projected ITC (Client Upload)</div>
+          <div style={{ fontSize: 12.5, color: '#475569', marginTop: 2 }}>
+            Upload your expected purchase invoices for the tax period to estimate your potential ITC. This is for your internal planning purposes only.{' '}
+            <b style={{ color: '#dc2626' }}>This is NOT FINAL</b> and will not be considered for filing. Once the actual GSTR-2B is available, the Admin user can delete the projected ITC data.
           </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button type="button" style={BTN_OUT} onClick={downloadTemplate}>
+            <IcDownload /> <span style={{ lineHeight: 1.1 }}>Download Format<br /><small style={{ fontWeight: 500 }}>(Excel Template)</small></span>
+          </button>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onFile} />
+          <button type="button" style={{ ...BTN_SOLID, height: 'auto', minHeight: 38 }} onClick={() => fileRef.current?.click()} disabled={uploading}>
+            <IcUpload /> <span style={{ lineHeight: 1.1 }}>{uploading ? 'Uploading…' : 'Upload Excel'}<br /><small style={{ fontWeight: 500 }}>(Use our template)</small></span>
+          </button>
+          <button type="button" style={BTN_OUT} onClick={() => setShowAdd(true)}><IcPlus /> Add Invoice Manually</button>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button type="button" className="bp-btn bp-btn-outline"
-          style={{ height: 38, gap: 8, display: 'flex', alignItems: 'center', borderRadius: 8, fontWeight: 600 }}
-          onClick={() => {
-            const a = document.createElement('a');
-            a.href = `/api/client/gstr2b/period/${period}/projected/template`;
-            a.download = 'gstr2b_projected_template.xlsx';
-            a.click();
-          }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Download Format (Excel Template)
-        </button>
-        <button type="button" className="bp-btn bp-btn-outline"
-          style={{ height: 38, gap: 8, display: 'flex', alignItems: 'center', borderRadius: 8, fontWeight: 600 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          Upload Excel
-        </button>
-        <button type="button" className="bp-btn bp-btn-primary"
-          style={{ height: 38, gap: 8, display: 'flex', alignItems: 'center', borderRadius: 8, fontWeight: 600, marginLeft: 'auto' }}
-          onClick={() => setShowAdd(true)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
-          </svg>
-          Add Invoice Manually
-        </button>
-      </div>
-
-      {err && <p className="bp-alert bp-alert-error" style={{ marginBottom: 10 }}>{err}</p>}
-
-      {loading ? <div className="bp-card"><LoadingBlock /></div> : (
-        <>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--bp-navy)', marginBottom: 8 }}>
-            Projected Invoices (Uploaded by Client)
-          </div>
-          <div className="bp-table-wrapper" style={{ overflowX: 'auto' }}>
-            <table className="bp-table bp-doc-table">
-              <thead>
-                <tr>
-                  <th>S.No</th><th>Invoice Date</th><th>Invoice No.</th>
-                  <th>Supplier Name</th><th>Supplier GSTIN</th>
-                  <th style={{ textAlign: 'right' }}>Taxable Value</th>
-                  <th style={{ textAlign: 'right' }}>IGST</th>
-                  <th style={{ textAlign: 'right' }}>CGST</th>
-                  <th style={{ textAlign: 'right' }}>SGST</th>
-                  <th style={{ textAlign: 'right' }}>ITC Amount</th>
-                  <th style={{ textAlign: 'center' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={r.id}>
-                    <td style={{ color: '#94a3b8', fontSize: 12 }}>{i + 1}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{fmt(r.invoice_date)}</td>
-                    <td style={{ fontWeight: 600 }}>{r.invoice_number || '—'}</td>
-                    <td>{r.party_name || '—'}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{r.gstin || '—'}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{money(r.taxable_value)}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{money(r.igst)}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{money(r.cgst)}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{money(r.sgst_utgst)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#2563eb', whiteSpace: 'nowrap' }}>{money(r.itc_amount)}</td>
-                    <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <button type="button"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', padding: 4 }}
-                        onClick={() => setEditing(r)} title="Edit">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                        </svg>
-                      </button>
-                      <button type="button"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 4 }}
-                        disabled={deleting === r.id}
-                        onClick={() => handleDelete(r.id)} title="Delete">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
-                          <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
-                        </svg>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {!rows.length && (
-                  <tr><td colSpan={11} style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--bp-muted)' }}>
-                    No projected invoices added yet. Click "Add Invoice Manually" or use OCR scan to get started.
-                  </td></tr>
-                )}
-                {rows.length > 0 && (
-                  <tr style={{ background: '#f8fafc', fontWeight: 700 }}>
-                    <td colSpan={5} style={{ textAlign: 'right', fontSize: 12, color: 'var(--bp-navy)' }}>Totals</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }}>{money(totals.taxable_value)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }}>{money(totals.igst)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }}>{money(totals.cgst)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }}>{money(totals.sgst)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#2563eb', fontSize: 14, whiteSpace: 'nowrap' }}>{money(totals.itc)}</td>
-                    <td />
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </>
+      {ok && <p className="bp-alert bp-alert-success" style={{ marginBottom: 10 }}>{ok}</p>}
+      {err && (
+        <div className="bp-alert bp-alert-error" style={{ marginBottom: 10 }}>
+          <div>{err}</div>
+          {importErrors.length > 0 && <ul style={{ margin: '6px 0 0', paddingLeft: 18, listStyle: 'disc' }}>{importErrors.map((m) => <li key={m}>{m}</li>)}</ul>}
+        </div>
       )}
 
-      <div style={{ marginTop: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: '#991b1b', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
-        </svg>
-        Projected ITC is for estimation only. It does not affect your actual GSTR-2B or GSTR-3B filing calculations.
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12, marginBottom: 18 }} className="g2b-tiles">
+        <Tile tone="blue"   icon={<IcDoc />}  label="Total Projected Invoices" value={totals.count} sub="Uploaded by Client" />
+        <Tile tone="green"  icon={<IcRupee />} label="Projected Taxable Value" value={`₹ ${inr(totals.taxable)}`} />
+        <Tile tone="blue"   icon={<IcRupee />} label="Projected IGST" value={`₹ ${inr(totals.igst)}`} />
+        <Tile tone="purple" icon={<IcRupee />} label="Projected CGST" value={`₹ ${inr(totals.cgst)}`} />
+        <Tile tone="purple" icon={<IcRupee />} label="Projected SGST" value={`₹ ${inr(totals.sgst)}`} />
+        <Tile tone="purple" icon={<IcRupee />} label="Total Projected ITC" value={`₹ ${inr(totals.itc)}`} />
+      </div>
+
+      <div style={CARD}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div style={{ fontWeight: 800, fontSize: 15, color: '#0f2a5f' }}>Projected Invoices (Uploaded by Client)</div>
+          <Toolbar q={q} setQ={(v) => { setQ(v); setPage(1); }} filterOpen={filterOpen} setFilterOpen={setFilterOpen} onExport={doExport} exporting={false}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>Tax Type</label>
+            <select style={{ ...CTRL, width: '100%' }} value={taxFilter} onChange={(e) => { setTaxFilter(e.target.value); setPage(1); setFilterOpen(false); }}>
+              <option value="">All</option>
+              <option value="igst">IGST (inter-state)</option>
+              <option value="cgst">CGST + SGST (intra-state)</option>
+            </select>
+          </Toolbar>
+        </div>
+
+        {loading ? <LoadingBlock /> : (
+          <>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>{['S. No.', 'Invoice Date', 'Invoice No.', 'Supplier Name', 'Supplier GSTIN', 'Taxable Value (₹)', 'IGST (₹)', 'CGST (₹)', 'SGST (₹)', 'ITC Amount (₹)', 'Action'].map((h) => <th key={h} style={TH}>{h}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {pageRows.map((r, i) => (
+                    <tr key={r.id} style={i % 2 ? { background: '#f9fbff' } : undefined}>
+                      <td style={{ ...TD, color: '#64748b' }}>{(curPage - 1) * perPage + i + 1}</td>
+                      <td style={TD}>{fmt(r.invoice_date)}</td>
+                      <td style={TD}><span style={{ color: '#1d4ed8', fontWeight: 700, textDecoration: 'underline' }}>{r.invoice_number || '—'}</span></td>
+                      <td style={TD}>{r.party_name || '—'}</td>
+                      <td style={{ ...TD, fontFamily: 'monospace', fontSize: 12 }}>{r.gstin || '—'}</td>
+                      <td style={TD}>{inr(r.taxable_value)}</td>
+                      <td style={TD}>{inr(r.igst)}</td>
+                      <td style={TD}>{inr(r.cgst)}</td>
+                      <td style={TD}>{inr(r.sgst_utgst)}</td>
+                      <td style={{ ...TD, fontWeight: 800, color: '#0f2a5f' }}>{inr(r.itc_amount)}</td>
+                      <td style={TD}>
+                        <button type="button" title="Edit" onClick={() => setEditing(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', padding: 4 }}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                        </button>
+                        <button type="button" title="Delete" disabled={deleting === r.id} onClick={() => handleDelete(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 4 }}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {!pageRows.length && <tr><td colSpan={11} style={{ ...TD, padding: '40px 16px', color: '#94a3b8' }}>No projected invoices yet. Download the Excel template and upload it, or use "Add Invoice Manually".</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <NumberedPagination
+              meta={{ current_page: curPage, last_page: lastPage, total: shown.length, per_page: perPage }}
+              perPage={perPage} onPerPage={(v) => { setPerPage(v); setPage(1); }} onPage={setPage}
+              itemLabel="documents" perPageOptions={[10, 25, 50]}
+            />
+          </>
+        )}
+      </div>
+
+      <div style={{ marginTop: 14, background: '#fff8e8', border: '1px solid #f6dd9b', borderRadius: 12, padding: '12px 16px', color: '#7a4a00', fontSize: 12.5, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#d97706" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="11" x2="12" y2="16" stroke="white" strokeWidth="2.2" strokeLinecap="round" /><line x1="12" y1="7.5" x2="12.01" y2="7.5" stroke="white" strokeWidth="2.4" strokeLinecap="round" /></svg>
+        <div>
+          <b>Note:</b> Projected ITC is for your internal planning purposes only. Once the actual GSTR-2B is available, the Admin user can delete the projected ITC data.
+          <div style={{ color: '#dc2626', fontWeight: 700, marginTop: 2 }}>This data will not be considered for filing.</div>
+        </div>
       </div>
 
       {showAdd && (
-        <InvoiceForm
-          period={period}
-          title="Add Invoice Manually"
-          submitUrl={`/client/gstr2b/period/${period}/projected`}
-          method="POST"
-          onClose={() => setShowAdd(false)}
-          onSaved={load}
-        />
+        <InvoiceForm period={period} title="Add Projected Invoice (Manually)" submitUrl={`/client/gstr2b/period/${period}/projected`} method="POST" onClose={() => setShowAdd(false)} onSaved={load} />
       )}
       {editing && (
-        <InvoiceForm
-          period={period}
-          title="Edit Projected Invoice"
-          initial={editing}
-          submitUrl={`/client/gstr2b/period/${period}/projected/${editing.id}`}
-          method="PUT"
-          onClose={() => setEditing(null)}
-          onSaved={load}
-        />
+        <InvoiceForm period={period} title="Edit Projected Invoice" initial={editing} submitUrl={`/client/gstr2b/period/${period}/projected/${editing.id}`} method="PUT" onClose={() => setEditing(null)} onSaved={load} />
       )}
     </div>
   );
-}
-
-// ── SVG icon helpers ──────────────────────────────────────────────────────────
-function InvIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>;
-}
-function MatchIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="9 15 11 17 15 13"/></svg>;
-}
-function UnmatchIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><line x1="9" y1="13" x2="15" y2="19"/><line x1="15" y1="13" x2="9" y2="19"/></svg>;
-}
-function ChartIcon() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>;
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
@@ -748,49 +682,57 @@ const TABS = [
 
 function periodLabel(period) {
   if (!period) return '';
-  if (/Q\d/.test(period)) return period;
-  try {
-    const [year, month] = period.split('-').map(Number);
-    return new Date(year, month - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
-  } catch { return period; }
+  if (/Q\d/.test(period)) {
+    const m = /^(\d{4})-Q(\d)$/.exec(period);
+    if (!m) return period;
+    const y = Number(m[1]);
+    return [`Q1 Apr–Jun ${y}`, `Q2 Jul–Sep ${y}`, `Q3 Oct–Dec ${y}`, `Q4 Jan–Mar ${y + 1}`][Number(m[2]) - 1] || period;
+  }
+  const [year, month] = period.split('-').map(Number);
+  return month ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month - 1]} ${year}` : period;
 }
 
 export default function Gstr2bPeriodPage() {
   const { period }    = useParams();
   const navigate      = useNavigate();
   const [activeTab, setActiveTab] = useState('invoices');
+  const label = periodLabel(period);
 
   return (
-    <div>
-      <div className="bp-toolbar no-print" style={{ marginBottom: 20 }}>
-        <button type="button"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, padding: '4px 0' }}
-          onClick={() => navigate('/portal/gstr-2b')}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          Back to GSTR-2B
-        </button>
-        <div style={{ flex: 1, marginLeft: 16 }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--bp-navy)' }}>GSTR-2B — {periodLabel(period)}</h2>
-          <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--bp-muted)' }}>Tax Period: {period}</p>
+    <div style={{ maxWidth: 1250 }}>
+      <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+        <Link to="/portal" style={{ color: '#2563eb', textDecoration: 'none' }}>Home</Link><span>›</span>
+        <span>GST Compliance</span><span>›</span>
+        <Link to="/portal/gstr-2b" style={{ color: '#2563eb', textDecoration: 'none' }}>GSTR-2B</Link><span>›</span>
+        <span style={{ color: '#1e293b', fontWeight: 800 }}>{activeTab === 'projected' ? 'Projected ITC' : 'View GSTR-2B'}</span>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <button type="button" onClick={() => navigate('/portal/gstr-2b')} style={{ background: 'none', border: 'none', padding: 0, marginBottom: 6, color: '#2563eb', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>‹ Back to GSTR-2B</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f2a5f', letterSpacing: '-0.01em' }}>GSTR-2B – {label}</h1>
+          <span style={{ padding: '4px 14px', borderRadius: 999, background: '#d9f3e3', color: '#15803d', fontSize: 12, fontWeight: 800 }}>Available</span>
         </div>
+        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Detailed view of inward supplies, ITC summary and reconciliation.</p>
       </div>
 
-      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e2e8f0', marginBottom: 20 }}>
-        {TABS.map((tab) => (
-          <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer', padding: '10px 20px',
-              fontSize: 14, fontWeight: activeTab === tab.key ? 700 : 500,
-              color: activeTab === tab.key ? '#2563eb' : '#64748b',
-              borderBottom: `2px solid ${activeTab === tab.key ? '#2563eb' : 'transparent'}`,
-              marginBottom: -2, transition: 'all 0.15s',
-            }}>
-            {tab.label}
-          </button>
-        ))}
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid #dbe5f3', marginBottom: 18 }}>
+        {TABS.map((tab) => {
+          const on = activeTab === tab.key;
+          return (
+            <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)}
+              style={{
+                background: on ? '#fff' : 'transparent', border: '1px solid', borderColor: on ? '#dbe5f3' : 'transparent', borderBottom: on ? '2px solid #2563eb' : '1px solid transparent',
+                borderRadius: '10px 10px 0 0', cursor: 'pointer', padding: '10px 24px', fontSize: 13.5, fontWeight: on ? 800 : 600,
+                color: on ? '#1d4ed8' : '#475569', marginBottom: -1,
+              }}>
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      {activeTab === 'invoices'  && <InvoicesTab  period={period} />}
+      {activeTab === 'invoices'  && <InvoicesTab  period={period} label={label} />}
       {activeTab === 'projected' && <ProjectedTab period={period} />}
     </div>
   );

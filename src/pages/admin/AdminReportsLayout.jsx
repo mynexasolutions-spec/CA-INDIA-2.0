@@ -23,7 +23,7 @@ export default function AdminReportsLayout() {
     setLoading(true);
     setFailed(false);
     setProfile(null);
-    api(`/admin/clients/${clientId}`)
+    api(`/admin/clients/${clientId}?directory=1`)
       .then((d) => setProfile(d?.client_profile ?? d))
       .catch(() => setFailed(true))
       .finally(() => setLoading(false));

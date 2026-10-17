@@ -889,3 +889,56 @@
     transform: none;
   }
 }
+
+/* ── Phones: keep the table layout, but give it room and let it scroll sideways (no overlapping columns) ── */
+@media (max-width: 640px) {
+  .ao-table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .ao-table { min-width: 560px; table-layout: auto; }
+  .ao-table th, .ao-table td { white-space: nowrap; }
+  .ao-table td:first-child { max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+  .ao-table .ao-table-empty { white-space: normal; }
+}
+
+/* ── Admin > Clients table on small screens: keep the table, let it scroll sideways instead of squashing ── */
+@media (max-width: 1100px) {
+  .ac-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .ac-table { min-width: 980px; }
+}
+
+/* Dashboard overview tables: every header and its data sit centered in the column */
+.ao-table-returns th, .ao-table-returns td,
+.ao-table-filing th, .ao-table-filing td,
+.ao-table-returns th.ao-col-client, .ao-table-returns td.ao-col-client,
+.ao-table-filing th.ao-col-client, .ao-table-filing td.ao-col-client {
+  text-align: center !important;
+}
+
+/* Client Request Overview and Upcoming Due Dates: headers and data centered too */
+.ao-table th, .ao-table td { text-align: center !important; }
+
+/* Dashboard summary strips: slightly larger tiles */
+.ao-strip-item { padding: 13px 14px; gap: 11px; }
+.ao-strip-item-icon { width: 36px; height: 36px; }
+.ao-strip-item-icon svg { width: 18px; height: 18px; }
+.ao-strip-item-label { font-size: 12px; }
+.ao-strip-item-val { font-size: 22px; }
+
+/* Client Request Overview: Request Type column stays left aligned so the icons line up in one column */
+.ao-table-req th:first-child, .ao-table-req td:first-child { text-align: left !important; padding-left: 14px; }
+.ao-table-req td:first-child .ao-req-icon-badge { width: 26px; height: 26px; margin-right: 10px; }
+
+/* Strip tiles: keep labels inside the tile (slightly tighter than the enlarged version) */
+.ao-strip-item { padding: 12px 11px; gap: 9px; }
+.ao-strip-item-icon { width: 34px; height: 34px; }
+.ao-strip-item-text { flex: 1 1 0; min-width: 0; }
+.ao-strip-item-label { font-size: 11.5px; overflow-wrap: anywhere; hyphens: auto; line-height: 1.2; }
+.ao-strip-item-val { font-size: 21px; }
+
+/* Strip tiles: whole words only, never split a word mid-way */
+.ao-strip-item { padding: 12px 9px; gap: 8px; }
+.ao-strip-item-icon { width: 32px; height: 32px; }
+.ao-strip-item-icon svg { width: 16px; height: 16px; }
+.ao-strip-item-label { font-size: 11px; overflow-wrap: normal; word-break: normal; hyphens: manual; letter-spacing: -0.1px; }
+
+/* Dashboard icons: flat, no shadow or ring */
+.ao-card-icon-wrap, .ao-strip-item-icon { box-shadow: none !important; }

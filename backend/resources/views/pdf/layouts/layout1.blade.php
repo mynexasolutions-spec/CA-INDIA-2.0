@@ -734,12 +734,12 @@
             @endif
             <td style="font-weight: bold;">{{ $item['qty'] }}</td>
             <td>{{ $item['uqc'] }}</td>
-            <td>{{ number_format($item['rate'], 0) }}</td>
+            <td>{{ number_format($item['rate'], 2) }}</td>
             @if($data['has_tax'])
               <td>{{ $item['gst_pct'] }}</td>
-              <td style="font-weight: bold; color: #0F172A;">{{ number_format($item['taxable_value'], 0) }}</td>
+              <td style="font-weight: bold; color: #0F172A;">{{ number_format($item['taxable_value'], 2) }}</td>
             @else
-              <td style="font-weight: bold; color: #0F172A;">{{ number_format($item['taxable_value'], 0) }}</td>
+              <td style="font-weight: bold; color: #0F172A;">{{ number_format($item['taxable_value'], 2) }}</td>
             @endif
           </tr>
         @endforeach
@@ -863,22 +863,22 @@
           <table class="sum-tbl">
             <tr>
               <td class="lab">{{ $data['has_tax'] ? 'Total Taxable Value' : 'Total Amount' }}</td>
-              <td class="val">₹ {{ number_format($data['summary']['taxable_value'], 0) }}</td>
+              <td class="val">₹ {{ number_format($data['summary']['taxable_value'], 2) }}</td>
             </tr>
             @if($data['has_tax'])
               @if(!empty($data['summary']['show_split_tax']))
                 <tr>
                   <td class="lab">CGST{{ !empty($data['summary']['cgst_rate']) ? ' ('.$data['summary']['cgst_rate'].'%)' : '' }}</td>
-                  <td class="val">₹ {{ number_format($data['summary']['cgst_amount'], 0) }}</td>
+                  <td class="val">₹ {{ number_format($data['summary']['cgst_amount'], 2) }}</td>
                 </tr>
                 <tr>
                   <td class="lab">SGST/UTGST{{ !empty($data['summary']['sgst_rate']) ? ' ('.$data['summary']['sgst_rate'].'%)' : '' }}</td>
-                  <td class="val">₹ {{ number_format($data['summary']['sgst_amount'], 0) }}</td>
+                  <td class="val">₹ {{ number_format($data['summary']['sgst_amount'], 2) }}</td>
                 </tr>
               @else
                 <tr>
                   <td class="lab">IGST{{ !empty($data['summary']['igst_rate']) ? ' ('.$data['summary']['igst_rate'].'%)' : '' }}</td>
-                  <td class="val">₹ {{ number_format($data['summary']['igst_amount'], 0) }}</td>
+                  <td class="val">₹ {{ number_format($data['summary']['igst_amount'], 2) }}</td>
                 </tr>
               @endif
             @endif

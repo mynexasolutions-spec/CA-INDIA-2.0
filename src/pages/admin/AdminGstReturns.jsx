@@ -72,7 +72,7 @@ export default function AdminGstReturns() {
   const fetchClients = useCallback(async (p = 1) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: p, per_page: 10, gst_status: 'registered' });
+      const params = new URLSearchParams({ page: p, per_page: 10, gst_status: 'registered', directory: '1' });
       if (applied.regType && applied.regType !== 'all') params.append('dealer_type', applied.regType);
       if (applied.filingFreq && applied.filingFreq !== 'all') params.append('gst_filing_frequency', applied.filingFreq);
       if (applied.status && applied.status !== 'all') params.append('status', applied.status);
@@ -137,7 +137,7 @@ export default function AdminGstReturns() {
     <div style={{ fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif", padding: '0 0 40px' }}>
       {/* Breadcrumb for non-list layout */}
       {!config.listLayout && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 13 }}>
+        <div className="gst-crumbs" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 13 }}>
           <Link to="/admin/gst-returns" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>
             GST Compliance
           </Link>
@@ -147,17 +147,17 @@ export default function AdminGstReturns() {
       )}
 
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+      <div className={config.listLayout ? 'gst-head gst-head-list' : 'gst-head'} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
             {config.title}
           </h1>
           <p style={{ margin: '4px 0 0', fontSize: 13.5, color: '#2563eb', fontWeight: 400 }}>
-            {config.subtitle}
+            {String(config.subtitle || '').replace(/-/g, '‑')}
           </p>
         </div>
         {config.listLayout ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 500, paddingTop: 4 }}>
+          <div className="gst-crumbs gst-crumbs-right" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 500, paddingTop: 4 }}>
             <Link to="/admin/gst-returns" style={{ color: '#2563eb', textDecoration: 'none' }}>
               GST Compliance
             </Link>
@@ -200,6 +200,7 @@ export default function AdminGstReturns() {
       {/* Search + Filters Row (list layout) */}
       {config.listLayout && (
         <div
+          className="gst-filter"
           style={{
             background: '#fff',
             border: '1px solid #bfdbfe',
@@ -619,7 +620,7 @@ export default function AdminGstReturns() {
       )}
 
       {/* Table */}
-      <div style={{ background: '#fff', border: '1px solid #bfdbfe', borderRadius: 8, overflow: 'hidden' }}>
+      <div className="gst-table-card" style={{ background: '#fff', border: '1px solid #bfdbfe', borderRadius: 8, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
           <thead>
             <tr style={{ background: '#eaf3fd', borderBottom: '1.5px solid #bfdbfe' }}>

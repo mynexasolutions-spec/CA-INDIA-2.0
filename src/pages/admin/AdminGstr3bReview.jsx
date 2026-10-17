@@ -193,7 +193,7 @@ export default function AdminGstr3bReview() {
     <ReqActionsCtx.Provider value={{ onReject: () => { setRejectErr(''); setRejectReason(''); setRejectPopup(true); } }}>
     <div style={{ fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif", padding: '0 0 40px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+      <div className="gst-head gst-head-list" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
             GSTR-3B – Client Details (Admin Portal)
@@ -202,7 +202,7 @@ export default function AdminGstr3bReview() {
             Review, verify and manage GSTR-3B for the selected client.
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 500, paddingTop: 4 }}>
+        <div className="gst-crumbs gst-crumbs-right" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 500, paddingTop: 4 }}>
           <Link to="/admin/gst-returns?tab=gstr-3b" style={{ color: '#2563eb', textDecoration: 'none' }}>
             GST Compliance
           </Link>
@@ -223,6 +223,7 @@ export default function AdminGstr3bReview() {
 
       {/* Client Summary Strip */}
       <div
+        className="gst-strip"
         style={{
           background: '#fff',
           border: '1px solid #bfdbfe',
@@ -236,7 +237,7 @@ export default function AdminGstr3bReview() {
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
+        <div className="gst-strip-fields" style={{ display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
           {[
             ['Client Name', client?.business_name || client?.client_name || '—'],
             ['GSTIN', client?.gstin || '—'],

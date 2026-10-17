@@ -743,6 +743,7 @@ export default function ClientLayoutTab({
 
               {/* 6 Swatches in a strictly separated grid */}
               <div
+                className="cp-swatches"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(6, 1fr)',

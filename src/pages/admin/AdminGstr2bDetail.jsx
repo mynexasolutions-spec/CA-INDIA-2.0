@@ -21,6 +21,14 @@ export default function AdminGstr2bDetail() {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [fy, setFy]           = useState('2026-27');
+  const [note, setNote]       = useState('');
+  const removeProjected = async (period) => {
+    if (!window.confirm("Delete this client's Projected ITC data for this period? The actual GSTR-2B records are not affected.")) return;
+    try {
+      const r = await api(`/admin/clients/${clientId}/gstr2b/period/${period}/projected`, { method: 'DELETE' });
+      setNote(r.message || 'Projected ITC deleted.');
+    } catch (e) { setNote(e.message || 'Could not delete the projected ITC.'); }
+  };
 
   const load = () => {
     setLoading(true);
@@ -34,6 +42,7 @@ export default function AdminGstr2bDetail() {
   if (!data)   return null;
 
   const { client, frequency, periods } = data;
+
   const isQuarterly = frequency === 'quarterly';
   const freqLabel   = isQuarterly ? 'Quarterly' : 'Monthly';
 
@@ -47,7 +56,7 @@ export default function AdminGstr2bDetail() {
     <div style={{ fontFamily:"'Inter',system-ui,sans-serif", padding:'0 0 48px' }}>
 
       {/* Breadcrumb */}
-      <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10, fontSize:13 }}>
+      <div className="gst-crumbs" style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10, fontSize:13 }}>
         <Link to="/admin/gst-returns?tab=gstr-2b" style={bcLink}>GST Compliance</Link>
         <BcSep/>
         <Link to="/admin/gst-returns?tab=gstr-2b" style={bcLink}>GSTR-2B</Link>
@@ -56,12 +65,12 @@ export default function AdminGstr2bDetail() {
       </div>
 
       {/* Page Header */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
+      <div className="gst-head" style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
         <div>
           <h1 style={{ margin:0, fontSize:26, fontWeight:700, color:'#1e3a5f', lineHeight:1.2 }}>
             GSTR-2B – {client.business_name}
           </h1>
-          <div style={{ marginTop:6, fontSize:13, color:'#64748b', display:'flex', gap:12, alignItems:'center' }}>
+          <div className="gst-meta" style={{ marginTop:6, fontSize:13, color:'#64748b', display:'flex', gap:12, alignItems:'center' }}>
             <span>GSTIN: <strong style={{ color:'#1e293b' }}>{client.gstin || '—'}</strong></span>
             <span style={{ color:'#cbd5e1' }}>|</span>
             <span>Filing Frequency: <strong style={{ color:'#2563eb' }}>{freqLabel}</strong></span>
@@ -86,10 +95,17 @@ export default function AdminGstr2bDetail() {
         </div>
       </div>
 
+      {note && (
+        <div style={{ marginTop:14, padding:'10px 14px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:10, color:'#1e40af', fontSize:13, fontWeight:600, display:'flex', justifyContent:'space-between' }}>
+          <span>{note}</span>
+          <button onClick={() => setNote('')} aria-label="Dismiss" style={{ background:'none', border:'none', cursor:'pointer', color:'#1e40af' }}>×</button>
+        </div>
+      )}
+
       {/* Period Table Card */}
       <div style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:12, overflow:'hidden', marginTop:20 }}>
         {/* Card Header */}
-        <div style={{ padding:'14px 20px', borderBottom:'1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div className="gst-card-head" style={{ padding:'14px 20px', borderBottom:'1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
             <div style={{ fontWeight:700, fontSize:15, color:'#1e3a5f' }}>GSTR-2B – {freqLabel}</div>
             <div style={{ fontSize:12.5, color:'#64748b', marginTop:2 }}>
@@ -136,6 +152,10 @@ export default function AdminGstr2bDetail() {
                     style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 16px', background:'#fff', border:'1.5px solid #bfdbfe', borderRadius:7, fontSize:13, fontWeight:600, color:'#2563eb', cursor:'pointer' }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     View
+                  </button>
+                  <button onClick={() => removeProjected(p.period)} title="Delete the client's Projected ITC (estimate) for this period — actual GSTR-2B is not touched"
+                    style={{ marginLeft:8, display:'inline-flex', alignItems:'center', padding:'5px 12px', background:'#fff', border:'1.5px solid #fecaca', borderRadius:7, fontSize:12.5, fontWeight:600, color:'#dc2626', cursor:'pointer' }}>
+                    Delete Projected ITC
                   </button>
                 </td>
               </tr>

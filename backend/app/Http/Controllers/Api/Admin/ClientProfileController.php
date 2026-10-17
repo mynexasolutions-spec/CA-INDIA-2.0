@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Support\ExcelExport;
+
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\ClientProfile;
@@ -36,8 +38,17 @@ class ClientProfileController extends Controller
 
     public function index(Request $request)
     {
-        $this->assertClientsUnlocked($request);
-        $q = ClientProfile::with('user:id,name,email,phone,role,is_active,created_at');
+        // `directory=1` is the light, read-only client picker used by GST Compliance, Reports and
+        // Sub-User assignment. It returns only non-sensitive columns, so it does not need the
+        // Clients-module unlock (that gate protects the full client records and Manage Client).
+        $directory = $request->boolean('directory');
+        if (! $directory) {
+            $this->assertClientsUnlocked($request);
+        }
+        $q = $directory
+            ? ClientProfile::select(['id', 'user_id', 'client_code', 'client_name', 'business_name', 'gstin', 'pan', 'has_gst', 'dealer_type', 'gst_filing_frequency', 'gstr1_filing_frequency', 'created_at'])
+                ->with('user:id,is_active')
+            : ClientProfile::with('user:id,name,email,phone,role,is_active,created_at');
 
         if ($request->filled('status')) {
             $active = $request->status === 'active';
@@ -125,6 +136,18 @@ class ClientProfileController extends Controller
 
     public function show(Request $request, int $id)
     {
+        // `directory=1`: just the non-sensitive header fields that GST Compliance and Reports need
+        // to show a client's name and billing mode. Full records still require the Clients unlock.
+        if ($request->boolean('directory')) {
+            $light = ClientProfile::with('user:id,is_active')->findOrFail($id);
+
+            return response()->json($light->only([
+                'id', 'user_id', 'client_code', 'client_name', 'business_name', 'gstin', 'pan', 'has_gst',
+                'dealer_type', 'registration_type', 'gst_filing_frequency', 'gstr1_filing_frequency',
+                'gstr2b_filing_frequency', 'gst_compliance_enabled', 'applicable_from', 'state', 'state_code',
+            ]) + ['user' => $light->user?->only(['id', 'is_active'])]);
+        }
+
         $this->assertClientsUnlocked($request);
         $profile = ClientProfile::with([
             'user:id,name,email,phone,role,is_active,password_updated_at,password_updated_by,created_at,updated_at',
@@ -1124,13 +1147,6 @@ class ClientProfileController extends Controller
         // Logo, signature, seal, and QR are managed via client change-request approval only.
     }
 
-    private function nextClientCode(): string
-    {
-        $n = ClientProfile::count() + 1;
-
-        return 'CL-'.str_pad((string) $n, 4, '0', STR_PAD_LEFT);
-    }
-
     private function applyDealerGstMatrix(array $matrix, ClientProfile $profile): array
     {
         $zero = [
@@ -1397,23 +1413,9 @@ class ClientProfileController extends Controller
         $esc          = fn ($v) => htmlspecialchars((string) $v, ENT_QUOTES | ENT_XML1);
 
         $xml = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>';
-        $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
-        $xml .= '<Styles>';
-        $xml .= '<Style ss:ID="bizName"><Font ss:Bold="1" ss:Size="14" ss:Color="#000000"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="bizLine"><Font ss:Size="10" ss:Color="#222222"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="bizMeta"><Font ss:Size="10" ss:Color="#222222"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="title"><Font ss:Bold="1" ss:Size="13" ss:Color="#000000"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="period"><Font ss:Size="10" ss:Color="#444444"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="colHead"><Font ss:Bold="1" ss:Size="10" ss:Color="#FFFFFF"/><Interior ss:Color="#4B5563" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="cell"><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="cellLabel"><Font ss:Bold="1"/><Alignment ss:Horizontal="Left"/></Style>';
-        $xml .= '<Style ss:ID="cellMoney"><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
-        $xml .= '<Style ss:ID="totalCell"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="totalLabel"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Left"/></Style>';
-        $xml .= '<Style ss:ID="totalMoney"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
-        $xml .= '<Style ss:ID="footer"><Font ss:Size="9" ss:Color="#444444"/><Alignment ss:Horizontal="Left"/></Style>';
-        $xml .= '</Styles>';
-        $xml .= '<Worksheet ss:Name="Report"><Table>';
+        $xml .= ExcelExport::root();
+        $xml .= ExcelExport::styles();
+        $xml .= '<Worksheet ss:Name="Report"><Table>'.ExcelExport::cols($headers, $rows);
 
         $mergeAttr = $colCount > 1 ? ' ss:MergeAcross="'.($colCount - 1).'"' : '';
         if ($meta['name'] ?? null) {
@@ -1465,7 +1467,7 @@ class ClientProfileController extends Controller
         }
         $xml .= '<Row></Row>';
         $xml .= '<Row><Cell ss:StyleID="footer"><Data ss:Type="String">'.$esc('Report Generated On: '.now()->format('d-m-Y')).'</Data></Cell></Row>';
-        $xml .= '</Table></Worksheet></Workbook>';
+        $xml .= ExcelExport::end();
 
         return response($xml, 200, [
             'Content-Type'        => 'application/vnd.ms-excel',

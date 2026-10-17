@@ -185,6 +185,7 @@ export default function AdminBillingClientList() {
 
       {/* 2. Top 6 Document Cards (Single Row of 6 cards matching Mockup PDF p31) */}
       <div
+        className="abc-tiles"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(6, minmax(130px, 1fr))',
@@ -200,6 +201,7 @@ export default function AdminBillingClientList() {
           return (
             <div
               key={item.key}
+              className="abc-tile"
               style={{
                 background: item.bg,
                 border: `1px solid ${item.borderColor}`,
@@ -213,6 +215,7 @@ export default function AdminBillingClientList() {
               }}
             >
               <div
+                className="abc-tile-ic"
                 style={{
                   width: 38,
                   height: 38,
@@ -245,6 +248,7 @@ export default function AdminBillingClientList() {
                   Created by Clients
                 </div>
                 <div
+                  className="abc-tile-num"
                   style={{
                     fontSize: 20,
                     fontWeight: 800,
@@ -273,6 +277,7 @@ export default function AdminBillingClientList() {
         }}
       >
         <form
+          className="abc-filter"
           onSubmit={handleSearchSubmit}
           style={{
             display: 'flex',
@@ -522,7 +527,7 @@ export default function AdminBillingClientList() {
 
       {/* 4. Table Card */}
       <div
-        className="bp-card"
+        className="bp-card abc-table-card"
         style={{
           background: '#ffffff',
           borderRadius: 12,
@@ -679,6 +684,10 @@ export default function AdminBillingClientList() {
                             whiteSpace: 'nowrap',
                           }}
                         >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2.2" aria-hidden="true">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
                           View
                         </Link>
                       </td>

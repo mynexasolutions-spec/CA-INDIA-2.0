@@ -255,6 +255,7 @@ class AdminBillingDocumentController extends Controller
                 'vehicle_no' => $doc->vehicle_no,
                 'transporter_name' => $doc->transporter_name,
                 'eway_bill_no' => $doc->eway_bill_no,
+                'share_url' => ($doc->share_token && ! $doc->trashed()) ? url('/api/billing/share/'.$doc->share_token) : null,
                 'receiver_name' => $doc->receiver_name,
                 'receiver_signature_datetime' => $doc->receiver_signature_datetime?->timezone('Asia/Kolkata')->toIso8601String(),
             ],
@@ -278,8 +279,6 @@ class AdminBillingDocumentController extends Controller
     public function update(Request $request, int $clientId, string $docType, int $id): JsonResponse
     {
         $this->assertValidDocType($docType);
-        abort_unless($docType === 'tax_invoice', 422, 'Only Tax Invoices can be edited.');
-
         $profile = ClientProfile::findOrFail($clientId);
 
         $doc = CommercialDocument::withTrashed()
@@ -303,6 +302,14 @@ class AdminBillingDocumentController extends Controller
             'currency' => 'nullable|string|max:3',
             'notes' => 'nullable|string',
             'terms' => 'nullable|string',
+            'reference_document_id' => 'nullable|integer',
+            'reason_for_transportation' => 'nullable|string|max:60',
+            'reason_for_transportation_other' => 'nullable|string|max:255',
+            'vehicle_no' => 'nullable|string|max:40',
+            'transporter_name' => 'nullable|string|max:120',
+            'eway_bill_no' => 'nullable|string|max:40',
+            'receiver_name' => 'nullable|string|max:120',
+            'receiver_signature_datetime' => 'nullable|date',
             'round_off' => 'nullable|numeric',
             'tax_deduction_type' => 'nullable|in:tds,tcs',
             'tds_tcs_section_id' => 'nullable|integer|exists:tds_tcs_sections,id',
@@ -349,6 +356,7 @@ class AdminBillingDocumentController extends Controller
 
         // G2: Active status
         abort_unless(in_array($doc->status, ['issued', 'paid', 'partial'], true), 422, 'Only active documents can be edited.');
+        abort_if($doc->type === 'quotation' && $doc->converted_document_id, 422, 'A converted quotation cannot be edited.');
 
         // G3: GST Return filed lock check on created_at
         $currentLock = AdminBillingLockService::checkDocument($doc);

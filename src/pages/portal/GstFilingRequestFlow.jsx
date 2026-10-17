@@ -211,16 +211,16 @@ export default function GstFilingRequestFlow({ returnType, financialYear, quarte
         </div>
 
         {showConfirmModal && previewData && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(22, 58, 82, 0.4)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
-            <div className="bp-card" style={{ width: '100%', maxWidth: 420, padding: 0, overflow: 'hidden', background: '#fff' }}>
-              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--bp-border)', background: '#f8fafc' }}>
+          <div className="cf-modal" style={{ position: 'fixed', inset: 0, background: 'rgba(22, 58, 82, 0.4)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+            <div className="bp-card cf-card" style={{ width: '100%', maxWidth: 420, padding: 0, overflow: 'hidden', background: '#fff' }}>
+              <div className="cf-head" style={{ padding: '14px 18px', borderBottom: '1px solid var(--bp-border)', background: '#f8fafc' }}>
                 <h3 style={{ margin: 0, fontSize: 15, color: 'var(--bp-navy)' }}>Confirm Submission</h3>
               </div>
-              <div style={{ padding: 18 }}>
+              <div className="cf-body" style={{ padding: 18 }}>
                 <p style={{ margin: '0 0 14px', fontWeight: 600 }}>
                   Are you sure you want to send this {label} filing request to the CA?
                 </p>
-                <div style={{ background: '#f0f7ff', padding: 14, borderRadius: 8, display: 'grid', gap: 6, fontSize: 13 }}>
+                <div className="cf-sum" style={{ background: '#f0f7ff', padding: 14, borderRadius: 8, display: 'grid', gap: 6, fontSize: 13 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--bp-muted)' }}>Filing Period:</span><span style={{ fontWeight: 700 }}>{periodLabel(period)}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--bp-border)', paddingTop: 6, marginTop: 2 }}>
                     <span style={{ fontWeight: 800, color: 'var(--bp-navy)' }}>Total GST:</span>
@@ -228,7 +228,7 @@ export default function GstFilingRequestFlow({ returnType, financialYear, quarte
                   </div>
                 </div>
               </div>
-              <div style={{ padding: '10px 18px 14px', borderTop: '1px solid var(--bp-border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <div className="cf-foot" style={{ padding: '10px 18px 14px', borderTop: '1px solid var(--bp-border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button onClick={() => setShowConfirmModal(false)} className="bp-btn bp-btn-outline" style={{ height: 34, borderRadius: 6 }}>Cancel</button>
                 <button onClick={handleSubmit} disabled={submitting} className="bp-btn bp-btn-primary" style={{ height: 34, borderRadius: 6, background: '#0052cc' }}>
                   {submitting ? 'Sending…' : 'Send Request to CA'}

@@ -121,7 +121,7 @@ export default function AdminSettings() {
       </div>
 
       {/* ── Section 1: Admin Login Security ─────────────────────────── */}
-      <div style={{
+      <div className="as-card" style={{
         background: '#fff',
         border: '1.5px solid #bfdbfe',
         borderRadius: 12,
@@ -130,7 +130,7 @@ export default function AdminSettings() {
         boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
       }}>
         {/* Banner */}
-        <div style={{
+        <div className="as-banner" style={{
           background: '#0052cc',
           padding: '14px 20px',
           display: 'flex',
@@ -163,7 +163,7 @@ export default function AdminSettings() {
         </div>
 
         {/* Content Body */}
-        <div style={{
+        <div className="as-body" style={{
           padding: '20px 22px',
           display: 'grid',
           gridTemplateColumns: '360px 1fr',
@@ -200,7 +200,7 @@ export default function AdminSettings() {
             </div>
 
             <form onSubmit={changeAdminPwd}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <div className="as-pwd3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                 <PwdInput
                   label="Current Password"
                   value={aPwd.current}
@@ -222,10 +222,11 @@ export default function AdminSettings() {
               </div>
 
               {/* Bottom row: Info banner on left + Update Password button on right */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginTop: 14 }}>
+              <div className="as-foot" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginTop: 14 }}>
                 <InfoHint text="Password must be at least 8 characters with a combination of letters, numbers and special characters." />
 
                 <button
+                  className="as-btn"
                   type="submit"
                   disabled={aPwdState.busy}
                   style={{
@@ -262,7 +263,7 @@ export default function AdminSettings() {
       </div>
 
       {/* ── Section 2: Client Module Access Verification ───────────── */}
-      <div style={{
+      <div className="as-card" style={{
         background: '#fff',
         border: '1.5px solid #bfdbfe',
         borderRadius: 12,
@@ -270,7 +271,7 @@ export default function AdminSettings() {
         boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
       }}>
         {/* Banner */}
-        <div style={{
+        <div className="as-banner" style={{
           background: '#0052cc',
           padding: '14px 20px',
           display: 'flex',
@@ -303,7 +304,7 @@ export default function AdminSettings() {
         </div>
 
         {/* Content Body */}
-        <div style={{
+        <div className="as-body" style={{
           padding: '20px 22px',
           display: 'grid',
           gridTemplateColumns: '360px 1fr',
@@ -340,7 +341,7 @@ export default function AdminSettings() {
             </div>
 
             <form onSubmit={changeSecondaryPwd}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <div className="as-pwd3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                 <PwdInput
                   label="Current Password"
                   value={sPwd.current}
@@ -362,10 +363,11 @@ export default function AdminSettings() {
               </div>
 
               {/* Bottom row: Info banner on left + Update Password button on right */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginTop: 14 }}>
+              <div className="as-foot" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginTop: 14 }}>
                 <InfoHint text="Password must be at least 8 characters with a combination of letters, numbers and special characters." />
 
                 <button
+                  className="as-btn"
                   type="submit"
                   disabled={sPwdState.busy}
                   style={{
@@ -471,6 +473,7 @@ function PwdInput({ label, value, onChange, required }) {
 function RadioOption({ selected, onSelect, title, desc }) {
   return (
     <div
+      className={`as-radio${selected ? ' is-selected' : ''}`}
       onClick={onSelect}
       style={{
         display: 'flex',
@@ -515,7 +518,7 @@ function RadioOption({ selected, onSelect, title, desc }) {
 
 function InfoHint({ text }) {
   return (
-    <div style={{
+    <div className="as-hint" style={{
       display: 'flex',
       alignItems: 'center',
       gap: 9,

@@ -110,7 +110,7 @@ class Gstr2bInvoiceMatchingTest extends TestCase
 
         $this->assertDatabaseHas('client_gstr2b_invoices', [
             'id' => $invoice->id,
-            'match_status' => ClientGstr2bInvoice::MATCH_STATUS_UNMATCHED,
+            'match_status' => ClientGstr2bInvoice::MATCH_STATUS_PENDING,
         ]);
     }
 }

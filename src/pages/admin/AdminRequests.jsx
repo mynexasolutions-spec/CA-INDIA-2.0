@@ -65,10 +65,10 @@ export default function AdminRequests() {
       </div>
 
       {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
+      <div className="rq-stats crq-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 20 }}>
         {/* Total Requests */}
-        <div style={cardStyle}>
-          <div style={{ ...iconCircle, background: '#eff6ff', color: '#1d4ed8' }}>
+        <div className="rq-card" style={cardStyle}>
+          <div className="rq-ic" style={{ ...iconCircle, background: '#eff6ff', color: '#1d4ed8' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
@@ -88,8 +88,8 @@ export default function AdminRequests() {
         </div>
 
         {/* Pending */}
-        <div style={cardStyle}>
-          <div style={{ ...iconCircle, background: '#fff7ed', color: '#ea580c' }}>
+        <div className="rq-card" style={cardStyle}>
+          <div className="rq-ic" style={{ ...iconCircle, background: '#fff7ed', color: '#ea580c' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13" />
               <polygon points="22 2 15 22 11 13 2 9 22 2" />
@@ -106,8 +106,8 @@ export default function AdminRequests() {
         </div>
 
         {/* Completed */}
-        <div style={cardStyle}>
-          <div style={{ ...iconCircle, background: '#f0fdf4', color: '#16a34a' }}>
+        <div className="rq-card" style={cardStyle}>
+          <div className="rq-ic" style={{ ...iconCircle, background: '#f0fdf4', color: '#16a34a' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
@@ -123,8 +123,8 @@ export default function AdminRequests() {
         </div>
 
         {/* Rejected */}
-        <div style={cardStyle}>
-          <div style={{ ...iconCircle, background: '#fef2f2', color: '#dc2626' }}>
+        <div className="rq-card" style={cardStyle}>
+          <div className="rq-ic" style={{ ...iconCircle, background: '#fef2f2', color: '#dc2626' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />

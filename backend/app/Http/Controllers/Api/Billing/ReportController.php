@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Billing;
 
+use App\Support\ExcelExport;
+
 use App\Http\Controllers\Api\Billing\Concerns\ResolvesBillingProfile;
 use App\Http\Controllers\Controller;
 use App\Models\ClientProfile;
@@ -110,7 +112,7 @@ class ReportController extends Controller
         if (! count($rows)) {
             return [];
         }
-        $nonMoneyExact = ['invoices', 'documents', 'count', 'id'];
+        $nonMoneyExact = ['invoices', 'documents', 'count', 'id', 'total documents', 'cancelled'];
         $nonMoneyPattern = '/code|hsn|sac|qty|quantity|uqc|rate|no\.|number|\bname\b|particular|\btype\b|description|party|customer|date|sr\.|percent|%/i';
         $out = [];
         foreach ((array) $rows[0] as $h => $v) {
@@ -178,6 +180,7 @@ class ReportController extends Controller
             'paid_invoices' => 'Paid Invoices',
             'credit_notes' => 'Credit Notes',
             'debit_notes' => 'Debit Notes',
+            'document_numbering' => 'Document Numbering',
             default => ucwords(str_replace('_', ' ', $type)),
         };
     }
@@ -199,7 +202,9 @@ class ReportController extends Controller
         // client_profile_id / created_at / type / status columns (an unqualified name is "ambiguous").
         $base = CommercialDocument::where('commercial_documents.client_profile_id', $pid)
             ->whereDate('commercial_documents.created_at', '>=', $from)
-            ->whereDate('commercial_documents.created_at', '<=', $to);
+            ->whereDate('commercial_documents.created_at', '<=', $to)
+            // Amendment versions belong to Amendment History, never to billing reports.
+            ->where('commercial_documents.type', '!=', 'amendment');
 
         return match ($type) {
             'sales_register', 'sales_summary' => (clone $base)->where('type', 'tax_invoice')->whereIn('status', self::ISSUED_STATUSES)
@@ -220,13 +225,13 @@ class ReportController extends Controller
                 ->select(
                     'li.hsn_sac',
                     DB::raw('MAX(li.description) as description'),
-                    DB::raw("SUM(CASE WHEN d.type = 'credit_note' THEN -li.qty ELSE li.qty END) as qty"),
-                    DB::raw("SUM(CASE WHEN d.type = 'credit_note' THEN -li.taxable_amount ELSE li.taxable_amount END) as taxable"),
+                    DB::raw("ROUND(SUM(CASE WHEN d.type = 'credit_note' THEN -li.qty ELSE li.qty END), 2) as qty"),
+                    DB::raw("ROUND(SUM(CASE WHEN d.type = 'credit_note' THEN -li.taxable_amount ELSE li.taxable_amount END), 2) as taxable"),
                     DB::raw('AVG(li.gst_rate) as gst_rate'),
-                    DB::raw("SUM(CASE WHEN d.type = 'credit_note' THEN -li.cgst_amount ELSE li.cgst_amount END) as cgst"),
-                    DB::raw("SUM(CASE WHEN d.type = 'credit_note' THEN -li.sgst_amount ELSE li.sgst_amount END) as sgst"),
-                    DB::raw("SUM(CASE WHEN d.type = 'credit_note' THEN -li.igst_amount ELSE li.igst_amount END) as igst"),
-                    DB::raw("SUM(CASE WHEN d.type = 'credit_note' THEN -li.total_amount ELSE li.total_amount END) as total")
+                    DB::raw("ROUND(SUM(CASE WHEN d.type = 'credit_note' THEN -li.cgst_amount ELSE li.cgst_amount END), 2) as cgst"),
+                    DB::raw("ROUND(SUM(CASE WHEN d.type = 'credit_note' THEN -li.sgst_amount ELSE li.sgst_amount END), 2) as sgst"),
+                    DB::raw("ROUND(SUM(CASE WHEN d.type = 'credit_note' THEN -li.igst_amount ELSE li.igst_amount END), 2) as igst"),
+                    DB::raw("ROUND(SUM(CASE WHEN d.type = 'credit_note' THEN -li.total_amount ELSE li.total_amount END), 2) as total")
                 )
                 ->groupBy('li.hsn_sac')->get(),
             // Credit Notes reduce a party's business value — signed -1 here so the mixed
@@ -488,15 +493,14 @@ class ReportController extends Controller
                 ->whereDate('created_at', '>=', $from)
                 ->whereDate('created_at', '<=', $to)
                 ->whereNotIn('status', ['draft'])
-                ->orderBy('number')
                 ->get(['id', 'number', 'status']);
+            $docs = $this->sequenceSorted($docs);
 
-            if ($docs->isEmpty()) {
-                continue;
-            }
-
+            // All six document types are always listed; one with no documents in the period shows zeros.
             $allNums   = $docs->pluck('number');
-            $prefix    = $this->extractPrefix((string) ($allNums->first() ?? ''));
+            $prefix    = $docs->isEmpty()
+                ? rtrim((string) (app(\App\Services\Billing\InvoiceService::class)->resolveNumberingConfig(\App\Models\ClientProfile::find($pid), $type)[0] ?? ''), '/-')
+                : $this->extractPrefix((string) ($allNums->first() ?? ''));
             $cancelled = $docs->where('status', 'cancelled')->count();
             $active    = $docs->count() - $cancelled;
 
@@ -509,13 +513,14 @@ class ReportController extends Controller
                 'total'          => $docs->count(),
                 'cancelled'      => $cancelled,
                 'active'         => $active,
+                'status'         => $docs->isEmpty() ? 'No Documents' : ($active > 0 ? 'Active' : 'Cancelled'),
             ];
         }
 
         $totalDocs      = array_sum(array_column($rows, 'total'));
         $activeDocs     = array_sum(array_column($rows, 'active'));
         $cancelledDocs  = array_sum(array_column($rows, 'cancelled'));
-        $docTypesCount  = count($rows);
+        $docTypesCount  = count($rows); // always the six document types
 
         return [
             'summary' => compact('totalDocs', 'activeDocs', 'cancelledDocs', 'docTypesCount'),
@@ -536,23 +541,45 @@ class ReportController extends Controller
             ->whereDate('created_at', '>=', $period['from'])
             ->whereDate('created_at', '<=', $period['to'])
             ->whereNotIn('status', ['draft'])
-            ->orderBy('number')
             ->get(['id', 'number', 'status', 'document_date', 'created_at', 'type']);
+        // Strictly ascending by document number (numeric sequence), never by creation date.
+        $docs = $this->sequenceSorted($docs);
+        $profile = \App\Models\ClientProfile::find($pid);
+        $filedPeriods = \App\Services\Billing\BillingPolicy::filedPeriods($profile);
 
         return response()->json([
             'document_type' => $docType,
             'label'         => self::$DOC_TYPE_LABELS[$docType] ?? $docType,
             'from'          => $period['from'],
             'to'            => $period['to'],
-            'documents'     => $docs->map(fn ($d) => [
+            'documents'     => $docs->map(fn ($d) => [ // filing status below
                 'id'            => $d->id,
                 'number'        => $d->number,
                 'document_date' => $d->document_date?->format('d M Y'),
+                'date_iso'      => $d->document_date?->format('Y-m-d'),
                 'status'        => $d->status,
                 'created_at'    => $d->created_at?->format('d M Y, h:i A'),
-                'filing_status' => null,
+                // Filed / Not Filed follows the GST return filing data; quotations and challans have none.
+                'filing_status' => in_array($docType, ['tax_invoice', 'bill_of_supply', 'debit_note', 'credit_note'], true)
+                    ? (($d->created_at && in_array(\App\Services\Billing\BillingPolicy::periodOf($profile, $d->created_at->toDateString()), $filedPeriods, true)) ? 'filed' : 'not_filed')
+                    : 'not_applicable',
             ]),
         ]);
+    }
+
+    /** Ascending by series prefix, then by the numeric sequence (so INS/99 comes before INS/100). */
+    private function sequenceSorted($docs)
+    {
+        $parts = function ($n) {
+            return preg_match('/^(.*?)(\d+)$/u', (string) $n, $m) ? [$m[1], (int) $m[2]] : [(string) $n, 0];
+        };
+
+        return $docs->sort(function ($a, $b) use ($parts) {
+            [$pa, $sa] = $parts($a->number);
+            [$pb, $sb] = $parts($b->number);
+
+            return [$pa, $sa, $a->number] <=> [$pb, $sb, $b->number];
+        })->values();
     }
 
     private function extractPrefix(string $number): string
@@ -573,6 +600,25 @@ class ReportController extends Controller
         }
         if (isset($data['matrix']) && is_array($data['matrix'])) {
             return $this->flattenGstMatrix($data['matrix']);
+        }
+        // Document Numbering: export the same table the page shows (one row per document type),
+        // not the KPI summary block.
+        if (isset($data['rows'], $data['summary']) && is_array($data['rows'])) {
+            $out = [];
+            foreach ($data['rows'] as $i => $r) {
+                $out[] = [
+                    'Sr. No.'         => $i + 1,
+                    'Document Type'   => $r['label'] ?? $r['type'] ?? '',
+                    'Prefix'          => $r['prefix'] ?? '',
+                    'Start Sequence'  => $r['start_sequence'] ?? '—',
+                    'End Sequence'    => $r['end_sequence'] ?? '—',
+                    'Total Documents' => (int) ($r['total'] ?? 0),
+                    'Cancelled'       => (int) ($r['cancelled'] ?? 0),
+                    'Status'          => $r['status'] ?? '',
+                ];
+            }
+
+            return $out ?: [['message' => 'No data']];
         }
         if (isset($data['total_output_gst'], $data['total_eligible_itc'])) {
             return [
@@ -630,25 +676,11 @@ class ReportController extends Controller
         $esc = fn ($v) => htmlspecialchars((string) $v, ENT_QUOTES | ENT_XML1);
 
         $xml = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>';
-        $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
+        $xml .= ExcelExport::root();
 
-        $xml .= '<Styles>';
-        $xml .= '<Style ss:ID="bizName"><Font ss:Bold="1" ss:Size="14" ss:Color="#000000"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="bizLine"><Font ss:Size="10" ss:Color="#222222"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="bizMeta"><Font ss:Size="10" ss:Color="#222222"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="title"><Font ss:Bold="1" ss:Size="13" ss:Color="#000000"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="period"><Font ss:Size="10" ss:Color="#444444"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="colHead"><Font ss:Bold="1" ss:Size="10" ss:Color="#FFFFFF"/><Interior ss:Color="#4B5563" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="cell"><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="cellLabel"><Font ss:Bold="1"/><Alignment ss:Horizontal="Left"/></Style>';
-        $xml .= '<Style ss:ID="cellMoney"><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
-        $xml .= '<Style ss:ID="totalCell"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="totalLabel"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Left"/></Style>';
-        $xml .= '<Style ss:ID="totalMoney"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
-        $xml .= '<Style ss:ID="footer"><Font ss:Size="9" ss:Color="#444444"/><Alignment ss:Horizontal="Left"/></Style>';
-        $xml .= '</Styles>';
+        $xml .= ExcelExport::styles();
 
-        $xml .= '<Worksheet ss:Name="Report"><Table>';
+        $xml .= '<Worksheet ss:Name="Report"><Table>'.ExcelExport::cols($headers, $rows);
 
         $mergeAttr = $colCount > 1 ? ' ss:MergeAcross="'.($colCount - 1).'"' : '';
         if ($meta['name'] ?? null) {
@@ -699,7 +731,7 @@ class ReportController extends Controller
         }
         $xml .= '<Row></Row>';
         $xml .= '<Row><Cell ss:StyleID="footer"><Data ss:Type="String">'.$esc('Report Generated On: '.now()->format('d-m-Y')).'</Data></Cell></Row>';
-        $xml .= '</Table></Worksheet></Workbook>';
+        $xml .= ExcelExport::end();
 
         return response($xml, 200, [
             'Content-Type' => 'application/vnd.ms-excel',

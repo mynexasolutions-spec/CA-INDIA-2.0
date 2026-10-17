@@ -20,7 +20,7 @@ export default function AdminReportsList() {
       per_page: perPage,
       ...(q ? { search: q, q } : {}),
     });
-    api(`/admin/clients?${params}`)
+    api(`/admin/clients?${params}&directory=1`)
       .then(d => {
         setClients(Array.isArray(d) ? d : (d.data ?? d.clients ?? []));
         setTotal(d.total ?? d.meta?.total ?? (Array.isArray(d) ? d.length : 0));

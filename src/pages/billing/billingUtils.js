@@ -47,6 +47,17 @@ export function filterDocsByPeriod(docs, { from = '', to = '' } = {}) {
   return docs.filter((doc) => isDateInRange(doc.created_at, from, to));
 }
 
+/** Today's date as YYYY-MM-DD in the user's LOCAL timezone (toISOString() is UTC and shows yesterday in IST before 5:30 am). */
+export function localISODate(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** Always two decimals (HSN/SAC and GST figures must show the exact paise, e.g. 35,520.20). */
+export function moneyFixed(n) {
+  return `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function money(n) {
   return `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 }

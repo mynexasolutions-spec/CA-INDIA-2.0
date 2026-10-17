@@ -283,7 +283,7 @@ export default function HomePage() {
             </p>
             <div className="home-page__assurance-grid">
               {assurancePoints.map((point) => (
-                <div key={point}><span aria-hidden="true">✓</span>{point}</div>
+                <div key={point}><span aria-hidden="true" style={{ display: 'inline-flex', marginRight: 8 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg></span>{point}</div>
               ))}
             </div>
             <Link to="/about" className="btn btn-navy">Discover Our Firm</Link>
@@ -390,7 +390,7 @@ export default function HomePage() {
           <div className="testimonials-grid">
             {testimonials.map((item) => (
               <article key={item.name} className="test-card">
-                <div className="test-stars" aria-label="5 out of 5 stars">★★★★★</div>
+                <div className="test-stars" aria-label="5 out of 5 stars" style={{ display: 'flex', gap: 3 }}>{[0, 1, 2, 3, 4].map((n) => (<svg key={n} width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>))}</div>
                 <div className="test-quote-icon" aria-hidden="true">&ldquo;</div>
                 <p className="review">{item.review}</p>
                 <div className="test-person">

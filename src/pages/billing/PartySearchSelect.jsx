@@ -85,7 +85,7 @@ export default function PartySearchSelect({
     <button key={p.id} type="button" className="bp-party-search-item" onClick={() => pick(p)}>
       <span className="bp-party-search-item-name">{p.name}</span>
       <span className="bp-party-search-item-sub">
-        {p.gstin_display || p.gstin || 'Unregistered'}
+        {p.gstin_display || p.gstin || 'B2C'}
         {p.branch_name && ` (Branch Name - ${p.branch_name})`}
       </span>
     </button>

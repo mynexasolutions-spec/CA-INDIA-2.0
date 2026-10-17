@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, getAuthToken } from '../../api/client';
 import { useReportsEnv } from './ReportsContext';
 import { LoadingBlock } from '../../components/Spinner';
-import { buildFyOptions, currentFyRange, money } from './billingUtils';
+import { buildFyOptions, currentFyRange, moneyFixed as money } from './billingUtils';
 import { resolveGstMatrix, GST_MATRIX_ROWS, GST_MATRIX_COLS } from './GstSummaryMatrix';
 
 /* ── Icon helpers ─────────────────────────────────────────── */
@@ -40,35 +40,34 @@ function FunnelIcon() {
 }
 
 /* ── KPI cards meta ───────────────────────────────────────── */
-// Stacked-coins SVG (white, 28×28) — used by CGST, SGST, IGST, Gross cards
+// Clean white line icons for the KPI tiles (24 grid, 2px stroke) so they stay crisp at any size.
+const KPI_SVG = { width: 30, height: 30, viewBox: '0 0 24 24', fill: 'none', stroke: 'white', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+
+// Stack of coins — used by the CGST, SGST and IGST cards
 const StackedCoinsIcon = () => (
-  <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="16" cy="24" rx="10" ry="4" fill="rgba(255,255,255,0.35)"/>
-    <ellipse cx="16" cy="20" rx="10" ry="4" fill="rgba(255,255,255,0.5)"/>
-    <ellipse cx="16" cy="16" rx="10" ry="4" fill="rgba(255,255,255,0.7)"/>
-    <ellipse cx="16" cy="12" rx="10" ry="4" fill="rgba(255,255,255,0.85)"/>
-    <ellipse cx="16" cy="8"  rx="10" ry="4" fill="white"/>
-    <text x="16" y="11.5" textAnchor="middle" fontSize="6" fontWeight="800" fill="#ea580c" stroke="none">₹</text>
+  <svg {...KPI_SVG}>
+    <ellipse cx="12" cy="6" rx="8" ry="3" />
+    <path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6" />
+    <path d="M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" />
   </svg>
 );
 
-// Rupee coin with outer ring (yellow card) 
+// Rupee in a ring — the gross value card
 const RupeeRingIcon = () => (
-  <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="16" cy="16" r="13" stroke="white" strokeWidth="2" fill="none"/>
-    <circle cx="16" cy="16" r="9" fill="white"/>
-    <text x="16" y="20.5" textAnchor="middle" fontSize="11" fontWeight="900" fill="#d97706" stroke="none">₹</text>
+  <svg {...KPI_SVG}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M8 8h8M8 11.5h8M9.5 8c2.6 0 4 1.1 4 3.5s-1.4 3.5-4 3.5H8.5l5.5 3.5" />
   </svg>
 );
 
-// Document with bar-chart icon (blue taxable card)
+// Document with bar chart — the taxable value card
 const DocChartIcon = () => (
-  <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="5" y="2" width="22" height="28" rx="3" fill="white" fillOpacity="0.25"/>
-    <rect x="5" y="2" width="22" height="28" rx="3" stroke="white" strokeWidth="1.5" fill="none"/>
-    <rect x="9" y="18" width="3" height="8" rx="1" fill="white"/>
-    <rect x="14" y="13" width="3" height="13" rx="1" fill="white"/>
-    <rect x="19" y="8" width="3" height="18" rx="1" fill="white"/>
+  <svg {...KPI_SVG}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="9" y1="18" x2="9" y2="14" />
+    <line x1="12" y1="18" x2="12" y2="11" />
+    <line x1="15" y1="18" x2="15" y2="15" />
   </svg>
 );
 
@@ -281,12 +280,20 @@ export default function GstSummaryPage({
   return (
     <div style={{ maxWidth: '100%' }}>
       {/* ── Header ───────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--bp-navy)' }}>{title}</h2>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--bp-muted)' }}>
-            View taxable value, taxes and gross value summary by document type for the selected period.
-          </p>
+      <div className="gs-head" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div className="gl-head-ic" style={{ width: 44, height: 44, background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--bp-navy)' }}>{title}</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--bp-muted)' }}>
+              View taxable value, taxes and gross value summary by document type for the selected period.
+            </p>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
           <button
@@ -307,7 +314,7 @@ export default function GstSummaryPage({
       </div>
 
       {/* ── Filter Bar ───────────────────────────────────── */}
-      <div className="bp-card" style={{ marginBottom: 20, padding: '14px 18px' }}>
+      <div className="bp-card gs-filter" style={{ marginBottom: 20, padding: '14px 18px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
 
           {/* Quick pills – no label above, vertically centred with rest */}
@@ -438,10 +445,11 @@ export default function GstSummaryPage({
       </div>
 
       {/* ── KPI Cards ────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 20 }}>
+      <div className="gs-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 20 }}>
         {KPI_CARDS.map((card) => (
           <div
             key={card.key}
+            className="gs-kpi"
             style={{
               padding: '20px 18px 18px',
               background: card.bg,
@@ -452,6 +460,7 @@ export default function GstSummaryPage({
             }}
           >
             <div
+              className="gs-kpi-ic"
               style={{
                 width: 52, height: 52, borderRadius: 14,
                 background: card.iconBg,
@@ -472,7 +481,7 @@ export default function GstSummaryPage({
       </div>
 
       {/* ── Summary Table ────────────────────────────────── */}
-      <div className="bp-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
+      <div className="bp-card gs-table" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
         {/* Report Period Bar */}
         <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--bp-border)', display: 'flex', alignItems: 'center', gap: 8, background: '#f8fafc' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -566,11 +575,15 @@ export default function GstSummaryPage({
    B2B & B2C Bifurcation Section
    ───────────────────────────────────────────────────────────── */
 const BIF_DOC_TYPES = [
-  { key: 'tax_invoice',    label: 'Tax Invoices',  color: '#16a34a', bg: '#f0fdf4', iconBg: '#dcfce7' },
-  { key: 'bill_of_supply', label: 'Bill of Supply', color: '#2563eb', bg: '#eff6ff', iconBg: '#dbeafe' },
-  { key: 'debit_note',     label: 'Debit Notes',   color: '#7c3aed', bg: '#faf5ff', iconBg: '#e9d5ff' },
-  { key: 'credit_note',    label: 'Credit Notes',  color: '#dc2626', bg: '#fef2f2', iconBg: '#fee2e2' },
+  { key: 'tax_invoice',    label: 'Tax Invoices',   color: '#16a34a', bg: '#f1fbf4', border: '#cdeed8', iconBg: '#16a34a', head: '#e3f6ea' },
+  { key: 'bill_of_supply', label: 'Bill of Supply', color: '#1d4ed8', bg: '#f1f6ff', border: '#d0e0fa', iconBg: '#1d5fe0', head: '#e2ecfd' },
+  { key: 'debit_note',     label: 'Debit Notes',    color: '#7c3aed', bg: '#f8f3ff', border: '#e2d4fa', iconBg: '#7c3aed', head: '#eee3fd' },
+  { key: 'credit_note',    label: 'Credit Notes',   color: '#dc2626', bg: '#fff3f3', border: '#f8d3d3', iconBg: '#dc2626', head: '#fde3e3' },
 ];
+
+const DocIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+);
 
 const VALUE_ROWS = [
   { key: 'taxable_value',      label: 'Total Taxable Value',    bold: false },
@@ -599,27 +612,33 @@ function B2bBifurcationSection({ bifurcation, loading, activeTab, onTabChange })
   const totalB2c = BIF_DOC_TYPES.reduce((acc, dt) => sumB(acc, bifurcation?.[dt.key]?.b2c || zeroSums()), zeroSums());
   const totalAll = sumB(totalB2b, totalB2c);
 
+  const thB = { padding: '8px 12px', textAlign: 'center', fontWeight: 700, fontSize: 12, color: '#0f172a', border: '1px solid #dbe5f3' };
+  const tdB = { padding: '7px 12px', border: '1px solid #e3ebf6', fontSize: 12.5 };
+
   return (
-    <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
+    <div className="bf-wrap" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginTop: 18 }}>
       {/* Section Header */}
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--bp-navy)', marginBottom: 2 }}>B2B &amp; B2C Bifurcation</div>
-          <div style={{ fontSize: 12, color: '#64748b' }}>Value-wise and document-wise summary for each document type.</div>
+      <div className="bf-head" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="bf-ic bf-ic-main" style={{ width: 38, height: 38, borderRadius: 10, background: '#1d5fe0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><DocIcon /></div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>B2B &amp; B2C Bifurcation</div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>Value-wise and document-wise summary for each document type.</div>
+          </div>
         </div>
-        {/* Toggle */}
-        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 10, padding: 3, gap: 2 }}>
+        <div style={{ display: 'flex', gap: 10 }}>
           {[
             { id: 'value',    label: 'Value-wise Summary' },
             { id: 'document', label: 'Document-wise Summary' },
           ].map(({ id, label }) => (
-            <button key={id} type="button" onClick={() => onTabChange(id)}
+            <button key={id} type="button" className="bf-tab" onClick={() => onTabChange(id)}
               style={{
-                padding: '6px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                fontSize: 12, fontWeight: 700, transition: 'all 0.15s',
-                background: activeTab === id ? '#fff' : 'transparent',
-                color: activeTab === id ? '#1e3a5f' : '#64748b',
-                boxShadow: activeTab === id ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                height: 38, padding: '0 22px', borderRadius: 9, cursor: 'pointer',
+                fontSize: 13, fontWeight: 700, transition: 'all 0.15s',
+                border: activeTab === id ? '1px solid #1d5fe0' : '1px solid #cfd8e6',
+                background: activeTab === id ? '#1d5fe0' : '#fff',
+                color: activeTab === id ? '#fff' : '#1e293b',
+                boxShadow: activeTab === id ? '0 6px 14px -6px rgba(29,95,224,0.7)' : 'none',
               }}>
               {label}
             </button>
@@ -631,93 +650,86 @@ function B2bBifurcationSection({ bifurcation, loading, activeTab, onTabChange })
         <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Loading…</div>
       ) : activeTab === 'value' ? (
         /* ── Value-wise grid ── */
-        <div style={{ padding: '18px 20px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+        <div style={{ padding: '4px 20px 18px', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
           {BIF_DOC_TYPES.map((dt) => {
             const b2b = bifurcation?.[dt.key]?.b2b || zeroSums();
             const b2c = bifurcation?.[dt.key]?.b2c || zeroSums();
             return (
-              <div key={dt.key} style={{ border: `1.5px solid ${dt.iconBg}`, borderRadius: 12, overflow: 'hidden' }}>
-                {/* Card header */}
-                <div style={{ background: dt.bg, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: `1px solid ${dt.iconBg}` }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: dt.color }} />
-                  <span style={{ fontSize: 13, fontWeight: 800, color: dt.color }}>{dt.label} – B2B &amp; B2C Summary</span>
+              <div key={dt.key} className="bf-card" style={{ background: dt.bg, border: `1px solid ${dt.border}`, borderRadius: 14, padding: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div className="bf-ic" style={{ width: 34, height: 34, borderRadius: 10, background: dt.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><DocIcon /></div>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: dt.color }}>{dt.label} <span style={{ color: '#0f172a' }}>- B2B &amp; B2C Summary</span></span>
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      <th style={{ padding: '8px 14px', textAlign: 'left', fontWeight: 700, color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>Particulars</th>
-                      <th style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 700, color: '#16a34a', borderBottom: '1px solid #e2e8f0' }}>B2B</th>
-                      <th style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 700, color: '#ea580c', borderBottom: '1px solid #e2e8f0' }}>B2C</th>
-                      <th style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 700, color: '#1e3a5f', borderBottom: '1px solid #e2e8f0' }}>Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {VALUE_ROWS.map((row, i) => {
-                      const total = (b2b[row.key] || 0) + (b2c[row.key] || 0);
-                      return (
-                        <tr key={row.key} style={{ borderBottom: '1px solid #f1f5f9', background: row.bold ? '#f0f9ff' : i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                          <td style={{ padding: '8px 14px', color: row.bold ? '#2563eb' : 'var(--bp-navy)', fontWeight: row.bold ? 800 : 600 }}>{row.label}</td>
-                          <td style={{ padding: '8px 14px', textAlign: 'right', color: row.bold ? '#2563eb' : 'var(--bp-text)', fontWeight: row.bold ? 800 : 500 }}>{money(b2b[row.key] || 0)}</td>
-                          <td style={{ padding: '8px 14px', textAlign: 'right', color: row.bold ? '#2563eb' : 'var(--bp-text)', fontWeight: row.bold ? 800 : 500 }}>{money(b2c[row.key] || 0)}</td>
-                          <td style={{ padding: '8px 14px', textAlign: 'right', color: '#2563eb', fontWeight: 800 }}>{money(total)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="bf-tbl" style={{ background: '#fff', borderRadius: 8, overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...thB, textAlign: 'left', background: '#f8fafc' }}>Particulars</th>
+                        <th style={{ ...thB, background: '#e3edfc' }}>B2B</th>
+                        <th style={{ ...thB, background: '#e3f6ea' }}>B2C</th>
+                        <th style={{ ...thB, background: '#f1f5f9' }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {VALUE_ROWS.map((row) => {
+                        const total = (b2b[row.key] || 0) + (b2c[row.key] || 0);
+                        const bg = row.bold ? '#e7f0fd' : '#fff';
+                        const c = row.bold ? '#1d4ed8' : '#1e293b';
+                        const w = row.bold ? 800 : 500;
+                        return (
+                          <tr key={row.key} style={{ background: bg }}>
+                            <td style={{ ...tdB, color: c, fontWeight: row.bold ? 800 : 600 }}>{row.label}</td>
+                            <td style={{ ...tdB, textAlign: 'right', color: c, fontWeight: w }}>{money(b2b[row.key] || 0)}</td>
+                            <td style={{ ...tdB, textAlign: 'right', color: c, fontWeight: w }}>{money(b2c[row.key] || 0)}</td>
+                            <td style={{ ...tdB, textAlign: 'right', color: row.bold ? '#1d4ed8' : '#0f172a', fontWeight: 800 }}>{money(total)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             );
           })}
         </div>
       ) : (
         /* ── Document-wise table ── */
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <div className="bf-tbl bf-docs" style={{ padding: '4px 20px 18px', overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #dbe5f3' }}>
             <thead>
-              <tr style={{ background: '#1e3a5f', color: '#fff' }}>
-                <th style={{ padding: '10px 20px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Document Type</th>
-                <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>B2B</th>
-                <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>B2C</th>
-                <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Total</th>
+              <tr>
+                <th style={{ ...thB, textAlign: 'left', background: '#f1f5f9', padding: '11px 16px' }}>Document Type</th>
+                <th style={{ ...thB, background: '#e3edfc', padding: '11px 16px' }}>B2B</th>
+                <th style={{ ...thB, background: '#e3f6ea', padding: '11px 16px' }}>B2C</th>
+                <th style={{ ...thB, background: '#f1f5f9', padding: '11px 16px' }}>Total</th>
               </tr>
             </thead>
             <tbody>
-              {BIF_DOC_TYPES.map((dt, i) => {
+              {BIF_DOC_TYPES.map((dt) => {
                 const b2b = bifurcation?.[dt.key]?.b2b || zeroSums();
                 const b2c = bifurcation?.[dt.key]?.b2c || zeroSums();
                 const tot = (b2b.count || 0) + (b2c.count || 0);
                 return (
-                  <tr key={dt.key} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                    <td style={{ padding: '11px 20px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: dt.color, flexShrink: 0 }} />
+                  <tr key={dt.key} style={{ background: '#fff' }}>
+                    <td style={{ ...tdB, padding: '11px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 8, background: dt.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        </div>
                         <span style={{ fontWeight: 700, color: dt.color }}>{dt.label}</span>
                       </div>
                     </td>
-                    <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                      <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '3px 12px', borderRadius: 8, fontWeight: 700 }}>{b2b.count || 0}</span>
-                    </td>
-                    <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                      <span style={{ background: '#fff7ed', color: '#ea580c', padding: '3px 12px', borderRadius: 8, fontWeight: 700 }}>{b2c.count || 0}</span>
-                    </td>
-                    <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                      <span style={{ background: '#eff6ff', color: '#2563eb', padding: '3px 12px', borderRadius: 8, fontWeight: 700 }}>{tot}</span>
-                    </td>
+                    <td style={{ ...tdB, textAlign: 'center', fontWeight: 600 }}>{b2b.count || 0}</td>
+                    <td style={{ ...tdB, textAlign: 'center', fontWeight: 600 }}>{b2c.count || 0}</td>
+                    <td style={{ ...tdB, textAlign: 'center', fontWeight: 800, color: '#1d4ed8' }}>{tot}</td>
                   </tr>
                 );
               })}
-              {/* Totals row */}
-              <tr style={{ background: '#f0f9ff', borderTop: '2px solid #bfdbfe' }}>
-                <td style={{ padding: '11px 20px', fontWeight: 800, color: '#1e3a5f' }}>Total Documents</td>
-                <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                  <span style={{ background: '#dcfce7', color: '#16a34a', padding: '4px 14px', borderRadius: 8, fontWeight: 800 }}>{totalB2b.count}</span>
-                </td>
-                <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                  <span style={{ background: '#fed7aa', color: '#ea580c', padding: '4px 14px', borderRadius: 8, fontWeight: 800 }}>{totalB2c.count}</span>
-                </td>
-                <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                  <span style={{ background: '#bfdbfe', color: '#1d4ed8', padding: '4px 14px', borderRadius: 8, fontWeight: 800 }}>{totalAll.count}</span>
-                </td>
+              <tr style={{ background: '#e7f0fd' }}>
+                <td style={{ ...tdB, padding: '11px 16px', fontWeight: 800, color: '#1d4ed8' }}>Total Documents</td>
+                <td style={{ ...tdB, textAlign: 'center', fontWeight: 800, color: '#1d4ed8' }}>{totalB2b.count}</td>
+                <td style={{ ...tdB, textAlign: 'center', fontWeight: 800, color: '#1d4ed8' }}>{totalB2c.count}</td>
+                <td style={{ ...tdB, textAlign: 'center', fontWeight: 800, color: '#1d4ed8' }}>{totalAll.count}</td>
               </tr>
             </tbody>
           </table>
@@ -725,9 +737,12 @@ function B2bBifurcationSection({ bifurcation, loading, activeTab, onTabChange })
       )}
 
       {/* Note */}
-      <div style={{ padding: '10px 20px', background: '#f0f7ff', borderTop: '1px solid #bfdbfe', fontSize: 12, color: '#1e3a8a' }}>
-        <strong>Note:</strong>
-        <ul style={{ margin: '4px 0 0', paddingLeft: 18, lineHeight: 1.7 }}>
+      <div className="bf-note" style={{ margin: '0 20px 20px', padding: '14px 20px', background: 'linear-gradient(135deg,#f3f8ff,#e8f1fd)', border: '1px solid #d3e3f8', borderRadius: 12, fontSize: 12.5, color: '#1e293b' }}>
+        <div style={{ fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="11" fill="#1d5fe0" stroke="none"/><line x1="12" y1="11" x2="12" y2="17" stroke="#fff"/><line x1="12" y1="7.5" x2="12.01" y2="7.5" stroke="#fff"/></svg>
+          Note:
+        </div>
+        <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
           <li>B2B and B2C classification is based on the document party type and GSTIN availability.</li>
           <li>Values include only active documents. Cancelled documents are excluded.</li>
           <li>Data is shown for the selected period.</li>

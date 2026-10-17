@@ -3,14 +3,14 @@ import { createPortal } from 'react-dom';
 
 /**
  * Replaces the browser's native <select> popup with a styled listbox for every
- * single-choice <select> inside the admin shell (.bp-shell-admin).
+ * single-choice <select> inside the admin and client portal shells (.bp-shell-admin / .bp-shell-client).
  *
  * The <select> element stays the source of truth: choosing an option sets its
  * value and fires a bubbling `change` event, so existing React `onChange`
  * handlers (controlled or not) keep working without any per-page edits.
  */
 
-const SHELL = '.bp-shell-admin';
+const SHELL = '.bp-shell-admin, .bp-shell-client';
 const MAX_HEIGHT = 288;
 const GAP = 6;
 

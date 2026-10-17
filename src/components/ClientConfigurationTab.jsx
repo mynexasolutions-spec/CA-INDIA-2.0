@@ -627,7 +627,7 @@ export default function ClientConfigurationTab({
 
           {/* Table */}
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <table className="cp-compact-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', color: '#475569', textAlign: 'left' }}>
                   <th style={{ padding: '8px 10px', fontWeight: 600 }}>Document Type</th>
@@ -875,7 +875,7 @@ export default function ClientConfigurationTab({
 
           {/* Watermark per-document table */}
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <table className="cp-compact-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', color: '#475569', textAlign: 'left' }}>
                   <th style={{ padding: '8px 10px', fontWeight: 600 }}>Document Type</th>

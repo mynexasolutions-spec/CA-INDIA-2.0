@@ -26,6 +26,8 @@ class ChangeRequestController extends Controller
 
         return [
             'text' => $text,
+            'layout_id' => (int) ($profile->default_layout_id ?: 1),
+            'colour_scheme' => (string) ($profile->default_colour_scheme ?: 'slate_blue'),
             'logo_path' => $profile->logo_path,
             'signature_path' => $profile->signature_path,
             'seal_path' => $profile->seal_path,
@@ -77,8 +79,15 @@ class ChangeRequestController extends Controller
                 ->latest('id')
                 ->first();
 
+            $draft = ClientChangeRequest::where('client_profile_id', $profile->id)
+                ->where('section', $section)
+                ->where('status', ClientChangeRequest::STATUS_DRAFT)
+                ->latest('id')
+                ->first();
+
             $sections[$section] = [
                 'pending' => $this->serializeRequest($pending),
+                'draft' => $this->serializeRequest($draft),
                 'last_reviewed' => $this->serializeRequest($last),
             ];
         }
@@ -93,7 +102,9 @@ class ChangeRequestController extends Controller
     public function history(Request $request)
     {
         $profile = $this->profile($request);
-        $q = ClientChangeRequest::where('client_profile_id', $profile->id)->latest('id');
+        $q = ClientChangeRequest::where('client_profile_id', $profile->id)
+            ->where('status', '!=', ClientChangeRequest::STATUS_DRAFT)
+            ->latest('id');
 
         if ($request->filled('section') && in_array($request->section, ClientChangeRequest::SECTIONS, true)) {
             $q->where('section', $request->section);
@@ -122,6 +133,9 @@ class ChangeRequestController extends Controller
             'credit_note_prefix' => 'nullable|string|max:40',
             'debit_note_prefix' => 'nullable|string|max:40',
             'quotation_prefix' => 'nullable|string|max:40',
+            'delivery_challan_prefix' => 'nullable|string|max:40',
+            'layout_id' => 'nullable|integer|in:1,2,3,4',
+            'colour_scheme' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(\App\Models\ClientDocumentSetting::COLOUR_SCHEMES))],
             'terms_conditions' => 'nullable|string',
         ];
     }
@@ -150,6 +164,23 @@ class ChangeRequestController extends Controller
             ->where('status', ClientChangeRequest::STATUS_PENDING)
             ->latest('id')
             ->first();
+        $draft = ClientChangeRequest::where('client_profile_id', $profile->id)
+            ->where('section', $section)
+            ->where('status', ClientChangeRequest::STATUS_DRAFT)
+            ->latest('id')
+            ->first();
+
+        if ($draft && $pending) {
+            // Files staged after a submit belong to the same open request: fold them in.
+            foreach (ClientChangeRequest::ASSET_FIELDS as $column) {
+                if ($draft->{$column}) {
+                    $pending->{$column} = $draft->{$column};
+                }
+            }
+            $pending->save();
+            $draft->delete();
+            $draft = null;
+        }
 
         if ($pending) {
             $merged = array_merge($pending->payload ?? [], $payload);
@@ -157,6 +188,14 @@ class ChangeRequestController extends Controller
                 'payload' => $merged,
                 'submitted_by' => $request->user()->id,
             ]);
+        } elseif ($draft) {
+            // The client pressed "Submit for Approval": the staged files + these fields become ONE request.
+            $draft->update([
+                'payload' => $payload,
+                'submitted_by' => $request->user()->id,
+                'status' => ClientChangeRequest::STATUS_PENDING,
+            ]);
+            $pending = $draft;
         } else {
             $pending = ClientChangeRequest::create([
                 'client_profile_id' => $profile->id,
@@ -174,6 +213,31 @@ class ChangeRequestController extends Controller
         ], $pending->wasRecentlyCreated ? 201 : 200);
     }
 
+    /** The client's own layout preview (real renderer, demo data). Nothing is stored. */
+    public function layoutPreview(Request $request, \App\Services\DocumentTemplate\LayoutPreviewRenderer $renderer)
+    {
+        $profile = $this->profile($request);
+
+        $data = $request->validate([
+            'layout_id' => 'required|integer|in:1,2,3,4',
+            'colour_scheme' => ['required', 'string', \Illuminate\Validation\Rule::in(array_keys(\App\Models\ClientDocumentSetting::COLOUR_SCHEMES))],
+        ]);
+
+        try {
+            $pdf = $renderer->render($profile, (int) $data['layout_id'], (string) $data['colour_scheme'], 'tax_invoice', false);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Client layout preview failed for {$profile->id}: ".$e->getMessage());
+
+            return response()->json(['message' => 'Preview unavailable. Please try again.'], 503);
+        }
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="layout-preview.pdf"',
+            'Cache-Control' => 'no-store, private',
+        ]);
+    }
+
     public function uploadAsset(Request $request, string $field)
     {
         abort_unless(array_key_exists($field, ClientChangeRequest::ASSET_FIELDS), 404);
@@ -185,16 +249,18 @@ class ChangeRequestController extends Controller
         $profile = $this->profile($request);
         $pending = ClientChangeRequest::where('client_profile_id', $profile->id)
             ->where('section', ClientChangeRequest::SECTION_BRANDING)
-            ->where('status', ClientChangeRequest::STATUS_PENDING)
+            ->whereIn('status', [ClientChangeRequest::STATUS_PENDING, ClientChangeRequest::STATUS_DRAFT])
+            ->orderByRaw("CASE status WHEN 'pending' THEN 0 ELSE 1 END")
             ->latest('id')
             ->first();
 
         if (! $pending) {
+            // Nothing is sent to the admin until the client presses "Submit for Approval".
             $pending = ClientChangeRequest::create([
                 'client_profile_id' => $profile->id,
                 'section' => ClientChangeRequest::SECTION_BRANDING,
                 'submitted_by' => $request->user()->id,
-                'status' => ClientChangeRequest::STATUS_PENDING,
+                'status' => ClientChangeRequest::STATUS_DRAFT,
                 'payload' => [],
             ]);
         }

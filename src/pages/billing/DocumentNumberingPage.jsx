@@ -33,27 +33,35 @@ function extractPrefix(number) {
   return m ? m[1].replace(/[-_/]$/, '') : '';
 }
 
-/* Build full sequence including gap rows between a start and end number */
+/* Documents in strictly ascending number order, with a "Missing" row for every skipped number.
+ * Series are kept apart by their own prefix (INV- vs INS/), so a different prefix is never a gap. */
 function buildSequenceWithGaps(docs) {
   if (!docs.length) return docs;
-  const prefixStr = extractPrefix(docs[0].number);
-  const padLen    = docs[0].number?.match(/(\d+)$/)?.[1]?.length ?? 3;
-  const map       = Object.fromEntries(docs.map((d) => [d.number, d]));
-  const nums      = docs.map((d) => extractSeq(d.number)).filter((n) => n != null);
-  if (!nums.length) return docs;
-  const min = Math.min(...nums);
-  const max = Math.max(...nums);
-
+  const split = (n) => {
+    const m = /^(.*?)(\d+)$/.exec(n || '');
+    return m ? { prefix: m[1], seq: parseInt(m[2], 10), pad: m[2].length } : { prefix: n || '', seq: null, pad: 0 };
+  };
+  const groups = new Map();
+  docs.forEach((d) => {
+    const p = split(d.number);
+    if (!groups.has(p.prefix)) groups.set(p.prefix, []);
+    groups.get(p.prefix).push({ d, ...p });
+  });
   const result = [];
-  for (let i = min; i <= max; i++) {
-    const numStr = String(i).padStart(padLen, '0');
-    const fullNum = prefixStr ? `${prefixStr}-${numStr}` : numStr;
-    if (map[fullNum]) {
-      result.push({ ...map[fullNum], missing: false });
-    } else {
-      result.push({ id: null, number: fullNum, document_date: null, status: null, created_at: null, filing_status: null, missing: true });
+  [...groups.keys()].sort().forEach((prefix) => {
+    const items = groups.get(prefix).sort((x, y) => (x.seq ?? 0) - (y.seq ?? 0));
+    const seqs = items.filter((i) => i.seq != null);
+    if (!seqs.length) { items.forEach((i) => result.push({ ...i.d, missing: false })); return; }
+    // Every document is kept, even when two share the same number (e.g. INS/36 and INS/036).
+    const bySeq = new Map();
+    seqs.forEach((i) => { if (!bySeq.has(i.seq)) bySeq.set(i.seq, []); bySeq.get(i.seq).push(i); });
+    const pad = Math.max(...seqs.map((i) => i.pad));
+    for (let n = seqs[0].seq; n <= seqs[seqs.length - 1].seq; n += 1) {
+      const hits = bySeq.get(n);
+      if (hits) hits.forEach((h) => result.push({ ...h.d, missing: false }));
+      else result.push({ id: null, number: `${prefix}${String(n).padStart(pad, '0')}`, document_date: null, status: null, created_at: null, filing_status: null, missing: true });
     }
-  }
+  });
   return result;
 }
 
@@ -71,11 +79,22 @@ const DocStatusBadge = ({ status }) => {
 };
 
 /* ── Drill-Down Modal ── */
-function DrillDownModal({ typeKey, typeLabel, from, to, onClose }) {
+const LEGEND = [['#22c55e', 'Filed'], ['#fca5a5', 'Not Filed'], ['#ef4444', 'Missing'], ['#9ca3af', 'Cancelled']];
+
+const svgP = { width: 15, height: 15, viewBox: '0 0 24 24', fill: 'none', stroke: '#64748b', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+const IconSearch = () => <svg {...svgP}><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>;
+const IconCal = () => <svg {...svgP}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+const IconX = () => <svg {...svgP} stroke="#334155" strokeWidth="2.4"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const IconInfo = () => <svg width="13" height="13" viewBox="0 0 24 24" style={{ verticalAlign:'-2px', marginLeft:5 }}><circle cx="12" cy="12" r="11" fill="#2563eb"/><line x1="12" y1="11" x2="12" y2="17" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"/><line x1="12" y1="7.3" x2="12.01" y2="7.3" stroke="#fff" strokeWidth="2.8" strokeLinecap="round"/></svg>;
+
+function DrillDownModal({ typeKey, typeLabel, row, from, to, onClose }) {
   const env = useReportsEnv();
   const [docs,    setDocs]    = useState([]);
   const [loading, setLoading] = useState(true);
   const [search,  setSearch]  = useState('');
+  const [dFrom,   setDFrom]   = useState('');
+  const [dTo,     setDTo]     = useState('');
+  const [status,  setStatus]  = useState('all');
 
   useEffect(() => {
     setLoading(true);
@@ -83,129 +102,129 @@ function DrillDownModal({ typeKey, typeLabel, from, to, onClose }) {
       .then((d) => setDocs(d.documents || []))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [typeKey, from, to]);
+  }, [typeKey, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const withGaps  = buildSequenceWithGaps(docs);
-  const filtered  = search
-    ? withGaps.filter((d) => d.number?.toLowerCase().includes(search.toLowerCase()))
-    : withGaps;
-
-  const missing   = withGaps.filter((d) => d.missing).length;
-  const docPath   = DOC_PATH_MAP[typeKey];
+  const withGaps = buildSequenceWithGaps(docs);
+  const t = search.trim().toLowerCase();
+  const filtered = withGaps.filter((d) => {
+    if (t && !(`${d.number} ${d.document_date || ''} ${d.created_at || ''}`).toLowerCase().includes(t)) return false;
+    if (dFrom && !(d.date_iso && d.date_iso >= dFrom)) return false;
+    if (dTo && !(d.date_iso && d.date_iso <= dTo)) return false;
+    if (status === 'missing' && !d.missing) return false;
+    if (status === 'cancelled' && d.status !== 'cancelled') return false;
+    if (status === 'active' && (d.missing || d.status === 'cancelled')) return false;
+    return true;
+  });
+  const missing = withGaps.filter((d) => d.missing).length;
+  const noLabel = typeKey === 'tax_invoice' ? 'Invoice No.' : 'Document No.';
+  const dateLabel = typeKey === 'tax_invoice' ? 'Invoice Date' : 'Document Date';
+  const reset = () => { setSearch(''); setDFrom(''); setDTo(''); setStatus('all'); };
+  const ctl = { height: 36, borderRadius: 9, border: '1px solid #d3deef', background: '#fff', padding: '0 11px', fontSize: 12.5, color: '#1e293b' };
+  const info = (k, v) => (
+    <div style={{ display: 'grid', gridTemplateColumns: '130px 12px 1fr', fontSize: 12.5, lineHeight: 1.85 }}>
+      <span style={{ color: '#475569', fontWeight: 700 }}>{k}</span><span style={{ color: '#94a3b8' }}>:</span><span style={{ color: '#0f2a5f', fontWeight: 600 }}>{v ?? '—'}</span>
+    </div>
+  );
 
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:16 }}>
-      <div style={{ background:'#fff', borderRadius:14, width:'100%', maxWidth:780, maxHeight:'90vh', display:'flex', flexDirection:'column', boxShadow:'0 20px 60px rgba(0,0,0,0.25)' }}>
-        {/* Modal Header */}
-        <div style={{ padding:'16px 20px', borderBottom:'1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div>
-            <h3 style={{ margin:0, fontSize:15, fontWeight:800, color:'#1e3a5f' }}>{typeLabel} — Document Sequence</h3>
-            <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>
-              {fmtDate(from)} – {fmtDate(to)} &nbsp;·&nbsp;
-              <span style={{ color:'#1e293b', fontWeight:600 }}>{docs.length}</span> documents
-              {missing > 0 && <span style={{ color:'#ef4444', marginLeft:6 }}>· <strong>{missing}</strong> missing</span>}
+    <div className="dd-overlay" style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:16 }} onClick={onClose}>
+      <div className="dd-modal" onClick={(e) => e.stopPropagation()} style={{ background:'#fff', borderRadius:18, width:'100%', maxWidth:860, maxHeight:'92vh', display:'flex', flexDirection:'column', boxShadow:'0 30px 70px -20px rgba(15,42,95,0.5)' }}>
+        <div className="dd-head" style={{ padding:'18px 24px 8px', display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+          <div style={{ flex:1 }}>
+            <h3 style={{ margin:'0 0 10px', fontSize:19, fontWeight:800, color:'#1d4ed8' }}>{typeLabel} – Document Details</h3>
+            <div className="dd-info" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', columnGap:30 }}>
+              <div>{info('Document Type', typeLabel)}{info('Prefix', row?.prefix)}{info('Start Sequence', row?.start_sequence)}</div>
+              <div>{info('Total Documents', row?.total)}{info('End Sequence', row?.end_sequence)}{info('Cancelled Documents', row?.cancelled)}</div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', fontSize:22, color:'#94a3b8', lineHeight:1 }}>×</button>
+          <button type="button" onClick={onClose} aria-label="Close" style={{ width:30, height:30, borderRadius:8, border:'none', background:'transparent', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><IconX /></button>
         </div>
 
-        {/* Search */}
-        <div style={{ padding:'12px 20px', borderBottom:'1px solid #f1f5f9' }}>
-          <input
-            className="bp-input"
-            style={{ height:36, padding:'0 12px', width:'100%', maxWidth:260, fontSize:13 }}
-            placeholder={`Search ${typeLabel} number…`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="dd-tools" style={{ padding:'10px 24px', display:'flex', gap:10, flexWrap:'wrap', alignItems:'center' }}>
+          <label style={{ ...ctl, flex:'1 1 220px', minWidth:200, display:'flex', alignItems:'center', gap:8 }}>
+            <IconSearch />
+            <input style={{ border:'none', outline:'none', background:'transparent', flex:1, fontSize:12.5, minWidth:0 }} placeholder="Search by invoice number or date…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </label>
+          <label style={{ ...ctl, display:'flex', alignItems:'center', gap:8, width:160 }}>
+            <IconCal />
+            <input type="date" style={{ border:'none', outline:'none', background:'transparent', fontSize:12.5, width:'100%', color: dFrom ? '#1e293b' : '#94a3b8' }} value={dFrom} onChange={(e) => setDFrom(e.target.value)} aria-label="From date" />
+          </label>
+          <label style={{ ...ctl, display:'flex', alignItems:'center', gap:8, width:160 }}>
+            <IconCal />
+            <input type="date" style={{ border:'none', outline:'none', background:'transparent', fontSize:12.5, width:'100%', color: dTo ? '#1e293b' : '#94a3b8' }} value={dTo} onChange={(e) => setDTo(e.target.value)} aria-label="To date" />
+          </label>
+          <select style={{ ...ctl, width:130 }} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="all">All Status</option><option value="active">Active</option><option value="cancelled">Cancelled</option><option value="missing">Missing</option>
+          </select>
+          <button type="button" onClick={reset} style={{ ...ctl, cursor:'pointer', color:'#1d4ed8', fontWeight:700, borderColor:'#bfd3f6' }}>Reset</button>
         </div>
 
-        {/* Table */}
-        <div style={{ flex:1, overflowY:'auto', padding:'0 0 8px' }}>
+        <div className="dd-tbl" style={{ flex:1, overflowY:'auto', margin:'0 24px 8px', border:'1px solid #dbe5f3', borderRadius:10 }}>
           {loading ? (
             <div style={{ padding:40, textAlign:'center', color:'#94a3b8', fontSize:13 }}>Loading…</div>
           ) : (
-            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5 }}>
               <thead style={{ position:'sticky', top:0, zIndex:1 }}>
-                <tr style={{ background:'#1e3a5f', color:'#fff' }}>
-                  <th style={th}>#</th>
-                  <th style={th}>Document No.</th>
-                  <th style={th}>Document Date</th>
-                  <th style={th}>Status</th>
-                  <th style={th}>Created On</th>
-                  <th style={th}>Filing Status</th>
-                </tr>
+                <tr>{['Sr. No.', noLabel, dateLabel, 'Created On', 'Filing Status', 'Status'].map((h) => <th key={h} style={{ background:'#e9f0fb', color:'#0f2a5f', fontWeight:800, fontSize:12, padding:'10px 10px', textAlign:'center', whiteSpace:'nowrap' }}>{h}{h === 'Filing Status' && <IconInfo />}</th>)}</tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan="6" style={{ textAlign:'center', padding:24, color:'#94a3b8' }}>No documents found.</td></tr>
-                ) : (
-                  filtered.map((doc, i) => doc.missing ? (
-                    <tr key={doc.number} style={{ background:'#fff5f5', borderBottom:'1px solid #fee2e2' }}>
-                      <td style={{ ...td, color:'#94a3b8', textAlign:'center' }}>{i + 1}</td>
-                      <td style={{ ...td, color:'#ef4444', fontWeight:700 }}>{doc.number}</td>
-                      <td style={td}>—</td>
-                      <td style={td}>
-                        <span style={{ background:'#fee2e2', color:'#b91c1c', padding:'2px 8px', borderRadius:8, fontSize:11, fontWeight:700 }}>Missing</span>
-                      </td>
-                      <td style={td}>—</td>
-                      <td style={td}>—</td>
+                  <tr><td colSpan="6" style={{ textAlign:'center', padding:28, color:'#94a3b8' }}>No documents found.</td></tr>
+                ) : filtered.map((doc, i) => {
+                  const cell = { padding:'9px 10px', textAlign:'center', borderBottom:'1px solid #e3ebf6', borderRight:'1px solid #eef3fa', whiteSpace:'nowrap' };
+                  const pill = (bg, fg, text) => <span style={{ display:'inline-block', minWidth:74, padding:'3px 10px', borderRadius:8, background:bg, color:fg, fontSize:11.5, fontWeight:700 }}>{text}</span>;
+                  if (doc.missing) {
+                    return (
+                      <tr key={`m-${doc.number}`} style={{ background:'#fde8e8' }}>
+                        <td style={cell}>{i + 1}</td><td style={{ ...cell, fontWeight:800, color:'#dc2626' }}>{doc.number}</td>
+                        <td style={cell}>—</td><td style={cell}>—</td><td style={cell}>—</td><td style={cell}>{pill('#fbd0d0', '#b91c1c', 'Missing')}</td>
+                      </tr>
+                    );
+                  }
+                  const link = env.docLink(typeKey, doc.id);
+                  const cancelled = doc.status === 'cancelled';
+                  return (
+                    <tr key={doc.id} style={{ background: cancelled ? '#f4f5f7' : (i % 2 ? '#f9fbff' : '#fff') }}>
+                      <td style={{ ...cell, color:'#64748b' }}>{i + 1}</td>
+                      <td style={cell}>{link ? <Link to={link} onClick={onClose} style={{ color:'#1d4ed8', fontWeight:800, textDecoration:'underline' }}>{doc.number}</Link> : <b>{doc.number}</b>}</td>
+                      <td style={cell}>{doc.document_date || '—'}</td>
+                      <td style={{ ...cell, color:'#64748b' }}>{doc.created_at || '—'}</td>
+                      <td style={cell}>{doc.filing_status === 'not_applicable' ? '—' : doc.filing_status === 'filed' ? pill('#d9f3e3', '#15803d', 'Filed') : pill('#ffe0e0', '#dc2626', 'Not Filed')}</td>
+                      <td style={cell}>{cancelled ? pill('#e5e7eb', '#4b5563', 'Cancelled') : pill('#d9f3e3', '#15803d', 'Active')}</td>
                     </tr>
-                  ) : (
-                    <tr key={doc.id} style={{ borderBottom:'1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                      <td style={{ ...td, color:'#94a3b8', textAlign:'center' }}>{i + 1}</td>
-                      <td style={td}>
-                        {docPath && env.docLink(typeKey, doc.id) ? (
-                          <Link to={env.docLink(typeKey, doc.id)} style={{ color:'#2563eb', fontWeight:700, textDecoration:'none' }} onClick={onClose}>
-                            {doc.number}
-                          </Link>
-                        ) : (
-                          <span style={{ fontWeight:700, color:'#1e293b' }}>{doc.number}</span>
-                        )}
-                      </td>
-                      <td style={td}>{doc.document_date || '—'}</td>
-                      <td style={td}><DocStatusBadge status={doc.status} /></td>
-                      <td style={{ ...td, color:'#64748b' }}>{doc.created_at || '—'}</td>
-                      <td style={td}>
-                        {doc.filing_status === 'filed'
-                          ? <span style={{ background:'#f0fdf4', color:'#16a34a', padding:'2px 8px', borderRadius:8, fontSize:11, fontWeight:600 }}>Filed</span>
-                          : <span style={{ background:'#f8fafc', color:'#94a3b8', padding:'2px 8px', borderRadius:8, fontSize:11, fontWeight:600 }}>Not Filed</span>
-                        }
-                      </td>
-                    </tr>
-                  ))
-                )}
+                  );
+                })}
               </tbody>
             </table>
           )}
         </div>
 
-        {/* Footer note */}
-        {missing > 0 && !loading && (
-          <div style={{ padding:'10px 20px', background:'#fef2f2', borderTop:'1px solid #fee2e2', fontSize:12, color:'#b91c1c', display:'flex', alignItems:'center', gap:8 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <strong>{missing}</strong> document number{missing > 1 ? 's are' : ' is'} missing in the sequence. Highlighted rows indicate gaps in numbering.
+        <div className="dd-foot" style={{ padding:'12px 24px 18px', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
+          <span style={{ fontSize:12, color:'#475569' }}>Showing 1 to {filtered.length} of {filtered.length} records{missing > 0 && <b style={{ color:'#dc2626' }}> · {missing} missing</b>}</span>
+          <div style={{ display:'flex', gap:14, alignItems:'center', flexWrap:'wrap' }}>
+            {LEGEND.map(([c, l]) => <span key={l} style={{ display:'inline-flex', alignItems:'center', gap:5, fontSize:11.5, color:'#475569' }}><i style={{ width:9, height:9, borderRadius:'50%', background:c, display:'inline-block' }} />{l}</span>)}
+            <button type="button" onClick={onClose} style={{ height:36, padding:'0 24px', borderRadius:9, border:'1px solid #bfd3f6', background:'#fff', color:'#1d4ed8', fontWeight:800, cursor:'pointer' }}>Close</button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
-const th = { padding:'10px 14px', textAlign:'left', fontWeight:600, fontSize:11, whiteSpace:'nowrap' };
+const th = { padding:'13px 16px', textAlign:'left', fontWeight:600, fontSize:11, whiteSpace:'nowrap' };
 const td = { padding:'9px 14px', color:'#374151' };
 
 /* ── KPI summary card ── */
-function KpiCard({ label, value, sub, icon, color, bg }) {
+function KpiCard({ label, value, sub, icon, color, bg, border }) {
   return (
-    <div style={{ background:`linear-gradient(145deg,${bg},${bg}cc)`, border:'1.5px solid rgba(0,0,0,0.05)', borderRadius:14, padding:'16px 20px', display:'flex', alignItems:'center', gap:14 }}>
-      <div style={{ width:48, height:48, borderRadius:13, background:color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, boxShadow:`0 4px 12px ${color}55` }}>
+    <div className="dn-kpi" style={{ background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'16px 18px', display:'flex', alignItems:'center', gap:14 }}>
+      <div className="dn-kpi-ic" style={{ width:50, height:50, borderRadius:'50%', background:`${color}22`, color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
         {icon}
       </div>
       <div>
-        <div style={{ fontSize:12, color:'#64748b', fontWeight:600, marginBottom:4 }}>{label}</div>
-        <div style={{ fontSize:22, fontWeight:800, color:'#1e293b', lineHeight:1.1 }}>{value}</div>
-        {sub && <div style={{ fontSize:11, color:'#94a3b8', marginTop:3 }}>{sub}</div>}
+        <div style={{ fontSize:12.5, color, fontWeight:700, marginBottom:2 }}>{label}</div>
+        <div style={{ fontSize:26, fontWeight:800, color:'#0f172a', lineHeight:1.15 }}>{value}</div>
+        {sub && <div style={{ fontSize:11.5, color:'#64748b', marginTop:2 }}>{sub}</div>}
       </div>
     </div>
   );
@@ -280,22 +299,37 @@ export default function DocumentNumberingPage() {
   return (
     <div style={{ maxWidth:'100%' }}>
       {/* Header */}
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:12, marginBottom:20 }}>
+      <div className="dn-head gs-head" style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:12, marginBottom:18 }}>
         <div>
-          <h2 style={{ margin:0, fontSize:22, fontWeight:800, color:'var(--bp-navy)' }}>Document Numbering</h2>
-          <p style={{ margin:'3px 0 0', fontSize:13, color:'var(--bp-muted)' }}>
-            View document-wise numbering, including start sequence, end sequence and total number of documents generated for the selected period.
-          </p>
+          <div style={{ fontSize:12.5, color:'#64748b', marginBottom:10, display:'flex', gap:6, alignItems:'center' }}>
+            <Link to={env.rootCrumbTo} style={{ color:'#2563eb', textDecoration:'none', fontWeight:500 }}>Reports</Link>
+            <span>&gt;</span>
+            <span>Document Numbering</span>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+            <div className="gl-head-ic" style={{ width:44, height:44, background:'linear-gradient(135deg,#1d4ed8,#2563eb)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" /><line x1="10" y1="3" x2="8" y2="21" /><line x1="16" y1="3" x2="14" y2="21" /></svg>
+            </div>
+            <div className="dn-title">
+              <h2 style={{ margin:0, fontSize:26, fontWeight:800, color:'#0f172a', letterSpacing:'-0.3px' }}>Document Numbering</h2>
+              <p style={{ margin:'4px 0 0', fontSize:13, color:'#64748b' }}>
+                View document-wise numbering, including start sequence, end sequence and total documents for the selected period.
+              </p>
+            </div>
+          </div>
         </div>
-        <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#94a3b8' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Last Updated {new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+        <div style={{ display:'flex', alignItems:'center', gap:12, background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:12, padding:'10px 18px', minWidth:210 }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <div>
+            <div style={{ fontSize:11.5, color:'#475569', fontWeight:600 }}>Last Updated</div>
+            <div style={{ fontSize:12.5, color:'#0f172a', fontWeight:600 }}>{new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</div>
+          </div>
         </div>
       </div>
 
       {/* Period Filters */}
-      <div className="bp-card" style={{ padding:'14px 18px', marginBottom:20 }}>
-        <div style={{ fontSize:12, fontWeight:700, color:'var(--bp-muted)', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:10 }}>Select Period</div>
+      <div className="dn-filter gs-filter" style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:12, padding:'16px 20px', marginBottom:18 }}>
+        <div style={{ fontSize:13, fontWeight:800, color:'#0f172a', marginBottom:12 }}>Select Period</div>
         <div style={{ display:'flex', flexWrap:'wrap', gap:10, alignItems:'flex-end' }}>
           {[
             { id:'current', label:'Current Month' },
@@ -303,7 +337,7 @@ export default function DocumentNumberingPage() {
             { id:'fy',      label:'Financial Year' },
           ].map(({ id, label }) => (
             <button key={id} type="button" onClick={() => applyQuick(id)} style={{
-              height:36, padding:'0 14px', borderRadius:8, whiteSpace:'nowrap',
+              height:40, padding:'0 20px', borderRadius:9, whiteSpace:'nowrap',
               border:`1.5px solid ${activeQuick === id ? '#2563eb' : '#e2e8f0'}`,
               background: activeQuick === id ? '#eff6ff' : '#fff',
               color: activeQuick === id ? '#2563eb' : 'var(--bp-text)',
@@ -311,7 +345,7 @@ export default function DocumentNumberingPage() {
             }}>{label}</button>
           ))}
           <button type="button" onClick={() => setActiveQuick('custom')} style={{
-            height:36, padding:'0 14px', borderRadius:8,
+            height:40, padding:'0 20px', borderRadius:9,
             border:`1.5px solid ${activeQuick === 'custom' ? '#2563eb' : '#e2e8f0'}`,
             background: activeQuick === 'custom' ? '#eff6ff' : '#fff',
             color: activeQuick === 'custom' ? '#2563eb' : 'var(--bp-text)',
@@ -319,25 +353,25 @@ export default function DocumentNumberingPage() {
           }}>Custom Range</button>
 
           <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-            <span style={{ fontSize:10, fontWeight:700, color:'var(--bp-muted)', textTransform:'uppercase', letterSpacing:'0.5px' }}>From Date</span>
+            <span style={{ fontSize:12, fontWeight:600, color:'#334155' }}>From Date</span>
             <div style={{ display:'flex', alignItems:'center', gap:6 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              <input type="date" className="bp-input" style={{ height:36, minWidth:140 }} value={from}
+              <input type="date" className="bp-input" style={{ height:40, minWidth:150 }} value={from}
                 onChange={(e) => { setFrom(e.target.value); setActiveQuick('custom'); }} />
             </div>
           </div>
 
           <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-            <span style={{ fontSize:10, fontWeight:700, color:'var(--bp-muted)', textTransform:'uppercase', letterSpacing:'0.5px' }}>To Date</span>
+            <span style={{ fontSize:12, fontWeight:600, color:'#334155' }}>To Date</span>
             <div style={{ display:'flex', alignItems:'center', gap:6 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              <input type="date" className="bp-input" style={{ height:36, minWidth:140 }} value={to}
+              <input type="date" className="bp-input" style={{ height:40, minWidth:150 }} value={to}
                 onChange={(e) => { setTo(e.target.value); setActiveQuick('custom'); }} />
             </div>
           </div>
 
           <button type="button" disabled={loading} onClick={handleApply}
-            style={{ height:36, padding:'0 18px', borderRadius:8, background:'#0052cc', border:'none', color:'#fff', fontWeight:700, fontSize:13, display:'flex', alignItems:'center', gap:7, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
+            style={{ height:40, padding:'0 28px', borderRadius:9, background:'#1d5fe0', marginLeft:'auto', minWidth:170, justifyContent:'center', border:'none', color:'#fff', fontWeight:700, fontSize:13, display:'flex', alignItems:'center', gap:7, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}>
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 4h14l-5.5 6.5V16l-3 1.5v-7L3 4Z"/></svg>
             Apply Filters
           </button>
@@ -346,37 +380,37 @@ export default function DocumentNumberingPage() {
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14, marginBottom:24 }}>
+      <div className="dn-kpis" style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:16, marginBottom:20 }}>
         <KpiCard label="Total Documents" value={loading ? '…' : (summary.totalDocs ?? 0)} sub="All document types"
-          color="#2563eb" bg="#eff6ff"
-          icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>}
+          color="#2563eb" bg="#eef4ff" border="#d6e4fb"
+          icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>}
         />
         <KpiCard label="Active Documents" value={loading ? '…' : (summary.activeDocs ?? 0)} sub="Generated in selected period"
-          color="#16a34a" bg="#f0fdf4"
-          icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>}
+          color="#16a34a" bg="#eefaf2" border="#cfeedb"
+          icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>}
         />
         <KpiCard label="Cancelled Documents" value={loading ? '…' : (summary.cancelledDocs ?? 0)} sub="Not included in active count"
-          color="#ea580c" bg="#fff7ed"
-          icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>}
+          color="#ea580c" bg="#fff3ec" border="#fbd9c4"
+          icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>}
         />
         <KpiCard label="Document Types" value={loading ? '…' : (summary.docTypesCount ?? 0)} sub="Configured types"
-          color="#7c3aed" bg="#faf5ff"
-          icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>}
+          color="#7c3aed" bg="#f6f0ff" border="#e4d6fa"
+          icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>}
         />
       </div>
 
       {/* Summary Table */}
-      <div className="bp-card" style={{ padding:0, overflow:'hidden' }}>
-        <div style={{ padding:'14px 20px', borderBottom:'1px solid #e2e8f0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <h3 style={{ margin:0, fontSize:15, fontWeight:800, color:'var(--bp-navy)' }}>Document Numbering Summary</h3>
+      <div className="dn-table" style={{ background:'#fff', border:'1px solid #e2e8f0', borderRadius:12, padding:0, overflow:'hidden' }}>
+        <div style={{ padding:'16px 20px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <h3 style={{ margin:0, fontSize:15, fontWeight:800, color:'#0f172a' }}>Document Numbering Summary</h3>
           <div style={{ display:'flex', gap:8 }}>
             <button type="button" onClick={downloadXlsx}
-              style={{ height:32, padding:'0 12px', borderRadius:6, border:'1px solid #e2e8f0', background:'#fff', color:'#374151', fontSize:12, fontWeight:600, display:'inline-flex', alignItems:'center', gap:5, textDecoration:'none', cursor:'pointer' }}>
+              style={{ height:36, padding:'0 16px', borderRadius:8, border:'1px solid #cfd8e6', background:'#fff', color:'#374151', fontSize:12, fontWeight:600, display:'inline-flex', alignItems:'center', gap:5, textDecoration:'none', cursor:'pointer' }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Export to Excel
             </button>
             <button type="button" onClick={() => window.print()}
-              style={{ height:32, padding:'0 12px', borderRadius:6, border:'1px solid #e2e8f0', background:'#fff', color:'#374151', fontSize:12, fontWeight:600, display:'inline-flex', alignItems:'center', gap:5, cursor:'pointer' }}>
+              style={{ height:36, padding:'0 16px', borderRadius:8, border:'1px solid #cfd8e6', background:'#fff', color:'#374151', fontSize:12, fontWeight:600, display:'inline-flex', alignItems:'center', gap:5, cursor:'pointer' }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
               Print
             </button>
@@ -386,9 +420,11 @@ export default function DocumentNumberingPage() {
         <div style={{ overflowX:'auto' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
             <thead>
-              <tr style={{ background:'#1e3a5f', color:'#fff' }}>
-                {['Sr. No.','Document Type','Prefix','Start Sequence (First Document)','End Sequence (Last Document)','Total Documents (Generated)','Cancelled (If any)','Status'].map((h) => (
-                  <th key={h} style={{ padding:'10px 14px', textAlign:'left', fontWeight:600, fontSize:12, whiteSpace:'nowrap' }}>{h}</th>
+              <tr style={{ background:'#f1f5f9', color:'#0f172a' }}>
+                {[['Sr. No.'],['Document Type'],['Prefix'],['Start Sequence','(First Document)'],['End Sequence','(Last Document)'],['Total Documents','(Generated)'],['Cancelled','(If any)'],['Status']].map(([h, sub]) => (
+                  <th key={h} style={{ padding:'11px 16px', textAlign:'left', fontWeight:700, fontSize:12.5, whiteSpace:'nowrap', borderTop:'1px solid #e2e8f0', borderBottom:'1px solid #e2e8f0' }}>
+                    {h}{sub && <div style={{ fontWeight:500, fontSize:11.5, color:'#475569' }}>{sub}</div>}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -399,26 +435,30 @@ export default function DocumentNumberingPage() {
                 <tr><td colSpan="8" style={{ textAlign:'center', padding:32, color:'#94a3b8' }}>No documents found for the selected period.</td></tr>
               ) : (
                 rows.map((r, i) => (
-                  <tr key={r.type} style={{ borderBottom:'1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                    <td style={{ padding:'10px 14px', color:'#94a3b8', fontWeight:600 }}>{i + 1}</td>
-                    <td style={{ padding:'10px 14px' }}>
+                  <tr key={r.type} style={{ borderBottom:'1px solid #eef2f7', background:'#fff' }}>
+                    <td style={{ padding:'13px 16px', color:'#334155', fontWeight:500 }}>{i + 1}</td>
+                    <td style={{ padding:'13px 16px' }}>
                       <button type="button" onClick={() => setDrillType(r.type)}
-                        style={{ background:'none', border:'none', color:'#2563eb', fontWeight:700, cursor:'pointer', fontSize:13, padding:0, textDecoration:'underline' }}>
+                        style={{ background:'none', border:'none', color:'#1d4ed8', fontWeight:600, cursor:'pointer', fontSize:13, padding:0, textDecoration:'underline' }}>
                         {r.label}
                       </button>
                     </td>
-                    <td style={{ padding:'10px 14px', fontWeight:600, color:'#475569' }}>{r.prefix}</td>
-                    <td style={{ padding:'10px 14px', fontWeight:600, color:'#1e293b' }}>{r.start_sequence || '—'}</td>
-                    <td style={{ padding:'10px 14px', fontWeight:600, color:'#1e293b' }}>{r.end_sequence || '—'}</td>
-                    <td style={{ padding:'10px 14px' }}>
+                    <td style={{ padding:'13px 16px', fontWeight:500, color:'#334155' }}>{r.prefix}</td>
+                    <td style={{ padding:'13px 16px', fontWeight:500, color:'#334155' }}>{r.start_sequence || '—'}</td>
+                    <td style={{ padding:'13px 16px', fontWeight:500, color:'#334155' }}>{r.end_sequence || '—'}</td>
+                    <td style={{ padding:'13px 16px' }}>
                       <button type="button" onClick={() => setDrillType(r.type)}
-                        style={{ background:'#eff6ff', color:'#2563eb', border:'none', fontWeight:700, cursor:'pointer', fontSize:13, padding:'3px 10px', borderRadius:8 }}>
+                        style={{ background:'none', color:'#1d4ed8', border:'none', fontWeight:600, cursor:'pointer', fontSize:13, padding:0, textDecoration:'underline' }}>
                         {r.total}
                       </button>
                     </td>
-                    <td style={{ padding:'10px 14px', color: r.cancelled > 0 ? '#ef4444' : '#94a3b8' }}>{r.cancelled}</td>
-                    <td style={{ padding:'10px 14px' }}>
-                      <span style={{ background:'#f0fdf4', color:'#16a34a', padding:'3px 10px', borderRadius:8, fontSize:12, fontWeight:600 }}>Active</span>
+                    <td style={{ padding:'13px 16px', color: r.cancelled > 0 ? '#dc2626' : '#334155', fontWeight: r.cancelled > 0 ? 600 : 500 }}>{r.cancelled}</td>
+                    <td style={{ padding:'13px 16px' }}>
+                      {(() => {
+                        const st = r.status || 'Active';
+                        const c = st === 'Active' ? ['#d9f6e3', '#15803d'] : st === 'Cancelled' ? ['#fef2f2', '#ef4444'] : ['#f1f5f9', '#64748b'];
+                        return <span style={{ background:c[0], color:c[1], padding:'3px 14px', borderRadius:8, fontSize:12, fontWeight:700 }}>{st}</span>;
+                      })()}
                     </td>
                   </tr>
                 ))
@@ -428,15 +468,15 @@ export default function DocumentNumberingPage() {
         </div>
 
         {/* Notes */}
-        <div style={{ padding:'14px 20px', background:'#f0f7ff', borderTop:'1px solid #bfdbfe', fontSize:12, color:'#1e3a8a' }}>
+        <div className="bf-note" style={{ margin:'16px 20px 20px', padding:'16px 22px', background:'linear-gradient(135deg,#f3f8ff,#e8f1fd)', border:'1px solid #d3e3f8', borderRadius:12, fontSize:12.5, color:'#1e293b' }}>
           <div style={{ fontWeight:700, marginBottom:6 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5" style={{ marginRight:5, verticalAlign:'middle' }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" style={{ marginRight:8, verticalAlign:'middle' }}><circle cx="12" cy="12" r="11" fill="#1d5fe0" stroke="none"/><line x1="12" y1="11" x2="12" y2="17" stroke="#fff"/><line x1="12" y1="7.5" x2="12.01" y2="7.5" stroke="#fff"/></svg>
             Note:
           </div>
-          <ul style={{ margin:'0', paddingLeft:18, lineHeight:1.7 }}>
+          <ul style={{ margin:'0', paddingLeft:18, lineHeight:1.8 }}>
             <li>Start Sequence shows the first document number generated in the selected period.</li>
             <li>End Sequence shows the last document number generated in the selected period.</li>
-            <li>Total Documents include active documents only. Cancelled documents are shown separately.</li>
+            <li>Total Documents is every document generated in the period; the Cancelled column shows how many of them were cancelled.</li>
             <li>Document numbering follows the prefix and series configured in Billing Settings.</li>
           </ul>
         </div>
@@ -447,6 +487,7 @@ export default function DocumentNumberingPage() {
         <DrillDownModal
           typeKey={drillType}
           typeLabel={drillRow.label}
+          row={drillRow}
           from={from}
           to={to}
           onClose={() => setDrillType(null)}

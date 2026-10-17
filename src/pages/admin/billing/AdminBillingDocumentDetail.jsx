@@ -110,6 +110,68 @@ function formatReasonForTransportation(reason, other) {
   }
 }
 
+const ICON_PATHS = {
+  back: <><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></>,
+  edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></>,
+  calendar: <><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></>,
+  download: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></>,
+  mail: <><rect x="2" y="4" width="20" height="16" rx="2" /><polyline points="22 6 12 13 2 6" /></>,
+  whatsapp: <><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /><path d="M9.5 9c.4 1.800 2 3.400 3.900 3.900l1-1a.7.7 0 0 1 .8-.2l1.400.600" /></>,
+  ban: <><circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" /></>,
+  trash: <><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></>,
+  check: <polyline points="20 6 9 17 4 12" />,
+  alert: <><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>,
+  info: <><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></>,
+  doc: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></>,
+};
+
+function Icon({ name, size = 15 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      {ICON_PATHS[name]}
+    </svg>
+  );
+}
+
+const BTN_VARIANTS = {
+  back:     { background: '#ffffff', color: '#1e3a8a', border: '1px solid #2563eb' },
+  edit:     { background: '#2563eb', color: '#ffffff', border: '1px solid #2563eb' },
+  date:     { background: '#ffffff', color: '#1e3a8a', border: '1px solid #2563eb' },
+  pdf:      { background: '#0f3a8a', color: '#ffffff', border: '1px solid #0f3a8a' },
+  email:    { background: '#f5a623', color: '#ffffff', border: '1px solid #f5a623' },
+  whatsapp: { background: '#16a34a', color: '#ffffff', border: '1px solid #16a34a' },
+  cancel:   { background: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca' },
+  delete:   { background: '#dc2626', color: '#ffffff', border: '1px solid #dc2626' },
+};
+
+function ActionBtn({ variant, icon, label, disabled, title, onClick, wait }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      title={title}
+      onClick={onClick}
+      style={{
+        ...BTN_VARIANTS[variant],
+        padding: '8px 16px',
+        borderRadius: 6,
+        fontSize: 12.5,
+        fontWeight: 650,
+        cursor: disabled ? (wait ? 'wait' : 'not-allowed') : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 7,
+        minWidth: 90,
+        justifyContent: 'center',
+      }}
+    >
+      <Icon name={icon} size={14} />
+      {label}
+    </button>
+  );
+}
+
 export default function AdminBillingDocumentDetail() {
   const { clientId, docType: docTypeParam, id } = useParams();
   const navigate = useNavigate();
@@ -239,7 +301,7 @@ export default function AdminBillingDocumentDetail() {
             margin: '40px auto',
           }}
         >
-          <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+          <div style={{ marginBottom: 12, color: '#dc2626', display: 'flex', justifyContent: 'center' }}><Icon name="alert" size={40} /></div>
           <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>
             Unknown Document Type
           </h2>
@@ -292,7 +354,7 @@ export default function AdminBillingDocumentDetail() {
             margin: '40px auto',
           }}
         >
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+          <div style={{ marginBottom: 12, color: '#64748b', display: 'flex', justifyContent: 'center' }}><Icon name="doc" size={40} /></div>
           <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>
             Document Not Found
           </h2>
@@ -423,6 +485,27 @@ export default function AdminBillingDocumentDetail() {
   const cancelDisabledReason = getDocumentActionDisabledReason('cancel', docData, docConfig?.key);
   const editDateDisabledReason = getDocumentActionDisabledReason('edit_creation_date', docData, docConfig?.key);
 
+  const shareMessage = () => {
+    const total = formatCurrency(summary.grand_total);
+    const link = doc.share_url ? `
+View / download: ${doc.share_url}` : '';
+    return `Dear ${customer?.name || 'Customer'},
+
+Please find your ${docConfig.label} ${doc.number} dated ${formatDate(doc.document_date)} for ${total} from ${seller.business_name || 'us'}.${link}
+
+Regards,
+${seller.business_name || ''}`;
+  };
+  const handleEmail = () => {
+    const subject = `${docConfig.label} ${doc.number} from ${seller.business_name || ''}`.trim();
+    window.location.href = `mailto:${encodeURIComponent(customer.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(shareMessage())}`;
+  };
+  const handleWhatsapp = () => {
+    let digits = String(customer.phone || '').replace(/\D/g, '');
+    if (digits.length === 10) digits = `91${digits}`;
+    window.open(`https://wa.me/${digits}?text=${encodeURIComponent(shareMessage())}`, '_blank', 'noopener');
+  };
+
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 60 }}>
       {/* 1. Breadcrumb */}
@@ -453,7 +536,7 @@ export default function AdminBillingDocumentDetail() {
             justifyContent: 'space-between',
           }}
         >
-          <span>✓ {actionSuccess}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Icon name="check" size={15} /> {actionSuccess}</span>
           <button
             type="button"
             onClick={() => setActionSuccess(null)}
@@ -481,7 +564,7 @@ export default function AdminBillingDocumentDetail() {
             justifyContent: 'space-between',
           }}
         >
-          <span>⚠️ {error}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Icon name="alert" size={15} /> {error}</span>
           <button
             type="button"
             onClick={() => setError(null)}
@@ -492,59 +575,21 @@ export default function AdminBillingDocumentDetail() {
         </div>
       )}
 
-      {/* 2. Top Header Strip: Title, Subtitle, Payment status, and Right Status/GST box */}
-      <div
-        className="bp-card"
-        style={{
-          background: '#ffffff',
-          borderRadius: 12,
-          border: '1px solid #e2e8f0',
-          padding: '18px 22px',
-          marginBottom: 16,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 16,
-        }}
-      >
+      {/* 2. Title, date/time (left) and invoice status + GST status (right) */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: '0 0 6px' }}>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#1d4ed8', margin: '0 0 4px', letterSpacing: '-0.01em' }}>
             {docConfig.label} • {doc.number}
           </h1>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, color: '#64748b' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, color: '#334155' }}>
             <span>{formatDateTime(doc.created_at)}</span>
-
-            {/* Payment badge ONLY when payment_status is not null (hidden for quotation & delivery_challan) */}
             {doc.payment_status && docConfig.key !== 'quotation' && docConfig.key !== 'delivery_challan' && doc.type !== 'quotation' && doc.type !== 'delivery_challan' && (
               <span
                 style={{
-                  display: 'inline-block',
-                  padding: '2px 8px',
-                  borderRadius: 999,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  background:
-                    doc.payment_status === 'Paid'
-                      ? '#dcfce7'
-                      : doc.payment_status === 'Partial'
-                      ? '#fef3c7'
-                      : '#fee2e2',
-                  color:
-                    doc.payment_status === 'Paid'
-                      ? '#15803d'
-                      : doc.payment_status === 'Partial'
-                      ? '#b45309'
-                      : '#b91c1c',
-                  border: `1px solid ${
-                    doc.payment_status === 'Paid'
-                      ? '#bbf7d0'
-                      : doc.payment_status === 'Partial'
-                      ? '#fde68a'
-                      : '#fca5a5'
-                  }`,
+                  display: 'inline-block', padding: '2px 10px', borderRadius: 6, fontSize: 11.5, fontWeight: 700,
+                  background: doc.payment_status === 'Paid' ? '#dcfce7' : doc.payment_status === 'Partial' ? '#fef3c7' : '#fee2e2',
+                  color: doc.payment_status === 'Paid' ? '#15803d' : doc.payment_status === 'Partial' ? '#b45309' : '#b91c1c',
+                  border: `1px solid ${doc.payment_status === 'Paid' ? '#bbf7d0' : doc.payment_status === 'Partial' ? '#fde68a' : '#fca5a5'}`,
                 }}
               >
                 {doc.payment_status}
@@ -553,44 +598,29 @@ export default function AdminBillingDocumentDetail() {
           </div>
         </div>
 
-        {/* Right side: Status badge & GST Status box */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          {/* Status Badge */}
           <span
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '6px 12px',
-              borderRadius: 999,
-              fontSize: 12,
-              fontWeight: 700,
-              background: statusBadgeBg,
-              color: statusBadgeText,
-              border: `1px solid ${statusBadgeBorder}`,
+              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 18px', borderRadius: 6,
+              fontSize: 12.5, fontWeight: 700, background: statusBadgeBg, color: statusBadgeText, border: `1px solid ${statusBadgeBorder}`,
             }}
           >
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: statusBadgeText }} />
             {statusLabel}
           </span>
-
-          {/* GST Status Box (hidden for quotation/delivery_challan if status is '-') */}
           {!hideGstBox && (
             <div
               style={{
-                padding: '6px 12px',
-                borderRadius: 8,
-                fontSize: 12,
-                fontWeight: 650,
-                background: isFiled ? '#ecfdf5' : gst.status === 'Not Filed' ? '#fef2f2' : '#f8fafc',
+                padding: '6px 16px', borderRadius: 6, fontSize: 12.5, fontWeight: 700,
+                background: isFiled ? '#ecfdf5' : gst.status === 'Not Filed' ? '#fee2e2' : '#f8fafc',
                 color: isFiled ? '#065f46' : gst.status === 'Not Filed' ? '#dc2626' : '#64748b',
                 border: `1px solid ${isFiled ? '#a7f3d0' : gst.status === 'Not Filed' ? '#fecaca' : '#cbd5e1'}`,
-                textAlign: 'right',
+                lineHeight: 1.35,
               }}
             >
               <div>GST Status: {gst.status}</div>
               {isFiled && (
-                <div style={{ fontSize: 11, fontWeight: 500, color: '#047857', marginTop: 2 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 500, color: '#047857' }}>
                   Filed on: {formatDate(gst.filed_on)} | ARN: {gst.ack_no || '—'}
                 </div>
               )}
@@ -599,206 +629,39 @@ export default function AdminBillingDocumentDetail() {
         </div>
       </div>
 
-      {/* 3. Action Buttons Bar */}
-      <div
-        className="bp-card"
-        style={{
-          background: '#ffffff',
-          borderRadius: 10,
-          border: '1px solid #e2e8f0',
-          padding: '12px 16px',
-          marginBottom: 16,
-          boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: 10,
-        }}
-      >
-        {/* 1. Back */}
-        <button
-          type="button"
-          onClick={() => navigate(`/admin/billing/${clientId}/${docConfig.slug}`)}
-          style={{
-            padding: '7px 14px',
-            borderRadius: 6,
-            border: '1px solid #cbd5e1',
-            background: '#ffffff',
-            color: '#1e293b',
-            fontSize: 12.5,
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          Back
-        </button>
-
-        {/* 2. Edit */}
-        <button
-          type="button"
+      {/* 3. Action buttons */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+        <ActionBtn variant="back" icon="back" label="Back" onClick={() => navigate(`/admin/billing/${clientId}/${docConfig.slug}`)} />
+        <ActionBtn
+          variant="edit" icon="edit" label="Edit"
           disabled={!flags.can_edit || isDeleted}
           title={!flags.can_edit || isDeleted ? editDisabledReason : 'Edit Document'}
           onClick={() => navigate(`/admin/billing/${clientId}/${docConfig.slug}/${id}/edit`)}
-          style={{
-            padding: '7px 14px',
-            borderRadius: 6,
-            border: '1px solid #bfdbfe',
-            background: flags.can_edit && !isDeleted ? '#eff6ff' : '#f1f5f9',
-            color: flags.can_edit && !isDeleted ? '#2563eb' : '#94a3b8',
-            fontSize: 12.5,
-            fontWeight: 600,
-            cursor: flags.can_edit && !isDeleted ? 'pointer' : 'not-allowed',
-            opacity: flags.can_edit && !isDeleted ? 1 : 0.6,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <span>✏️</span> Edit
-        </button>
-
-        {/* 3. Edit Creation Date */}
-        <button
-          type="button"
+        />
+        <ActionBtn
+          variant="date" icon="calendar" label="Edit Creation Date"
           disabled={!flags.can_edit_creation_date || isDeleted}
           title={!flags.can_edit_creation_date || isDeleted ? (editDateDisabledReason || undefined) : 'Edit Creation Date'}
           onClick={() => setEditDateOpen(true)}
-          style={{
-            padding: '7px 14px',
-            borderRadius: 6,
-            border: '1px solid #bfdbfe',
-            background: flags.can_edit_creation_date && !isDeleted ? '#eff6ff' : '#f1f5f9',
-            color: flags.can_edit_creation_date && !isDeleted ? '#2563eb' : '#94a3b8',
-            fontSize: 12.5,
-            fontWeight: 600,
-            cursor: flags.can_edit_creation_date && !isDeleted ? 'pointer' : 'not-allowed',
-            opacity: flags.can_edit_creation_date && !isDeleted ? 1 : 0.6,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <span>📅</span> Edit Creation Date
-        </button>
-
-        {/* 4. Download PDF */}
-        <button
-          type="button"
-          disabled={downloadingPdf}
-          onClick={handleDownloadPdf}
-          style={{
-            padding: '7px 16px',
-            borderRadius: 6,
-            border: 'none',
-            background: '#1e3a8a',
-            color: '#ffffff',
-            fontSize: 12.5,
-            fontWeight: 650,
-            cursor: downloadingPdf ? 'wait' : 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <span>⬇️</span> {downloadingPdf ? 'Downloading…' : 'Download PDF'}
-        </button>
-
-        {/* 5. Email (disabled, tooltip "Coming soon") */}
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          style={{
-            padding: '7px 14px',
-            borderRadius: 6,
-            border: '1px solid #cbd5e1',
-            background: '#f1f5f9',
-            color: '#94a3b8',
-            fontSize: 12.5,
-            fontWeight: 600,
-            cursor: 'not-allowed',
-            opacity: 0.6,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <span>✉️</span> Email
-        </button>
-
-        {/* 6. WhatsApp (disabled, tooltip "Coming soon") */}
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          style={{
-            padding: '7px 14px',
-            borderRadius: 6,
-            border: '1px solid #cbd5e1',
-            background: '#f1f5f9',
-            color: '#94a3b8',
-            fontSize: 12.5,
-            fontWeight: 600,
-            cursor: 'not-allowed',
-            opacity: 0.6,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <span>💬</span> WhatsApp
-        </button>
-
-        {/* 7. Cancel */}
-        <button
-          type="button"
+        />
+        <ActionBtn
+          variant="pdf" icon="download" label={downloadingPdf ? 'Downloading…' : 'Download PDF'}
+          disabled={downloadingPdf} wait onClick={handleDownloadPdf}
+        />
+        <ActionBtn variant="email" icon="mail" label="Email" disabled={isDeleted || !customer?.email} title={customer?.email ? `Email ${customer.email}` : 'Customer has no email address'} onClick={handleEmail} />
+        <ActionBtn variant="whatsapp" icon="whatsapp" label="WhatsApp" disabled={isDeleted || !customer?.phone} title={customer?.phone ? `WhatsApp ${customer.phone}` : 'Customer has no mobile number'} onClick={handleWhatsapp} />
+        <ActionBtn
+          variant="cancel" icon="ban" label="Cancel"
           disabled={!flags.can_cancel || isDeleted}
           title={!flags.can_cancel || isDeleted ? (cancelDisabledReason || undefined) : 'Cancel Document'}
           onClick={() => setCancelOpen(true)}
-          style={{
-            padding: '7px 14px',
-            borderRadius: 6,
-            border: '1px solid #fecaca',
-            background: flags.can_cancel && !isDeleted ? '#fef2f2' : '#f1f5f9',
-            color: flags.can_cancel && !isDeleted ? '#dc2626' : '#94a3b8',
-            fontSize: 12.5,
-            fontWeight: 600,
-            cursor: flags.can_cancel && !isDeleted ? 'pointer' : 'not-allowed',
-            opacity: flags.can_cancel && !isDeleted ? 1 : 0.6,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <span>⊘</span> Cancel
-        </button>
-
-        {/* 8. Delete */}
-        <button
-          type="button"
+        />
+        <ActionBtn
+          variant="delete" icon="trash" label="Delete"
           disabled={!flags.can_delete || isDeleted}
           title={!flags.can_delete || isDeleted ? (deleteDisabledReason || undefined) : 'Delete Document'}
           onClick={() => setDeleteOpen(true)}
-          style={{
-            padding: '7px 14px',
-            borderRadius: 6,
-            border: 'none',
-            background: flags.can_delete && !isDeleted ? '#dc2626' : '#f1f5f9',
-            color: flags.can_delete && !isDeleted ? '#ffffff' : '#94a3b8',
-            fontSize: 12.5,
-            fontWeight: 650,
-            cursor: flags.can_delete && !isDeleted ? 'pointer' : 'not-allowed',
-            opacity: flags.can_delete && !isDeleted ? 1 : 0.6,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <span>🗑️</span> Delete
-        </button>
+        />
       </div>
 
       {/* Converted Banner (when quotation is converted) */}
@@ -817,7 +680,7 @@ export default function AdminBillingDocumentDetail() {
             gap: 8,
           }}
         >
-          <span style={{ fontSize: 16 }}>📋</span>
+          <span style={{ display: 'inline-flex' }}><Icon name="doc" size={16} /></span>
           <span>
             <strong>Converted to </strong>
             {doc.converted_document && !doc.converted_document.is_deleted ? (
@@ -894,14 +757,14 @@ export default function AdminBillingDocumentDetail() {
           gap: 24,
         }}
       >
-        {/* Left Column: From (Seller) & To (Buyer) */}
+        {/* Left Column: From (Sender) & To (Recipient) */}
         <div>
           {/* Seller Block */}
-          <div style={{ marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid #f1f5f9' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-              From (Seller)
+          <div style={{ marginBottom: 20, paddingBottom: 16, borderBottom: 'none' }}>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#1d4ed8', marginBottom: 4 }}>
+              From ({isNonGstType ? 'Sender' : 'Seller'})
             </div>
-            <div style={{ fontSize: 16, fontWeight: 750, color: '#0f172a', marginBottom: 4 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#0a2a6b', marginBottom: 4 }}>
               {seller.business_name || '—'}
             </div>
             <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.6 }}>
@@ -919,12 +782,12 @@ export default function AdminBillingDocumentDetail() {
 
           {/* Buyer Block */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-              To (Buyer)
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#1d4ed8', marginBottom: 4 }}>
+              To ({isNonGstType ? 'Recipient' : 'Buyer'})
             </div>
             {customer ? (
               <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.6 }}>
-                <div style={{ fontSize: 15, fontWeight: 750, color: '#0f172a', marginBottom: 2 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#0a2a6b', marginBottom: 2 }}>
                   {customer.name}
                 </div>
                 <div>
@@ -937,11 +800,11 @@ export default function AdminBillingDocumentDetail() {
                     {customer.phone && <span>Mob: {customer.phone}</span>}
                   </div>
                 )}
-                {customerAddress && <div>Office: {customerAddress}</div>}
+                {customerAddress && <div>Address: {customerAddress}</div>}
                 <div>
                   <strong>Place of Supply:</strong> {doc.place_of_supply || customer.place_of_supply || '—'} | {doc.supply_type || '—'}
                 </div>
-                {doc.notes && (
+                {doc.notes && docConfig.key !== 'delivery_challan' && (
                   <div style={{ marginTop: 4, color: '#0f172a', fontWeight: 500 }}>
                     <strong>Notes:</strong> {doc.notes}
                   </div>
@@ -978,16 +841,16 @@ export default function AdminBillingDocumentDetail() {
           {/* Document Information Box */}
           <div
             style={{
-              background: '#f8fafc',
+              background: '#ffffff',
               borderRadius: 8,
-              border: '1px solid #e2e8f0',
+              border: '1px solid #bfdbfe',
               overflow: 'hidden',
               fontSize: 12.5,
             }}
           >
             {/* Number Row */}
             <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0' }}>
-              <div style={{ width: '45%', padding: '9px 12px', background: '#f1f5f9', fontWeight: 650, color: '#475569' }}>
+              <div style={{ width: '45%', padding: '9px 12px', background: '#eff6ff', fontWeight: 600, color: '#1e3a8a' }}>
                 {docConfig.numberLabel}
               </div>
               <div style={{ width: '55%', padding: '9px 12px', fontWeight: 750, color: '#0f172a' }}>
@@ -997,10 +860,10 @@ export default function AdminBillingDocumentDetail() {
 
             {/* Date Row */}
             <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0' }}>
-              <div style={{ width: '45%', padding: '9px 12px', background: '#f1f5f9', fontWeight: 650, color: '#475569' }}>
+              <div style={{ width: '45%', padding: '9px 12px', background: '#eff6ff', fontWeight: 600, color: '#1e3a8a' }}>
                 {docConfig.dateLabel}
               </div>
-              <div style={{ width: '55%', padding: '9px 12px', color: '#1e293b' }}>
+              <div style={{ width: '55%', padding: '9px 12px', color: '#0f172a', fontWeight: 700 }}>
                 {formatDate(doc.document_date)}
               </div>
             </div>
@@ -1008,7 +871,7 @@ export default function AdminBillingDocumentDetail() {
             {/* Valid Until / Due Date Row */}
             {doc.due_date && (
               <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0' }}>
-                <div style={{ width: '45%', padding: '9px 12px', background: '#f1f5f9', fontWeight: 650, color: '#475569' }}>
+                <div style={{ width: '45%', padding: '9px 12px', background: '#eff6ff', fontWeight: 600, color: '#1e3a8a' }}>
                   {docConfig.key === 'quotation' ? 'Valid Until' : 'Due Date'}
                 </div>
                 <div style={{ width: '55%', padding: '9px 12px', color: '#1e293b' }}>
@@ -1019,10 +882,10 @@ export default function AdminBillingDocumentDetail() {
 
             {/* Creation Date Row */}
             <div style={{ display: 'flex', borderBottom: gst.status !== '-' ? '1px solid #e2e8f0' : 'none' }}>
-              <div style={{ width: '45%', padding: '9px 12px', background: '#f1f5f9', fontWeight: 650, color: '#475569' }}>
+              <div style={{ width: '45%', padding: '9px 12px', background: '#eff6ff', fontWeight: 600, color: '#1e3a8a' }}>
                 Creation Date
               </div>
-              <div style={{ width: '55%', padding: '9px 12px', color: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ width: '55%', padding: '9px 12px', color: '#0f172a', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>{formatDateTime(doc.created_at)}</span>
                 {flags.can_edit_creation_date && !isDeleted && (
                   <button
@@ -1034,21 +897,33 @@ export default function AdminBillingDocumentDetail() {
                       border: 'none',
                       color: '#2563eb',
                       cursor: 'pointer',
-                      fontSize: 13,
                       padding: '2px 4px',
+                      display: 'inline-flex',
                     }}
                   >
-                    📅
+                    <Icon name="calendar" size={14} />
                   </button>
                 )}
               </div>
             </div>
 
+            {/* E-Way Bill No. (optional, Delivery Challan only) */}
+            {docConfig.key === 'delivery_challan' && (
+              <div style={{ display: 'flex', borderTop: '1px solid #e2e8f0' }}>
+                <div style={{ width: '45%', padding: '9px 12px', background: '#eff6ff', fontWeight: 600, color: '#1e3a8a' }}>
+                  E-Way Bill No.
+                </div>
+                <div style={{ width: '55%', padding: '9px 12px', color: '#0f172a', fontWeight: 700 }}>
+                  {doc.eway_bill_no || '—'}
+                </div>
+              </div>
+            )}
+
             {/* GST Rows (Hidden when gst.status === '-') */}
             {gst.status !== '-' && (
               <>
                 <div style={{ display: 'flex', borderBottom: isFiled ? '1px solid #e2e8f0' : 'none' }}>
-                  <div style={{ width: '45%', padding: '9px 12px', background: '#f1f5f9', fontWeight: 650, color: '#475569' }}>
+                  <div style={{ width: '45%', padding: '9px 12px', background: '#eff6ff', fontWeight: 600, color: '#1e3a8a' }}>
                     GST Filed On
                   </div>
                   <div style={{ width: '55%', padding: '9px 12px' }}>
@@ -1062,7 +937,7 @@ export default function AdminBillingDocumentDetail() {
 
                 {isFiled && (
                   <div style={{ display: 'flex' }}>
-                    <div style={{ width: '45%', padding: '9px 12px', background: '#f1f5f9', fontWeight: 650, color: '#475569' }}>
+                    <div style={{ width: '45%', padding: '9px 12px', background: '#eff6ff', fontWeight: 600, color: '#1e3a8a' }}>
                       ARN No.
                     </div>
                     <div style={{ width: '55%', padding: '9px 12px', color: '#1e293b', fontFamily: 'monospace' }}>
@@ -1082,7 +957,7 @@ export default function AdminBillingDocumentDetail() {
         style={{
           background: '#ffffff',
           borderRadius: 10,
-          border: '1px solid #e2e8f0',
+          border: '1px solid #bfdbfe',
           boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
           overflow: 'hidden',
           marginBottom: 16,
@@ -1091,15 +966,15 @@ export default function AdminBillingDocumentDetail() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
             <thead>
-              <tr style={{ background: '#1e3a8a', color: '#ffffff', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+              <tr style={{ background: '#0f3a8a', color: '#ffffff', fontSize: 12.5 }}>
                 <th style={{ padding: '10px 10px', width: 45, textAlign: 'center' }}>Sr. No.</th>
-                <th style={{ padding: '10px 12px', fontWeight: 700 }}>Particulars</th>
+                <th style={{ padding: '10px 12px', fontWeight: 700, textAlign: 'center' }}>Particulars</th>
                 <th style={{ padding: '10px 10px', fontWeight: 700, textAlign: 'center' }}>HSN/SAC</th>
-                <th style={{ padding: '10px 10px', fontWeight: 700, textAlign: 'right' }}>QTY</th>
+                <th style={{ padding: '10px 10px', fontWeight: 700, textAlign: 'center' }}>QTY</th>
                 <th style={{ padding: '10px 10px', fontWeight: 700, textAlign: 'center' }}>UQC</th>
-                <th style={{ padding: '10px 12px', fontWeight: 700, textAlign: 'right' }}>Rate (₹)</th>
-                <th style={{ padding: '10px 10px', fontWeight: 700, textAlign: 'right' }}>GST %</th>
-                <th style={{ padding: '10px 12px', fontWeight: 700, textAlign: 'right' }}>Taxable Value (₹)</th>
+                <th style={{ padding: '10px 12px', fontWeight: 700, textAlign: 'center' }}>Rate (₹)</th>
+                <th style={{ padding: '10px 10px', fontWeight: 700, textAlign: 'center' }}>GST %</th>
+                <th style={{ padding: '10px 12px', fontWeight: 700, textAlign: 'center' }}>Taxable Value (₹)</th>
               </tr>
             </thead>
             <tbody>
@@ -1114,33 +989,33 @@ export default function AdminBillingDocumentDetail() {
                   <tr
                     key={idx}
                     style={{
-                      borderBottom: '1px solid #f1f5f9',
-                      background: idx % 2 === 1 ? '#f8fafc' : '#ffffff',
+                      borderBottom: '1px solid #e2e8f0',
+                      background: '#ffffff',
                     }}
                   >
                     <td style={{ padding: '9px 10px', textAlign: 'center', color: '#94a3b8' }}>
                       {item.sr_no || idx + 1}
                     </td>
-                    <td style={{ padding: '9px 12px', color: '#0f172a', fontWeight: 600 }}>
+                    <td style={{ padding: '9px 12px', color: '#1e3a8a' }}>
                       {item.description || '—'}
                     </td>
-                    <td style={{ padding: '9px 10px', textAlign: 'center', color: '#64748b', fontFamily: 'monospace' }}>
+                    <td style={{ padding: '9px 10px', textAlign: 'center', color: '#64748b', }}>
                       {item.hsn_sac || '—'}
                     </td>
-                    <td style={{ padding: '9px 10px', textAlign: 'right', color: '#1e293b' }}>
+                    <td style={{ padding: '9px 10px', textAlign: 'center', color: '#1e293b' }}>
                       {item.qty}
                     </td>
                     <td style={{ padding: '9px 10px', textAlign: 'center', color: '#64748b' }}>
                       {item.unit || 'NOS'}
                     </td>
-                    <td style={{ padding: '9px 12px', textAlign: 'right', color: '#334155' }}>
-                      {Number(item.rate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <td style={{ padding: '9px 12px', textAlign: 'center', color: '#334155' }}>
+                      {Number(item.rate).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ padding: '9px 10px', textAlign: 'right', color: '#64748b' }}>
+                    <td style={{ padding: '9px 10px', textAlign: 'center', color: '#334155' }}>
                       {item.gst_rate}%
                     </td>
-                    <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 650, color: '#0f172a' }}>
-                      {Number(item.taxable_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <td style={{ padding: '9px 12px', textAlign: 'center', color: '#0f172a' }}>
+                      {Number(item.taxable_amount).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                     </td>
                   </tr>
                 ))
@@ -1161,63 +1036,39 @@ export default function AdminBillingDocumentDetail() {
       >
         {/* Left: Transportation Details (when DC) or Terms & Conditions */}
         {docConfig.key === 'delivery_challan' ? (
-          <div
-            className="bp-card"
-            style={{
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="bp-card" style={{
               background: '#ffffff',
               borderRadius: 10,
-              border: '1px solid #e2e8f0',
-              padding: '16px 18px',
-            }}
-          >
-            <div style={{ fontSize: 12, fontWeight: 750, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 12 }}>
-              Transportation Details
+              border: '1px solid #bfdbfe',
+              padding: '14px 18px',
+            }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1d4ed8', marginBottom: 6 }}>Remarks:</div>
+              <div style={{ fontSize: 12.5, color: '#334155', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{doc.notes && doc.notes.trim() ? doc.notes : '-'}</div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, fontSize: 12.5 }}>
-              <div>
-                <span style={{ color: '#64748b' }}>Reason for Transportation:</span>
-                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
-                  {formatReasonForTransportation(doc.reason_for_transportation, doc.reason_for_transportation_other)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: '#64748b' }}>Vehicle No.:</span>
-                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
-                  {doc.vehicle_no || '—'}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: '#64748b' }}>Transporter Name:</span>
-                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
-                  {doc.transporter_name || '—'}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: '#64748b' }}>E-Way Bill No.:</span>
-                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
-                  {doc.eway_bill_no || '—'}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: '#64748b' }}>Receiver Name:</span>
-                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
-                  {doc.receiver_name || '—'}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: '#64748b' }}>Receiver Signature:</span>
-                <div style={{ fontWeight: 600, color: '#0f172a', marginTop: 2 }}>
-                  {doc.receiver_signature_datetime ? formatDateTime(doc.receiver_signature_datetime) : '—'}
-                </div>
-              </div>
+            <div className="bp-card" style={{
+              background: '#ffffff',
+              borderRadius: 10,
+              border: '1px solid #bfdbfe',
+              padding: '14px 18px',
+            }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1d4ed8', marginBottom: 6 }}>Terms &amp; Conditions:</div>
+              <div style={{ fontSize: 12.5, color: '#334155', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{doc.terms && doc.terms.trim() ? doc.terms : '-'}</div>
             </div>
-            {doc.terms && doc.terms.trim() && (
-              <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
-                  Terms &amp; Conditions:
-                </div>
-                <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                  {doc.terms}
+            {(doc.reason_for_transportation || doc.vehicle_no || doc.transporter_name || doc.receiver_name || doc.receiver_signature_datetime) && (
+              <div className="bp-card" style={{
+              background: '#ffffff',
+              borderRadius: 10,
+              border: '1px solid #bfdbfe',
+              padding: '14px 18px',
+            }}>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1d4ed8', marginBottom: 6 }}>Transportation Details:</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, fontSize: 12.5 }}>
+                  <div><span style={{ color: '#64748b' }}>Reason:</span> <strong>{formatReasonForTransportation(doc.reason_for_transportation, doc.reason_for_transportation_other)}</strong></div>
+                  <div><span style={{ color: '#64748b' }}>Vehicle No.:</span> <strong>{doc.vehicle_no || '—'}</strong></div>
+                  <div><span style={{ color: '#64748b' }}>Transporter:</span> <strong>{doc.transporter_name || '—'}</strong></div>
+                  <div><span style={{ color: '#64748b' }}>Receiver:</span> <strong>{doc.receiver_name || '—'}</strong></div>
+                  <div style={{ gridColumn: '1 / -1' }}><span style={{ color: '#64748b' }}>Receiver Signature:</span> <strong>{doc.receiver_signature_datetime ? formatDateTime(doc.receiver_signature_datetime) : '—'}</strong></div>
                 </div>
               </div>
             )}
@@ -1228,14 +1079,14 @@ export default function AdminBillingDocumentDetail() {
             style={{
               background: '#ffffff',
               borderRadius: 10,
-              border: '1px solid #e2e8f0',
+              border: '1px solid #bfdbfe',
               padding: '16px 18px',
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 750, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1d4ed8', marginBottom: 8 }}>
               Terms &amp; Conditions:
             </div>
-            <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+            <div style={{ fontSize: 12.5, color: '#334155', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
               {doc.terms && doc.terms.trim() ? doc.terms : '-'}
             </div>
           </div>
@@ -1245,9 +1096,9 @@ export default function AdminBillingDocumentDetail() {
         <div
           className="bp-card"
           style={{
-            background: '#ffffff',
+            background: '#eff6ff',
             borderRadius: 10,
-            border: '1px solid #e2e8f0',
+            border: '1px solid #bfdbfe',
             padding: '16px 18px',
           }}
         >
@@ -1282,33 +1133,35 @@ export default function AdminBillingDocumentDetail() {
               </>
             )}
 
-            {/* Round Off */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
-              <span>Round Off</span>
-              <strong style={{ color: '#0f172a' }}>{formatCurrency(summary.round_off)}</strong>
-            </div>
+            {/* Round Off (only when there is one) */}
+            {Number(summary.round_off) !== 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+                <span>Round Off</span>
+                <strong style={{ color: '#0f172a' }}>{formatCurrency(summary.round_off)}</strong>
+              </div>
+            )}
 
             {/* Grand Total */}
             <div
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                borderTop: '2px solid #e2e8f0',
+                borderTop: '1px solid #bfdbfe',
                 paddingTop: 8,
                 marginTop: 2,
-                fontSize: 15,
+                fontSize: 17,
                 fontWeight: 800,
-                color: '#0f172a',
+                color: '#0a2a6b',
               }}
             >
               <span>Grand Total</span>
-              <span style={{ color: '#2563eb' }}>{formatCurrency(summary.grand_total)}</span>
+              <span style={{ color: '#0f3a8a', fontSize: 20 }}>{formatCurrency(summary.grand_total)}</span>
             </div>
 
             {/* Amount in Words (Exact as returned by API) */}
-            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 8, marginTop: 4, fontSize: 11.5, color: '#64748b' }}>
-              <div style={{ fontWeight: 700, color: '#475569', marginBottom: 2 }}>Amount in Words:</div>
-              <div style={{ fontStyle: 'italic', color: '#1e293b' }}>
+            <div style={{ paddingTop: 4, fontSize: 12 }}>
+              <div style={{ fontWeight: 800, color: '#1d4ed8', marginBottom: 2 }}>Amount in Words</div>
+              <div style={{ color: '#1e293b' }}>
                 {summary.amount_in_words || '—'}
               </div>
             </div>
@@ -1332,7 +1185,7 @@ export default function AdminBillingDocumentDetail() {
             gap: 10,
           }}
         >
-          <span style={{ fontSize: 18 }}>ℹ️</span>
+          <span style={{ display: 'inline-flex' }}><Icon name="info" size={18} /></span>
           <span>
             Since the GST Status is <strong>Filed</strong>, the buttons Edit, Edit Creation Date, Cancel and Delete are disabled.
           </span>

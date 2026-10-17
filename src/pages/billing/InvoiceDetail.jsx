@@ -27,7 +27,7 @@ function MailIcon() { return <svg {...ICON}><rect x="2" y="4" width="20" height=
 function XCircleIcon() { return <svg {...ICON}><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>; }
 function TrashIcon() { return <svg {...ICON}><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>; }
 function RefreshCwIcon() { return <svg {...ICON}><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>; }
-function DocEditIcon() { return <svg {...ICON}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><path d="M10.4 12.6a2 2 0 1 1 3 3L8 21l-1.5-.5.5-1.5z" /></svg>; }
+function DocEditIcon() { return <svg {...ICON}><path d="M12.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v9.5" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M13.378 15.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z" /></svg>; }
 function WhatsAppIcon() { return <svg {...ICON} width={17} height={17} fill="currentColor" stroke="none" viewBox="0 0 24 24"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm5.8 14.03c-.24.68-1.4 1.3-1.93 1.38-.5.08-1.11.11-1.79-.11-.41-.13-.94-.31-1.62-.61-2.85-1.23-4.71-4.1-4.85-4.29-.14-.19-1.16-1.54-1.16-2.94 0-1.4.73-2.08.99-2.37.26-.29.57-.36.76-.36.19 0 .38 0 .55.01.18.01.41-.07.64.49.24.58.81 2 .88 2.15.07.15.12.32.02.51-.1.19-.15.31-.29.48-.15.17-.31.38-.44.51-.15.15-.3.31-.13.61.17.29.75 1.24 1.62 2.01 1.11.99 2.05 1.3 2.34 1.44.29.15.46.13.63-.05.17-.19.72-.84.92-1.13.19-.29.38-.24.64-.14.26.1 1.66.78 1.95.92.29.14.48.21.55.33.07.12.07.68-.17 1.36Z" /></svg>; }
 
 export default function InvoiceDetail() {
@@ -132,9 +132,15 @@ export default function InvoiceDetail() {
             {doc.due_date ? ` · Due ${formatDMY(doc.due_date)}` : ''}
             {doc.currency && doc.currency !== 'INR' ? ` · ${doc.currency}` : ''}
             {' · '}
-            <span className={`bp-badge ${doc.status === 'paid' ? 'bp-badge-paid' : doc.status === 'partial' ? 'bp-badge-partial' : doc.status === 'draft' ? 'bp-badge-draft' : doc.status === 'cancelled' ? 'bp-badge-cancelled' : 'bp-badge-unpaid'}`}>
-              {doc.status === 'paid' ? 'Paid' : doc.status === 'partial' ? 'Partial' : doc.status === 'draft' ? 'Draft' : doc.status === 'cancelled' ? 'Cancelled' : 'Unpaid'}
-            </span>
+            {['tax_invoice', 'bill_of_supply', 'debit_note'].includes(doc.type) || doc.status === 'cancelled' || doc.status === 'draft' ? (
+              <span className={`bp-badge ${doc.status === 'paid' ? 'bp-badge-paid' : doc.status === 'partial' ? 'bp-badge-partial' : doc.status === 'draft' ? 'bp-badge-draft' : doc.status === 'cancelled' ? 'bp-badge-cancelled' : 'bp-badge-unpaid'}`}>
+                {doc.status === 'paid' ? 'Paid' : doc.status === 'partial' ? 'Partial' : doc.status === 'draft' ? 'Draft' : doc.status === 'cancelled' ? 'Cancelled' : 'Unpaid'}
+              </span>
+            ) : (
+              <span className={`bp-badge ${doc.converted_document_id ? 'bp-badge-partial' : 'bp-badge-paid'}`}>
+                {doc.converted_document_id ? 'Converted' : 'Active'}
+              </span>
+            )}
             {doc.edit_allowed ? <span className="bp-badge bp-badge-paid" style={{ marginLeft: 6 }}>Edit Allowed</span> : null}
           </div>
         </div>
@@ -172,7 +178,7 @@ export default function InvoiceDetail() {
               onClick={async () => {
                 setBusyAction('convert'); setMsg(''); setActionErr('');
                 try {
-                  const inv = await api(`/billing/documents/${doc.id}/convert`, { method: 'POST', body: {} });
+                  const inv = await api(`/billing/documents/${doc.id}/convert`, { method: 'POST', body: { target_type: isComposition ? 'bill_of_supply' : 'tax_invoice' } });
                   setMsg(`Converted to ${inv.number}`);
                   const dest = isComposition
                     ? `/portal/billing/bill-of-supply/${inv.id}`
@@ -243,7 +249,7 @@ export default function InvoiceDetail() {
           {['issued', 'partial', 'paid'].includes(doc.status) && ['tax_invoice', 'credit_note', 'debit_note'].includes(doc.type) && (
             <Link className="bp-btn bp-btn-outline" to={`/portal/amendments/new?ref=${doc.id}`}><DocEditIcon /> Create Amendment</Link>
           )}
-          {['issued', 'partial', 'paid'].includes(doc.status) && (
+          {['issued', 'partial', 'paid'].includes(doc.status) && ['tax_invoice', 'bill_of_supply', 'debit_note'].includes(doc.type) && (
             doc.status === 'paid' ? (
               <button
                 type="button"

@@ -182,7 +182,7 @@ export default function AdminGstr1Review({ returnType = 'GSTR1' }) {
   return (
     <div style={{ fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif", padding: '0 0 40px' }}>
       {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 13 }}>
+      <div className="gst-crumbs" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 13 }}>
         <Link to="/admin/gst-returns" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>
           GST Compliance
         </Link>
@@ -209,7 +209,7 @@ export default function AdminGstr1Review({ returnType = 'GSTR1' }) {
       </div>
 
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+      <div className="gst-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: '#1e3a8a', lineHeight: 1.2 }}>
             {detailView ? `${suppliesKind} Supplies - ${detailDocLabel}` : `${label} – ${period_label} (Review)`}

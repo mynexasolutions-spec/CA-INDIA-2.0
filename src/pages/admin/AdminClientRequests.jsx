@@ -27,8 +27,6 @@ export default function AdminClientRequests() {
   const [toDate, setToDate] = useState('');
   const [applied, setApplied] = useState({ search: '', status: 'All Status', from_date: '', to_date: '' });
 
-  useEffect(() => { setActionErr(''); }, [viewReq, rejectMode]);
-
   // View Modal
   const [viewReq, setViewReq] = useState(null);
   const [popupTab, setPopupTab] = useState('Details');
@@ -36,6 +34,8 @@ export default function AdminClientRequests() {
   const [rejectReason, setRejectReason] = useState('');
   const [actionErr, setActionErr] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setActionErr(''); }, [viewReq, rejectMode]);
 
   const load = (p = 1, type = activeType, f = applied) => {
     setLoading(true);
@@ -150,7 +150,7 @@ export default function AdminClientRequests() {
     <div style={{ fontFamily: "'Inter',system-ui,sans-serif", padding: '4px 0 48px', color: '#1e293b' }}>
 
       {/* Top Breadcrumbs */}
-      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+      <div className="crq-crumbs" style={{ fontSize: 13, color: '#64748b', marginBottom: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
         <Link to="/admin/requests" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>Request</Link>
         <span>&gt;</span>
         <Link to="/admin/requests" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>Client List</Link>
@@ -162,7 +162,7 @@ export default function AdminClientRequests() {
 
       {/* Client Header Card */}
       {client && (
-        <div style={{
+        <div className="crq-head" style={{
           background: '#fff',
           border: '1.5px solid #bfdbfe',
           borderRadius: 12,
@@ -174,7 +174,7 @@ export default function AdminClientRequests() {
           gap: 16,
           boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div className="crq-head-main" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{
               width: 50,
               height: 50,
@@ -196,7 +196,7 @@ export default function AdminClientRequests() {
               <div style={{ fontWeight: 800, fontSize: 18, color: '#0f172a', marginBottom: 4 }}>
                 {client.business_name}
               </div>
-              <div style={{ fontSize: 12.5, color: '#64748b', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div className="crq-info" style={{ fontSize: 12.5, color: '#64748b', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span>Client Code : <b style={{ color: '#334155' }}>{client.client_code}</b></span>
                 <span style={{ color: '#cbd5e1' }}>|</span>
                 <span>GSTIN : <b style={{ color: '#334155' }}>{client.gstin || '—'}</b></span>
@@ -210,7 +210,7 @@ export default function AdminClientRequests() {
             </div>
           </div>
 
-          <div style={{
+          <div className="crq-badge" style={{
             padding: '5px 16px',
             background: client.is_active ? '#dcfce7' : '#fee2e2',
             borderRadius: 20,
@@ -239,9 +239,9 @@ export default function AdminClientRequests() {
       </div>
 
       {/* 4 Stat Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 18 }}>
-        <div style={statCard}>
-          <div style={{ ...iconBox, background: '#eff6ff', color: '#1d4ed8' }}>
+      <div className="rq-stats crq-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 18 }}>
+        <div className="rq-card" style={statCard}>
+          <div className="rq-ic" style={{ ...iconBox, background: '#eff6ff', color: '#1d4ed8' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
           </div>
           <div>
@@ -250,8 +250,8 @@ export default function AdminClientRequests() {
           </div>
         </div>
 
-        <div style={statCard}>
-          <div style={{ ...iconBox, background: '#fff7ed', color: '#ea580c' }}>
+        <div className="rq-card" style={statCard}>
+          <div className="rq-ic" style={{ ...iconBox, background: '#fff7ed', color: '#ea580c' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
           </div>
           <div>
@@ -260,8 +260,8 @@ export default function AdminClientRequests() {
           </div>
         </div>
 
-        <div style={statCard}>
-          <div style={{ ...iconBox, background: '#f0fdf4', color: '#16a34a' }}>
+        <div className="rq-card" style={statCard}>
+          <div className="rq-ic" style={{ ...iconBox, background: '#f0fdf4', color: '#16a34a' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
           </div>
           <div>
@@ -270,8 +270,8 @@ export default function AdminClientRequests() {
           </div>
         </div>
 
-        <div style={statCard}>
-          <div style={{ ...iconBox, background: '#fef2f2', color: '#dc2626' }}>
+        <div className="rq-card" style={statCard}>
+          <div className="rq-ic" style={{ ...iconBox, background: '#fef2f2', color: '#dc2626' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </div>
           <div>
@@ -282,7 +282,7 @@ export default function AdminClientRequests() {
       </div>
 
       {/* Horizontal Category Tabs with Count Pills */}
-      <div style={{
+      <div className="crq-tabs" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(7, 1fr)',
         gap: 10,
@@ -339,7 +339,7 @@ export default function AdminClientRequests() {
       </div>
 
       {/* Filter Row */}
-      <div style={{
+      <div className="crq-filter" style={{
         background: '#fff',
         border: '1.5px solid #bfdbfe',
         borderRadius: 10,
@@ -384,7 +384,7 @@ export default function AdminClientRequests() {
         </div>
 
         {/* Date Range Picker */}
-        <div style={{
+        <div className="crq-date" style={{
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
@@ -416,6 +416,7 @@ export default function AdminClientRequests() {
 
         {/* Status Dropdown */}
         <select
+          className="crq-status"
           value={status}
           onChange={e => setStatus(e.target.value)}
           style={{
@@ -436,6 +437,7 @@ export default function AdminClientRequests() {
 
         {/* Reset */}
         <button
+          className="crq-btn"
           onClick={doReset}
           style={{
             padding: '7.5px 18px',
@@ -453,6 +455,7 @@ export default function AdminClientRequests() {
 
         {/* Search */}
         <button
+          className="crq-btn"
           onClick={doSearch}
           style={{
             padding: '7.5px 22px',
@@ -877,7 +880,7 @@ export default function AdminClientRequests() {
                               No attachments uploaded for this request.
                             </div>
                           ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                            <div className="crq-two" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                               {attList.map((att, idx) => (
                                 <div
                                   key={idx}
@@ -1001,7 +1004,7 @@ export default function AdminClientRequests() {
                     ) : (
                       normalizeAttachments(viewReq.attachments).map((att, idx) => (
                         <div key={idx} style={{ padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>📄 {att.name} ({att.size})</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>{att.name} ({att.size})</span>
                           <button type="button" onClick={() => downloadAttachment(att)} style={{ color: '#1d4ed8', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>Download</button>
                         </div>
                       ))
@@ -1275,7 +1278,7 @@ const iconBox = {
   flexShrink: 0,
 };
 
-const thStyle = ({ align = 'left', width, isLast = false }) => ({
+const thStyle = ({ align = 'left', width, isLast = false } = {}) => ({
   padding: '11px 14px',
   textAlign: align,
   fontWeight: 700,
@@ -1286,7 +1289,7 @@ const thStyle = ({ align = 'left', width, isLast = false }) => ({
   borderRight: isLast ? 'none' : '1px solid #dbeafe',
 });
 
-const tdStyle = ({ align = 'left', color = '#1e293b', weight = 400, isLast = false }) => ({
+const tdStyle = ({ align = 'left', color = '#1e293b', weight = 400, isLast = false } = {}) => ({
   padding: '10.5px 14px',
   textAlign: align,
   color,

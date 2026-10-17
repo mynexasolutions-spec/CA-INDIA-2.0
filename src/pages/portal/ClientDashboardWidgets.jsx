@@ -217,40 +217,52 @@ function shortDueDate(iso) {
   return `${d} ${MONTHS[Number(m) - 1]} ${y}`;
 }
 
+const STATUS_ICON = {
+  filed: <polyline points="20 6 9 17 4 12" />,
+  pending: <><line x1="12" y1="8" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>,
+  upcoming: <><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" /></>,
+};
+
 function PeriodCard({ period }) {
   const s = STATUS_STYLE[period.status] || STATUS_STYLE.upcoming;
+  const key = STATUS_STYLE[period.status] ? period.status : 'upcoming';
+  const due = period.due_date ? shortDueDate(period.due_date) : '';
   return (
     <div
       className="bp-period-card"
+      title={due ? `${period.label} — ${s.text}, due ${due}` : `${period.label} — ${s.text}`}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-        flexShrink: 0, minWidth: 80, padding: '12px 8px 10px',
-        background: s.bg, borderRadius: 12, border: `1px solid ${s.fg}26`,
-        scrollSnapAlign: 'start',
+        flexShrink: 0, flex: '1 0 88px', minWidth: 88, padding: '12px 6px 10px', scrollSnapAlign: 'start',
+        background: s.bg, borderRadius: 12, border: `1px solid ${s.fg}2e`,
+        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
       }}
+      onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 8px 16px -10px ${s.fg}`; }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
     >
-      <span style={{ fontSize: 11.5, color: 'var(--bp-navy)', fontWeight: 800 }}>{period.label}</span>
+      <span style={{ fontSize: 12, color: 'var(--bp-navy)', fontWeight: 800, whiteSpace: 'nowrap' }}>{period.label}</span>
       <span style={{
-        width: 28, height: 28, borderRadius: '50%', background: '#fff', color: s.fg,
+        width: 30, height: 30, borderRadius: '50%', background: '#fff', color: s.fg,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 13, fontWeight: 800, border: `1.5px solid ${s.fg}44`, flexShrink: 0,
+        border: `1.5px solid ${s.fg}44`, flexShrink: 0, boxShadow: `0 4px 10px -6px ${s.fg}`,
       }}>
-        {s.icon}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{STATUS_ICON[key]}</svg>
       </span>
-      <span style={{ fontSize: 10, color: s.fg, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.3 }}>{s.text}</span>
-      {period.due_date && <span style={{ fontSize: 9, color: 'var(--bp-muted)', fontWeight: 600, textAlign: 'center', lineHeight: 1.3 }}>Due {shortDueDate(period.due_date)}</span>}
+      <span style={{ fontSize: 10, color: s.fg, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.4 }}>{s.text}</span>
+      {due && <span style={{ fontSize: 9.5, color: 'var(--bp-muted)', fontWeight: 600, textAlign: 'center', lineHeight: 1.3, whiteSpace: 'nowrap' }}>Due {due.replace(/ \d{4}$/, '')}</span>}
     </div>
   );
 }
 
-/** One GSTR-1 or GSTR-3B row: a period-by-period filed/pending/upcoming strip, each with its
- * due date, + X/Total filed count. */
+/** One GSTR-1 / GSTR-3B / CMP-08 row: every period of the year as a tile (no scrolling),
+ * with its due date, plus an X/Total filed count and a progress bar. */
 function ComplianceRow({ label, row }) {
   if (!row) return null;
   const allFiled = row.total > 0 && row.filed_count === row.total;
+  const pct = row.total > 0 ? Math.round((row.filed_count / row.total) * 100) : 0;
   return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--bp-navy)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</span>
         <span style={{
           fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 20,
@@ -259,7 +271,10 @@ function ComplianceRow({ label, row }) {
           {row.filed_count}/{row.total} filed
         </span>
       </div>
-      <div className="bp-compliance-scroll" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, scrollSnapType: 'x proximity' }}>
+      <div style={{ height: 5, borderRadius: 99, background: '#e8eef6', overflow: 'hidden', marginBottom: 12 }} aria-hidden="true">
+        <div style={{ width: `${pct}%`, height: '100%', borderRadius: 99, background: allFiled ? '#16a34a' : 'linear-gradient(90deg,#2563eb,#60a5fa)', transition: 'width 0.4s ease' }} />
+      </div>
+      <div className="bp-compliance-scroll" style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '4px 2px 8px', scrollSnapType: 'x proximity' }}>
         {row.periods.map((p) => <PeriodCard key={p.period} period={p} />)}
       </div>
     </div>

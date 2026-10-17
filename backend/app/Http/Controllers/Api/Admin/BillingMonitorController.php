@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Support\ExcelExport;
+
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\ClientProfile;
@@ -67,12 +69,13 @@ class BillingMonitorController extends Controller
             ->groupBy('li.hsn_sac')->orderByDesc('total')->limit(20)->get();
 
         $recent = CommercialDocument::with(['customer:id,name', 'clientProfile:id,business_name'])
+            ->where('type', '!=', 'amendment')
             ->latest('created_at')->latest('id')->limit(12)->get();
 
         return response()->json([
             'kpis' => [
                 'total_clients' => ClientProfile::count(),
-                'total_invoices' => CommercialDocument::count(),
+                'total_invoices' => CommercialDocument::where('type', '!=', 'amendment')->count(),
                 'tax_invoices' => CommercialDocument::where('type', 'tax_invoice')->count(),
                 'debit_notes' => CommercialDocument::where('type', 'debit_note')->count(),
                 'credit_notes' => CommercialDocument::where('type', 'credit_note')->count(),
@@ -306,20 +309,9 @@ class BillingMonitorController extends Controller
         $title = strtoupper(str_replace('_', ' ', $type));
 
         $xml = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?>';
-        $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
-        $xml .= '<Styles>';
-        $xml .= '<Style ss:ID="title"><Font ss:Bold="1" ss:Size="13" ss:Color="#000000"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="period"><Font ss:Size="10" ss:Color="#444444"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="colHead"><Font ss:Bold="1" ss:Size="10" ss:Color="#FFFFFF"/><Interior ss:Color="#4B5563" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="cell"><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="cellLabel"><Font ss:Bold="1"/><Alignment ss:Horizontal="Left"/></Style>';
-        $xml .= '<Style ss:ID="cellMoney"><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
-        $xml .= '<Style ss:ID="totalCell"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>';
-        $xml .= '<Style ss:ID="totalLabel"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Left"/></Style>';
-        $xml .= '<Style ss:ID="totalMoney"><Font ss:Bold="1" ss:Color="#000000"/><Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/><NumberFormat ss:Format="#,##0.00"/></Style>';
-        $xml .= '<Style ss:ID="footer"><Font ss:Size="9" ss:Color="#444444"/><Alignment ss:Horizontal="Left"/></Style>';
-        $xml .= '</Styles>';
-        $xml .= '<Worksheet ss:Name="Report"><Table>';
+        $xml .= ExcelExport::root();
+        $xml .= ExcelExport::styles();
+        $xml .= '<Worksheet ss:Name="Report"><Table>'.ExcelExport::cols($headers, $rows);
 
         // Determine period from request or default
         $reqFrom = request()->input('from', '');
@@ -360,7 +352,7 @@ class BillingMonitorController extends Controller
         }
         $xml .= '<Row></Row>';
         $xml .= '<Row><Cell ss:StyleID="footer"><Data ss:Type="String">'.$esc('Report Generated On: '.now()->format('d-m-Y')).'</Data></Cell></Row>';
-        $xml .= '</TABLE></Worksheet></Workbook>';
+        $xml .= ExcelExport::end();
 
         return response($xml, 200, [
             'Content-Type' => 'application/vnd.ms-excel',

@@ -197,7 +197,7 @@ export default function PartyDocumentDetailPage() {
     <div style={{ maxWidth: '100%' }}>
 
       {/* ── Header ──────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
+      <div className="gs-head pd-head" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
         <div>
           {/* Back button */}
           <button type="button" onClick={() => navigate(-1)}
@@ -206,7 +206,7 @@ export default function PartyDocumentDetailPage() {
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 13, background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 14px #2563eb44' }}>
+            <div className="gl-head-ic" style={{ width: 48, height: 48, borderRadius: 13, background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 14px #2563eb44' }}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <polyline points="14 2 14 8 20 8"/>
@@ -254,7 +254,7 @@ export default function PartyDocumentDetailPage() {
 
       {/* ── Filter pills info bar ────────────────────────────── */}
       {(fyLabel || from || to || partyName) && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, marginBottom: 20, fontSize: 13, flexWrap: 'wrap' }}>
+        <div className="pd-filter" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, marginBottom: 20, fontSize: 13, flexWrap: 'wrap' }}>
           <InfoIcon />
           <span style={{ color: '#475569', fontWeight: 600 }}>Filtered By:</span>
           {fyLabel && <span style={{ color: '#475569' }}>• Financial Year: <strong style={{ color: '#1e293b' }}>{fyLabel}</strong></span>}
@@ -265,7 +265,7 @@ export default function PartyDocumentDetailPage() {
       )}
 
       {/* ── Table Card ──────────────────────────────────────── */}
-      <div className="bp-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
+      <div className="bp-card pd-table" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
         {loading ? (
           <LoadingBlock label="Loading documents…" minHeight={180} />
         ) : err ? (
@@ -332,7 +332,7 @@ export default function PartyDocumentDetailPage() {
 
       {/* ── Pagination ──────────────────────────────────────── */}
       {flatDocs.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 13, color: '#64748b' }}>
+        <div className="hs-pager" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 13, color: '#64748b' }}>
           <span>Showing {total === 0 ? 0 : (safePage - 1) * pageSize + 1} to {Math.min(safePage * pageSize, total)} of {total} documents</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <PagBtn onClick={() => setPage(1)} disabled={safePage === 1}>«</PagBtn>
@@ -343,7 +343,7 @@ export default function PartyDocumentDetailPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>Rows per page</span>
-            <select className="bp-select" style={{ height: 32, width: 70 }} value={pageSize}
+            <select className="bp-select pg-rows" style={{ height: 32, width: 70 }} value={pageSize}
               onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}>
               {PAGE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>

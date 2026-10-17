@@ -64,7 +64,7 @@ export default function AdminGstr3bDetail() {
   return (
     <div style={{ fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif", padding: '0 0 40px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+      <div className="gst-head gst-head-list" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
             GSTR-3B – Client Details (Admin Portal)
@@ -73,7 +73,7 @@ export default function AdminGstr3bDetail() {
             View, verify and manage GSTR-3B for the selected client.
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 500, paddingTop: 4 }}>
+        <div className="gst-crumbs gst-crumbs-right" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 500, paddingTop: 4 }}>
           <Link to="/admin/gst-returns?tab=gstr-3b" style={{ color: '#2563eb', textDecoration: 'none' }}>
             GST Compliance
           </Link>
@@ -87,7 +87,7 @@ export default function AdminGstr3bDetail() {
       </div>
 
       {/* 3 Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 16 }}>
+      <div className="gst-info3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 16 }}>
         {/* Card 1: Client Info */}
         <div
           style={{
@@ -391,7 +391,7 @@ export default function AdminGstr3bDetail() {
       </div>
 
       {/* Table */}
-      <div style={{ background: '#fff', border: '1px solid #bfdbfe', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
+      <div className="gst-periods" style={{ background: '#fff', border: '1px solid #bfdbfe', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
           <thead>
             <tr style={{ background: '#0b3b6f', borderBottom: '1.5px solid #bfdbfe' }}>

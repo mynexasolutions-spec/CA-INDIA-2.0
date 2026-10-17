@@ -466,7 +466,7 @@ class AdminBillingCountService
             $canDelete = ($isActive || $isCancelled) && ! $isReferenced && ! $isAttached;
 
             return [
-                'can_edit' => false,
+                'can_edit' => $isActive && ! $doc->converted_document_id && ! $isReferenced && ! $isAttached,
                 'can_edit_creation_date' => $canEditCreationDate,
                 'can_cancel' => $canCancel,
                 'can_delete' => $canDelete,
@@ -480,7 +480,7 @@ class AdminBillingCountService
         $canCancel = $isActive && ! $isGstFiled;
 
         $canDelete = ($isActive || $isCancelled) && ! $isGstFiled && ! $isReferenced && ! $isAttached;
-        $canEdit = ($doc->type === 'tax_invoice') && $isActive && ! $isGstFiled && ! $isReferenced && ! $isAttached;
+        $canEdit = $isActive && ! $isGstFiled && ! $isReferenced && ! $isAttached;
 
         return [
             'can_edit' => $canEdit,

@@ -39,4 +39,13 @@ return [
         'api_key' => env('ANTHROPIC_API_KEY'),
     ],
 
+
+    // Authorised GST API / GSP used for "Fetch GST Details" (credentials stay on the server).
+    'gst' => [
+        'url' => env('GST_API_URL'),            // e.g. https://gsp.example.com/taxpayer/{gstin}
+        'key' => env('GST_API_KEY'),
+        'key_header' => env('GST_API_KEY_HEADER'), // default: Authorization (Bearer)
+        'secret' => env('GST_API_SECRET'),
+    ],
+
 ];

@@ -73,18 +73,23 @@ function RefreshIcon() {
   );
 }
 
+/* Zero-width anchor: the arrow hangs to the right of the label, so the label itself stays exactly
+ * centred over its column (the data cells below are centred the same way). */
 function SortIcon({ active }) {
   return (
     <span
+      aria-hidden="true"
       style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        marginLeft: 6,
-        color: active ? '#0066ff' : '#60a5fa',
+        position: 'relative',
+        display: 'inline-block',
+        width: 0,
+        height: 12,
         verticalAlign: 'middle',
+        overflow: 'visible',
+        color: active ? '#0066ff' : '#60a5fa',
       }}
     >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <svg style={{ position: 'absolute', left: 6, top: 0 }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M7 15l5 5 5-5" />
         <path d="M7 9l5-5 5 5" />
       </svg>
@@ -582,8 +587,9 @@ export default function AdminClients() {
           boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
         }}
       >
-        <div style={{ width: '100%', overflowX: 'hidden' }}>
+        <div className="ac-scroll" style={{ width: '100%', overflowX: 'hidden' }}>
           <table
+            className="ac-table"
             style={{
               width: '100%',
               tableLayout: 'fixed',
@@ -853,7 +859,7 @@ export default function AdminClients() {
             Showing {paginationMeta.from || (rows.length > 0 ? 1 : 0)} to {paginationMeta.to || rows.length} of {paginationMeta.total} clients
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div className="cl-pager" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {/* Prev Page Button */}
             <button
               type="button"

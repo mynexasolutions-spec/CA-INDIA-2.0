@@ -149,7 +149,7 @@ class AdminBilling3C1QuotationAndChallanTest extends TestCase
         $this->assertTrue($flags['can_cancel']);
         $this->assertTrue($flags['can_edit_creation_date']);
         $this->assertTrue($flags['can_delete']);
-        $this->assertFalse($flags['can_edit']);
+        $this->assertTrue($flags['can_edit']);
         $this->assertEquals('-', $res->json('gst.status'));
     }
 

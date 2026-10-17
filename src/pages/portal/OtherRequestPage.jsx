@@ -21,21 +21,29 @@ const DOC_TYPES = [
 /* ── icons ── */
 function HeaderIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-      <path d="M9 12h6"/><path d="M9 16h4"/>
+    <svg width="38" height="38" viewBox="0 0 80 80" fill="none" aria-hidden="true">
+      <path d="M18 8h30l14 14v42a6 6 0 0 1-6 6H18a6 6 0 0 1-6-6V14a6 6 0 0 1 6-6z" fill="#fff" stroke="#3b82f6" strokeWidth="4" strokeLinejoin="round" />
+      <path d="M48 8v10a4 4 0 0 0 4 4h10" stroke="#3b82f6" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
+      <line x1="22" y1="36" x2="42" y2="36" stroke="#3b82f6" strokeWidth="4" strokeLinecap="round" />
+      <line x1="22" y1="48" x2="50" y2="48" stroke="#3b82f6" strokeWidth="4" strokeLinecap="round" />
+      <circle cx="58" cy="58" r="15" fill="#2563eb" />
+      <path d="M53.5 55a4.6 4.6 0 1 1 6.6 4.1c-1.4.8-2.1 1.5-2.1 3" stroke="#fff" strokeWidth="3" strokeLinecap="round" fill="none" />
+      <circle cx="58" cy="66.5" r="1.8" fill="#fff" />
     </svg>
   );
 }
 
-function IllustrationIcon() {
+function IllustrationIcon({ size = 76 }) {
+  // Document with a question-mark badge, as in the approved design.
   return (
-    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.85 }}>
-      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-      <circle cx="12" cy="14" r="3"/>
-      <path d="M12 11v-1"/><path d="M12 17v1"/>
+    <svg width={size} height={size} viewBox="0 0 80 80" fill="none" aria-hidden="true">
+      <path d="M18 8h30l14 14v42a6 6 0 0 1-6 6H18a6 6 0 0 1-6-6V14a6 6 0 0 1 6-6z" fill="#fff" stroke="#3b82f6" strokeWidth="3.2" strokeLinejoin="round" />
+      <path d="M48 8v10a4 4 0 0 0 4 4h10" stroke="#3b82f6" strokeWidth="3.2" strokeLinejoin="round" strokeLinecap="round" />
+      <line x1="22" y1="34" x2="42" y2="34" stroke="#3b82f6" strokeWidth="3.2" strokeLinecap="round" />
+      <line x1="22" y1="44" x2="50" y2="44" stroke="#3b82f6" strokeWidth="3.2" strokeLinecap="round" />
+      <circle cx="58" cy="58" r="14" fill="#2563eb" />
+      <path d="M53.5 55a4.6 4.6 0 1 1 6.6 4.1c-1.4.8-2.1 1.5-2.1 3" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" fill="none" />
+      <circle cx="58" cy="66.2" r="1.7" fill="#fff" />
     </svg>
   );
 }
@@ -230,11 +238,11 @@ export default function OtherRequestPage() {
   };
 
   return (
-    <div className="bp-content" style={{ maxWidth: '100%' }}>
+    <div className="bp-content er-page" style={{ maxWidth: '100%' }}>
       {/* Header */}
       <div className="bp-toolbar" style={{ marginBottom: 20 }}>
         <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-          <span style={{ width:44, height:44, borderRadius:10, background:'#eff6ff', display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid #bfdbfe' }}>
+          <span className="er-hico" style={{ width:54, height:54, borderRadius:14, background:'#e6eeff', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
             <HeaderIcon />
           </span>
           <div>
@@ -252,7 +260,7 @@ export default function OtherRequestPage() {
         <div className="bp-card" style={{ padding:20 }}>
           <div style={{ marginBottom:16 }}>
             <span style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'6px 14px', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:6, color:'#2563eb', fontSize:12, fontWeight:750 }}>
-              <span style={{ fontSize:14 }}>&#9998;</span> Create Other Request
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg> Create Other Request
             </span>
           </div>
 
@@ -409,7 +417,7 @@ export default function OtherRequestPage() {
                     type="submit"
                     className="bp-btn bp-btn-primary"
                     disabled={busy || !canSubmit}
-                    style={{ height:42, padding:'0 24px', background: canSubmit ? '#0052cc' : '#94a3b8', fontWeight:800, borderRadius:8, display:'inline-flex', alignItems:'center', gap:8, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
+                    style={{ height:44, padding:'0 28px', border:'none', background: canSubmit ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : '#b8c4d9', boxShadow: canSubmit ? '0 12px 20px -12px rgba(29,78,216,.85)' : 'none', color:'#fff', fontWeight:800, borderRadius:11, display:'inline-flex', alignItems:'center', gap:8, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -417,25 +425,25 @@ export default function OtherRequestPage() {
                     {busy ? 'Submitting…' : 'Submit Request'}
                   </button>
                   {!canSubmit && !msg && <span style={{ fontSize:12, color:'var(--bp-muted)' }}>Please fill in all the required fields to enable the submit button.</span>}
-                  {msg && <span style={{ color:'#16a34a', fontWeight:700, fontSize:13 }}>✓ {msg}</span>}
-                  {err && <span style={{ color:'#dc2626', fontWeight:700, fontSize:13 }}>⚠ {err}</span>}
+                  {msg && <span style={{ color:'#16a34a', fontWeight:700, fontSize:13 }}>{msg}</span>}
+                  {err && <span style={{ color:'#dc2626', fontWeight:700, fontSize:13 }}>{err}</span>}
                 </div>
               </div>
 
               {/* Right — Important Information */}
-              <div style={{ flex:'1 1 35%', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:12, padding:16, position:'relative', minHeight:200, display:'flex', flexDirection:'column' }}>
+              <div className="er-important" style={{ flex:'1 1 35%', alignSelf:'flex-start', background:'linear-gradient(160deg,#eef5ff,#e1ecff)', border:'1px solid #cfe0fa', borderRadius:16, padding:'18px 20px 22px', position:'relative', display:'flex', flexDirection:'column' }}>
                 <h4 style={{ margin:'0 0 12px 0', fontSize:14, color:'#2563eb', fontWeight:800, display:'flex', alignItems:'center', gap:6 }}>
                   <span style={{ width:20, height:20, background:'#2563eb', color:'#fff', borderRadius:'50%', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, flexShrink:0 }}>i</span>
                   Important Information
                 </h4>
-                <ol style={{ margin:0, paddingLeft:20, fontSize:12, lineHeight:1.7, color:'#1e3a8a', display:'flex', flexDirection:'column', gap:4, fontWeight:500 }}>
+                <ol style={{ margin:0, paddingLeft:0, fontSize:12.5, lineHeight:1.55, color:'#1e3a8a', display:'flex', flexDirection:'column', gap:12, fontWeight:500 }}>
                   <li>This option is for requests that are not covered under <strong>Edit Request</strong> or <strong>Amendment Request</strong>.</li>
                   <li>Select the appropriate request type and provide complete details.</li>
                   <li>For <strong>Profile Update, Document Change, Bank Details</strong> or <strong>Invoice Settings</strong>, the request will be processed after admin approval.</li>
                   <li>You can attach supporting documents if required.</li>
                   <li>You will be notified once your request is reviewed.</li>
                 </ol>
-                <div style={{ position:'absolute', bottom:10, right:10 }}>
+                <div style={{ alignSelf:'flex-end', marginTop:10 }}>
                   <IllustrationIcon />
                 </div>
               </div>
@@ -445,9 +453,9 @@ export default function OtherRequestPage() {
 
         {/* History */}
         <div className="bp-card" style={{ padding:20 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+          <div className="er-list-head" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--bp-navy)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg className="er-list-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--bp-navy)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
                 <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
                 <path d="M9 12h6"/><path d="M9 16h4"/>
@@ -456,7 +464,7 @@ export default function OtherRequestPage() {
             </div>
             <button
               type="button"
-              className="bp-btn bp-btn-outline"
+              className="bp-btn bp-btn-outline er-viewall"
               style={{ height:32, padding:'0 12px', fontSize:12, fontWeight:700, color:'#2563eb', borderColor:'#bfdbfe', background:'#f8fafc', display:'flex', alignItems:'center' }}
               onClick={loadHistory}
             >
@@ -514,8 +522,8 @@ export default function OtherRequestPage() {
             </table>
           </div>
 
-          <div style={{ background:'#f0f7ff', border:'1px solid #bfdbfe', borderRadius:8, padding:'10px 14px', marginTop:16, display:'flex', gap:8, alignItems:'center', fontSize:12, color:'var(--bp-navy)', fontWeight:600 }}>
-            <span style={{ fontSize:14 }}>ⓘ</span>
+          <div className="er-note" style={{ background:'#f0f7ff', border:'1px solid #bfdbfe', borderRadius:8, padding:'10px 14px', marginTop:16, display:'flex', gap:8, alignItems:'center', fontSize:12, color:'var(--bp-navy)', fontWeight:600 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#2563eb"><circle cx="12" cy="12" r="10" /><line x1="12" y1="11" x2="12" y2="16" stroke="white" strokeWidth="2.2" strokeLinecap="round" /><line x1="12" y1="7.5" x2="12.01" y2="7.5" stroke="white" strokeWidth="2.4" strokeLinecap="round" /></svg>
             <span>All requests are reviewed by Admin. The client cannot directly modify system data through this module.</span>
           </div>
         </div>

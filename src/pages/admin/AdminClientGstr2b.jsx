@@ -283,7 +283,7 @@ export default function AdminClientGstr2b() {
   };
 
   useEffect(() => {
-    api(`/admin/clients/${id}`).then(setClient).catch((e) => setErr(e.message));
+    api(`/admin/clients/${id}?directory=1`).then(setClient).catch((e) => setErr(e.message));
     loadRecords();
   }, [id]);
 

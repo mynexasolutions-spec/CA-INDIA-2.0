@@ -3,7 +3,7 @@ import { api, getAuthToken } from '../../api/client';
 import { useReportsEnv } from './ReportsContext';
 import { LoadingBlock } from '../../components/Spinner';
 import { billingMode } from './billingProfile';
-import { buildFyOptions, currentFyRange, money } from './billingUtils';
+import { buildFyOptions, currentFyRange, moneyFixed as money } from './billingUtils';
 
 /* ── Icons ─────────────────────────────────────────────────── */
 function DocIcon() {
@@ -102,67 +102,109 @@ function fmt(n) { return money(Number(n) || 0); }
 
 /* ── Simple bar chart ──────────────────────────────────────── */
 function LiabilityBarChart({ outputGst, eligibleItc }) {
-  const maxVal = Math.max(outputGst, eligibleItc, 1);
-  const toH = (v) => Math.max(4, Math.round((v / maxVal) * 160));
-  const outputH = toH(outputGst);
-  const itcH    = toH(eligibleItc);
+  const [hover, setHover] = useState(null);   // key of the hovered bar
+  const [hidden, setHidden] = useState({});   // legend toggles
+  const [ready, setReady] = useState(false);  // bars grow in on mount
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const series = [
+    { key: 'output', label: 'Output GST', value: Number(outputGst) || 0, from: '#60a5fa', to: '#1d4ed8', dot: '#2563eb' },
+    { key: 'itc', label: 'Eligible ITC', value: Number(eligibleItc) || 0, from: '#4ade80', to: '#15803d', dot: '#16a34a' },
+  ];
+  const visible = series.filter((x) => !hidden[x.key]);
+  const maxVal = Math.max(...visible.map((x) => x.value), 1);
 
   const labelize = (n) => {
     if (n >= 100000) return `${(n / 100000).toFixed(2)} L`;
-    if (n >= 1000)   return `${(n / 1000).toFixed(1)} K`;
-    return String(n);
+    if (n >= 1000) return `${(n / 1000).toFixed(1)} K`;
+    return String(Math.round(n));
   };
-  const yLabels = [0, 0.25, 0.5, 0.75, 1.0].map((f) => labelize(Math.round(maxVal * f)));
+  const ticks = [0, 0.25, 0.5, 0.75, 1];
+  const toggle = (key) => setHidden((h) => {
+    // Never allow hiding both series
+    const next = { ...h, [key]: !h[key] };
+    return series.every((x) => next[x.key]) ? h : next;
+  });
+
+  const netLiability = Math.max(series[0].value - series[1].value, 0);
+  const coverage = series[0].value > 0 ? Math.min((series[1].value / series[0].value) * 100, 100) : 0;
+  const hovered = series.find((x) => x.key === hover);
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', gap: 0, flex: 1 }}>
-        {/* Y-axis title */}
-        <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: 11, color: '#94a3b8', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingRight: 4 }}>
-          Amount (₹)
+    <div className="gl-chart">
+      <div className="gl-chart-body">
+        <div className="gl-chart-ytitle">Amount (₹)</div>
+        <div className="gl-chart-y">
+          {ticks.map((f) => <span key={f} style={{ bottom: `${f * 100}%` }}>{labelize(maxVal * f)}</span>)}
         </div>
-        {/* Y-axis */}
-        <div style={{ display: 'flex', flexDirection: 'column-reverse', justifyContent: 'space-between', width: 48, paddingRight: 8, fontSize: 11, color: '#94a3b8', textAlign: 'right' }}>
-          {yLabels.map((l, i) => <span key={i}>{l}</span>)}
-        </div>
-        {/* Chart area */}
-        <div style={{ flex: 1, position: 'relative', borderLeft: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
-          {/* Grid lines */}
-          {[0.25, 0.5, 0.75].map((f) => (
-            <div key={f} style={{ position: 'absolute', bottom: `${f * 100}%`, left: 0, right: 0, borderTop: '1px dashed #e2e8f0' }} />
-          ))}
-          {/* Divider between bar groups */}
-          <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', borderLeft: '1px dashed #cbd5e1' }} />
-          {/* Bars */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', height: '100%', padding: '0 24px', paddingBottom: 0 }}>
-            {/* Output GST bar */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{fmt(outputGst)}</span>
-              <div style={{ width: 64, height: outputH, background: '#2563eb', borderRadius: '4px 4px 0 0' }} />
-            </div>
-            {/* Eligible ITC bar */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{fmt(eligibleItc)}</span>
-              <div style={{ width: 64, height: itcH, background: '#16a34a', borderRadius: '4px 4px 0 0' }} />
-            </div>
+        <div className="gl-chart-plot">
+          {ticks.map((f) => <div key={f} className="gl-chart-grid" style={{ bottom: `${f * 100}%` }} />)}
+          <div className="gl-chart-bars">
+            {series.map((x) => {
+              const off = hidden[x.key];
+              const pct = off ? 0 : Math.max((x.value / maxVal) * 100, x.value > 0 ? 2 : 0.8);
+              const active = hover === x.key;
+              return (
+                <div
+                  key={x.key}
+                  className={`gl-chart-col${active ? ' is-active' : ''}${off ? ' is-off' : ''}`}
+                  onMouseEnter={() => setHover(x.key)}
+                  onMouseLeave={() => setHover(null)}
+                  onFocus={() => setHover(x.key)}
+                  onBlur={() => setHover(null)}
+                  tabIndex={0}
+                  role="img"
+                  aria-label={`${x.label}: ${fmt(x.value)}`}
+                >
+                  <span className="gl-chart-val">{off ? '' : fmt(x.value)}</span>
+                  <div
+                    className="gl-chart-bar"
+                    style={{
+                      height: ready ? `${pct}%` : '0%',
+                      background: `linear-gradient(180deg, ${x.from}, ${x.to})`,
+                    }}
+                  />
+                </div>
+              );
+            })}
           </div>
+
+          {hovered && !hidden[hovered.key] && (
+            <div className={`gl-chart-tip gl-chart-tip-${hovered.key}`}>
+              <div className="gl-chart-tip-title"><i style={{ background: hovered.dot }} />{hovered.label}</div>
+              <div className="gl-chart-tip-amt">{fmt(hovered.value)}</div>
+              {hovered.key === 'output' ? (
+                <div className="gl-chart-tip-sub">Net liability {fmt(netLiability)}</div>
+              ) : (
+                <div className="gl-chart-tip-sub">{coverage.toFixed(1)}% of output GST covered</div>
+              )}
+            </div>
+          )}
         </div>
       </div>
-      {/* X-axis labels */}
-      <div style={{ display: 'flex', paddingLeft: 78 }}>
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'space-around', fontSize: 12, color: '#475569', fontWeight: 600 }}>
-          <span>Output GST</span>
-          <span>Eligible ITC</span>
-        </div>
+
+      <div className="gl-chart-x">
+        {series.map((x) => <span key={x.key} className={hover === x.key ? 'is-active' : ''}>{x.label}</span>)}
       </div>
-      {/* Legend */}
-      <div style={{ display: 'flex', gap: 20, paddingLeft: 78, fontSize: 12, color: '#475569' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 14, height: 14, background: '#2563eb', borderRadius: 3 }} /> Output GST
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 14, height: 14, background: '#16a34a', borderRadius: 3 }} /> Eligible ITC
-        </div>
+
+      <div className="gl-chart-legend">
+        {series.map((x) => (
+          <button
+            key={x.key}
+            type="button"
+            className={`gl-chart-chip${hidden[x.key] ? ' is-off' : ''}`}
+            onClick={() => toggle(x.key)}
+            onMouseEnter={() => setHover(x.key)}
+            onMouseLeave={() => setHover(null)}
+            title={hidden[x.key] ? `Show ${x.label}` : `Hide ${x.label}`}
+          >
+            <i style={{ background: x.dot }} />{x.label}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -275,9 +317,9 @@ export default function GstLiabilityReport() {
     <div style={{ maxWidth: '100%' }}>
 
       {/* ── Header ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
+      <div className="gs-head gl-head" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ width: 44, height: 44, background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div className="gl-head-ic" style={{ width: 44, height: 44, background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
               <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
@@ -303,7 +345,7 @@ export default function GstLiabilityReport() {
       </div>
 
       {/* ── Filter Bar ─────────────────────────────────────── */}
-      <div className="bp-card" style={{ marginBottom: 20, padding: '14px 18px' }}>
+      <div className="bp-card gs-filter" style={{ marginBottom: 20, padding: '14px 18px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
           {/* Quick pills */}
           {[
@@ -370,7 +412,7 @@ export default function GstLiabilityReport() {
       </div>
 
       {/* ── Report Period Bar ───────────────────────────────── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '11px 18px', background: '#f8fafc', border: '1px solid var(--bp-border)', borderRadius: 10, marginBottom: 18 }}>
+      <div className="gl-bar" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '11px 18px', background: '#f8fafc', border: '1px solid var(--bp-border)', borderRadius: 10, marginBottom: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
@@ -394,10 +436,10 @@ export default function GstLiabilityReport() {
       ) : (
         <>
           {/* ── KPI Cards ──────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+          <div className="gl-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
             {/* Total Output GST */}
-            <div style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#eff6ff,#dbeafe)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-              <div style={{ width: 48, height: 48, borderRadius: 12, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #2563eb55', marginBottom: 12 }}>
+            <div className="gl-kpi" style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#eff6ff,#dbeafe)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div className="gl-kpi-ic" style={{ width: 48, height: 48, borderRadius: 12, background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #2563eb55', marginBottom: 12 }}>
                 <OutputGstIcon />
               </div>
               <div style={{ minWidth: 0 }}>
@@ -410,8 +452,8 @@ export default function GstLiabilityReport() {
             </div>
 
             {/* Total Eligible ITC */}
-            <div style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#f0fdf4,#dcfce7)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-              <div style={{ width: 48, height: 48, borderRadius: 12, background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #16a34a55', marginBottom: 12 }}>
+            <div className="gl-kpi" style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#f0fdf4,#dcfce7)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div className="gl-kpi-ic" style={{ width: 48, height: 48, borderRadius: 12, background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #16a34a55', marginBottom: 12 }}>
                 <ItcIcon />
               </div>
               <div style={{ minWidth: 0 }}>
@@ -424,8 +466,8 @@ export default function GstLiabilityReport() {
             </div>
 
             {/* Net GST Liability */}
-            <div style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#fff7ed,#fed7aa)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-              <div style={{ width: 48, height: 48, borderRadius: 12, background: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #ea580c55', marginBottom: 12 }}>
+            <div className="gl-kpi" style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#fff7ed,#fed7aa)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div className="gl-kpi-ic" style={{ width: 48, height: 48, borderRadius: 12, background: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #ea580c55', marginBottom: 12 }}>
                 <NetLiabilityIcon />
               </div>
               <div style={{ minWidth: 0 }}>
@@ -438,8 +480,8 @@ export default function GstLiabilityReport() {
             </div>
 
             {/* GST Payable */}
-            <div style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#faf5ff,#e9d5ff)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-              <div style={{ width: 48, height: 48, borderRadius: 12, background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #7c3aed55', marginBottom: 12 }}>
+            <div className="gl-kpi" style={{ padding: '16px 18px', background: 'linear-gradient(145deg,#faf5ff,#e9d5ff)', borderRadius: 14, border: '1.5px solid rgba(0,0,0,0.05)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div className="gl-kpi-ic" style={{ width: 48, height: 48, borderRadius: 12, background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px #7c3aed55', marginBottom: 12 }}>
                 <PayableIcon />
               </div>
               <div style={{ minWidth: 0 }}>
@@ -456,7 +498,7 @@ export default function GstLiabilityReport() {
           <div className="bp-split" style={{ gap: 16, marginBottom: 18 }}>
 
             {/* OUTPUT GST BREAKDOWN */}
-            <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div className="bp-card gl-panel" style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--bp-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <BarChartIcon color="#2563eb" />
                 <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--bp-navy)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Output GST Breakdown</span>
@@ -492,7 +534,7 @@ export default function GstLiabilityReport() {
             </div>
 
             {/* OUTPUT GST vs ELIGIBLE ITC Chart */}
-            <div className="bp-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div className="bp-card gl-panel" style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--bp-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <BarChartIcon color="#2563eb" />
                 <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--bp-navy)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Output GST vs Eligible ITC</span>
@@ -505,7 +547,7 @@ export default function GstLiabilityReport() {
           </div>
 
           {/* ── Note bar ───────────────────────────────────── */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 18px', background: '#f8fafc', border: '1px solid var(--bp-border)', borderRadius: 10, fontSize: 13, color: '#475569' }}>
+          <div className="gl-note" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '12px 18px', background: '#f8fafc', border: '1px solid var(--bp-border)', borderRadius: 10, fontSize: 13, color: '#475569' }}>
             <span style={{ marginTop: 1, flexShrink: 0 }}><InfoIcon /></span>
             <span><strong>Note:</strong> Figures are based on data from GSTR-1 (Output) and matched GSTR-2B (ITC).</span>
           </div>

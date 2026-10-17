@@ -47,6 +47,8 @@ export default function BillingDateFilters({
   /* legacy props kept for backward compat — no-op */
   month, setMonth, fy, setFy, status, setStatus, docType, setDocType,
   showSearch = true, showDocType = false, profile = null,
+  dateLabel = 'Invoice Date',
+  searchHint = 'Search by invoice no., party name, GSTIN',
 }) {
   const clearAll = () => {
     const next = currentFyRange();
@@ -60,11 +62,11 @@ export default function BillingDateFilters({
   };
 
   const F = { display: 'flex', flexDirection: 'column', gap: 4 };
-  const LBL = { fontSize: 11.5, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.3 };
-  const CTL = { height: 36, borderRadius: 8, border: '1.5px solid #e2e8f0', padding: '0 10px', fontSize: 13, color: '#1e293b', background: '#fff', outline: 'none', boxSizing: 'border-box', width: '100%' };
+  const LBL = { fontSize: 11.5, fontWeight: 700, color: '#475569' };
+  const CTL = { height: 38, borderRadius: 10, border: '1px solid #d7e1ef', padding: '0 10px', fontSize: 13, color: '#1e293b', background: '#fff', outline: 'none', boxSizing: 'border-box', width: '100%' };
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', padding: '14px 0 12px', borderBottom: '1px solid #f1f5f9', marginBottom: 14 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', padding: '14px 16px', background: '#f8fbff', border: '1px solid #e3ebf6', borderRadius: 14, marginBottom: 16 }}>
 
       {/* Search */}
       {showSearch && (
@@ -74,7 +76,7 @@ export default function BillingDateFilters({
             <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }}><SearchIcon /></span>
             <input
               style={{ ...CTL, paddingLeft: 32 }}
-              placeholder="Search by invoice no., party name, GSTIN"
+              placeholder={searchHint}
               value={q}
               onChange={(e) => setQ?.(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onApply?.()}
@@ -98,7 +100,7 @@ export default function BillingDateFilters({
       {/* Invoice Date From */}
       {setDocFrom && (
         <div style={{ ...F, flex: '0 0 140px', minWidth: 120 }}>
-          <span style={LBL}>Invoice Date From</span>
+          <span style={LBL}>{dateLabel} From</span>
           <input type="date" style={CTL} value={docFrom} onChange={(e) => setDocFrom?.(e.target.value)} />
         </div>
       )}
@@ -106,7 +108,7 @@ export default function BillingDateFilters({
       {/* Invoice Date To */}
       {setDocTo && (
         <div style={{ ...F, flex: '0 0 140px', minWidth: 120 }}>
-          <span style={LBL}>Invoice Date To</span>
+          <span style={LBL}>{dateLabel} To</span>
           <input type="date" style={CTL} value={docTo} onChange={(e) => setDocTo?.(e.target.value)} />
         </div>
       )}
@@ -130,11 +132,11 @@ export default function BillingDateFilters({
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flex: '0 0 auto' }}>
         <button type="button" onClick={onApply}
-          style={{ height: 36, padding: '0 16px', borderRadius: 8, border: 'none', background: '#1e3a5f', color: '#fff', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+          style={{ height: 38, padding: '0 20px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#1e3a8a,#1d4ed8)', boxShadow: '0 8px 16px -8px rgba(29,78,216,.7)', color: '#fff', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
           <ApplyIcon /> Apply
         </button>
         <button type="button" onClick={clearAll}
-          style={{ height: 36, padding: '0 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+          style={{ height: 38, padding: '0 16px', borderRadius: 10, border: '1px solid #d7e1ef', background: '#fff', color: '#475569', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
           <ResetIcon /> Reset
         </button>
       </div>

@@ -165,14 +165,14 @@ class AdminBillingFullEditTest extends TestCase
         $res->assertJsonPath('message', 'Document updated successfully.');
     }
 
-    public function test_doctype_other_than_tax_invoice_returns_422(): void
+    public function test_doctype_mismatch_returns_404(): void
     {
         Sanctum::actingAs($this->admin);
 
+        // The id belongs to a tax invoice, so any other document type in the URL finds nothing.
         foreach (['bill_of_supply', 'credit_note', 'debit_note', 'quotation', 'delivery_challan'] as $docType) {
             $res = $this->putJson("/api/admin/billing/client-directory/{$this->client->id}/documents/{$docType}/{$this->invoice->id}", $this->validPayload());
-            $res->assertStatus(422);
-            $this->assertStringContainsString('Only Tax Invoices can be edited', $res->json('message'));
+            $res->assertStatus(404);
         }
     }
 
@@ -890,7 +890,7 @@ class AdminBillingFullEditTest extends TestCase
         $flags5 = AdminBillingCountService::computeDocumentFlags($this->invoice, $lockUnfiled);
         $this->assertFalse($flags5['can_edit']);
 
-        // 6. Quotation / delivery challan -> false
+        // 6. Quotation / delivery challan -> editable while active and not converted/referenced
         $quotation = CommercialDocument::create([
             'client_profile_id' => $this->client->id,
             'type' => 'quotation',
@@ -899,7 +899,7 @@ class AdminBillingFullEditTest extends TestCase
             'status' => 'issued',
         ]);
         $flags6 = AdminBillingCountService::computeDocumentFlags($quotation, $lockUnfiled);
-        $this->assertFalse($flags6['can_edit']);
+        $this->assertTrue($flags6['can_edit']);
     }
 
     public function test_minimal_body_keeps_stored_values_for_omitted_keys_and_recalculates_with_stored_tds(): void

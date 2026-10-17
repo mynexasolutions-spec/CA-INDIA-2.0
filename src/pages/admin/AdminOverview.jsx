@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
+import { LoadingBlock } from '../../components/Spinner';
 import { useAdminFy } from '../../context/AdminFyContext';
 import '../billing/admin-overview.css';
 
@@ -289,7 +290,7 @@ export default function AdminOverview() {
   if (loading || !data) {
     return (
       <div className="ao-wrap">
-        <p style={{ color: '#64748b', padding: '24px 0' }}>Loading Dashboard…</p>
+        <LoadingBlock label="Loading Dashboard" size={26} minHeight={420} />
       </div>
     );
   }
@@ -684,7 +685,7 @@ export default function AdminOverview() {
             </Link>
           </div>
           <div className="ao-table-responsive">
-            <table className="ao-table">
+            <table className="ao-table ao-table-req">
               <thead>
                 <tr>
                   <th>Request Type</th>

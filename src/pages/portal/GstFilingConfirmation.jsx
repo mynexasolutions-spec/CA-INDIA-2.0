@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { fyQuarterOptions } from '../billing/billingUtils';
@@ -75,6 +76,34 @@ export default function GstFilingConfirmation() {
   useEffect(() => {
     fetchPastRequests();
   }, []);
+
+  // "View Request" from a just-submitted filing request opens that request's details straight away.
+  const [searchParams] = useSearchParams();
+  const requestedId = searchParams.get('request');
+  useEffect(() => {
+    if (requestedId) handleViewRequestDetails(requestedId);
+  }, [requestedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Opened from a GST Filing Reminder (popup / bell): preselect that return and period.
+  const reminderReturn = searchParams.get('return');
+  const reminderPeriod = searchParams.get('period');
+  useEffect(() => {
+    if (!profile || !reminderReturn || !reminderPeriod) return;
+    const q = /^(\d{4})-(Q[1-4])$/.exec(reminderPeriod);
+    const m = /^(\d{4})-(\d{2})$/.exec(reminderPeriod);
+    setReturnType(reminderReturn);
+    setPreviewData(null);
+    if (q) {
+      const y = parseInt(q[1], 10);
+      setFinancialYear(`${y}-${y + 1}`);
+      setFilingQuarter(q[2]); setFilingPeriod('');
+    } else if (m) {
+      const y = parseInt(m[1], 10);
+      const fy = parseInt(m[2], 10) >= 4 ? y : y - 1;
+      setFinancialYear(`${fy}-${fy + 1}`);
+      setFilingPeriod(reminderPeriod); setFilingQuarter('');
+    }
+  }, [profile?.id, reminderReturn, reminderPeriod]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchPastRequests = async () => {
     try {
@@ -467,20 +496,20 @@ export default function GstFilingConfirmation() {
 
       {/* Confirm Modal */}
       {showConfirmModal && previewData && (
-        <div style={{
+        <div className="cf-modal" style={{
           position: 'fixed', inset: 0, background: 'rgba(22, 58, 82, 0.4)', backdropFilter: 'blur(3px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px'
         }}>
-          <div className="bp-card" style={{ width: '100%', maxWidth: '440px', padding: 0, overflow: 'hidden', background: '#fff' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bp-border)', background: '#f8fafc' }}>
+          <div className="bp-card cf-card" style={{ width: '100%', maxWidth: '440px', padding: 0, overflow: 'hidden', background: '#fff' }}>
+            <div className="cf-head" style={{ padding: '16px 20px', borderBottom: '1px solid var(--bp-border)', background: '#f8fafc' }}>
               <h3 style={{ margin: 0, fontSize: 16, color: 'var(--bp-navy)' }}>Confirm Submission</h3>
             </div>
-            <div style={{ padding: 20 }}>
+            <div className="cf-body" style={{ padding: 20 }}>
               <p style={{ margin: '0 0 16px 0', color: 'var(--bp-text)', fontWeight: 600 }}>
                 Are you sure you want to send this {returnType} filing request to the CA?
               </p>
               
-              <div style={{ background: '#f0f7ff', padding: 16, borderRadius: 8, display: 'grid', gap: 8, fontSize: 13 }}>
+              <div className="cf-sum" style={{ background: '#f0f7ff', padding: 16, borderRadius: 8, display: 'grid', gap: 8, fontSize: 13 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--bp-muted)' }}>Filing Period:</span> <span style={{ fontWeight: 700 }}>{formatPeriod(effectivePeriod)}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--bp-muted)' }}>Total Invoices:</span> <span style={{ fontWeight: 700 }}>{previewData.summary.total_bills}</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: 'var(--bp-muted)' }}>Taxable Value:</span> <span style={{ fontWeight: 700 }}>₹{previewData.summary.taxable_value.toFixed(2)}</span></div>
@@ -490,7 +519,7 @@ export default function GstFilingConfirmation() {
                 </div>
               </div>
             </div>
-            <div style={{ padding: '12px 20px 16px', borderTop: '1px solid var(--bp-border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <div className="cf-foot" style={{ padding: '12px 20px 16px', borderTop: '1px solid var(--bp-border)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button 
                 onClick={() => setShowConfirmModal(false)}
                 className="bp-btn bp-btn-outline"

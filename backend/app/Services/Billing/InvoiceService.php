@@ -357,6 +357,14 @@ class InvoiceService
                 'currency' => $locked->currency,
                 'tax_deduction_type' => $locked->tax_deduction_type,
                 'tds_tcs_section_id' => $locked->tds_tcs_section_id,
+                'reference_document_id' => $locked->reference_document_id,
+                'reason_for_transportation' => $locked->reason_for_transportation,
+                'reason_for_transportation_other' => $locked->reason_for_transportation_other,
+                'vehicle_no' => $locked->vehicle_no,
+                'transporter_name' => $locked->transporter_name,
+                'eway_bill_no' => $locked->eway_bill_no,
+                'receiver_name' => $locked->receiver_name,
+                'receiver_signature_datetime' => $locked->receiver_signature_datetime,
             ];
 
             $mergedData = $data;
@@ -405,7 +413,9 @@ class InvoiceService
                 $tdsRate
             );
             $payload['issued_at'] = $locked->issued_at;
-            $payload['reference_document_id'] = null;
+            // Keep the stored link (e.g. a Credit/Debit Note's original invoice) and the shared PDF link.
+            $payload['reference_document_id'] = $locked->reference_document_id;
+            $payload['share_token'] = $locked->share_token ?: $payload['share_token'];
 
             // If terms or place_of_supply are explicitly null (or stored as null), prevent fallback to profile defaults
             if (array_key_exists('terms', $mergedData) && $mergedData['terms'] === null) {

@@ -481,8 +481,8 @@ class AdminBilling3BMigrationAndModelTest extends TestCase
         ]);
 
         // Boundary tests for FY quarters:
-        // 31 Mar 2026 -> 2026-Q4
-        $this->assertEquals('2026-Q4', AdminBillingLockService::formatFyQuarter(Carbon::parse('2026-03-31')));
+        // 31 Mar 2026 -> 2025-Q4 (key year = financial-year START year)
+        $this->assertEquals('2025-Q4', AdminBillingLockService::formatFyQuarter(Carbon::parse('2026-03-31')));
         // 01 Apr 2026 -> 2026-Q1
         $this->assertEquals('2026-Q1', AdminBillingLockService::formatFyQuarter(Carbon::parse('2026-04-01')));
         // 30 Jun 2026 -> 2026-Q1
@@ -495,10 +495,10 @@ class AdminBilling3BMigrationAndModelTest extends TestCase
         $this->assertEquals('2026-Q3', AdminBillingLockService::formatFyQuarter(Carbon::parse('2026-10-01')));
         // 31 Dec 2026 -> 2026-Q3
         $this->assertEquals('2026-Q3', AdminBillingLockService::formatFyQuarter(Carbon::parse('2026-12-31')));
-        // 01 Jan 2027 -> 2027-Q4
-        $this->assertEquals('2027-Q4', AdminBillingLockService::formatFyQuarter(Carbon::parse('2027-01-01')));
-        // 31 Mar 2027 -> 2027-Q4
-        $this->assertEquals('2027-Q4', AdminBillingLockService::formatFyQuarter(Carbon::parse('2027-03-31')));
+        // 01 Jan 2027 -> 2026-Q4
+        $this->assertEquals('2026-Q4', AdminBillingLockService::formatFyQuarter(Carbon::parse('2027-01-01')));
+        // 31 Mar 2027 -> 2026-Q4
+        $this->assertEquals('2026-Q4', AdminBillingLockService::formatFyQuarter(Carbon::parse('2027-03-31')));
 
         // Mark 2026-Q1 filed for CMP08
         ClientGstReturn::create([

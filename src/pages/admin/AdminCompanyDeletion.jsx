@@ -250,7 +250,7 @@ function DeletionHistory() {
   const perPage = 10;
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginTop: 28 }}>
+    <div className="cd-card" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden', marginTop: 28 }}>
       <div style={{ padding: '14px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 200 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
@@ -262,7 +262,7 @@ function DeletionHistory() {
       </div>
 
       {/* History filters */}
-      <div style={{ padding: '12px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="cd-filter cd-hfilter" style={{ padding: '12px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"
             style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)' }}>
@@ -309,9 +309,9 @@ function DeletionHistory() {
       </table>
 
       {total > 0 && (
-        <div style={{ padding: '12px 18px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="cd-bottom" style={{ padding: '12px 18px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 13, color: '#64748b' }}>Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}</span>
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div className="cfg-pager" style={{ display: 'flex', gap: 6 }}>
             <PgBtn disabled={page <= 1} onClick={() => load(page - 1)}>‹</PgBtn>
             {Array.from({ length: lastPage }, (_, i) => i + 1).map(p => (
               <PgBtn key={p} active={p === page} onClick={() => load(p)}>{p}</PgBtn>
@@ -381,7 +381,7 @@ export default function AdminCompanyDeletion() {
           <span>Settings</span><span>›</span>
           <span style={{ color: '#2563eb', fontWeight: 600 }}>Company Deletion</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div className="cd-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
           <div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#1e3a5f' }}>Company Deletion</div>
             <div style={{ fontSize: 13, color: '#64748b', marginTop: 3, maxWidth: 600 }}>
@@ -399,15 +399,15 @@ export default function AdminCompanyDeletion() {
       </div>
 
       {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+      <div className="cd-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
         {[
           { label: 'Total Deleted Companies\n(Till Date)', value: summary.total_deleted, bg: '#fef2f2', color: '#dc2626', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg> },
           { label: `Deleted This Financial Year\n(${fyLabel})`, value: summary.deleted_this_fy, bg: '#eff6ff', color: '#2563eb', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg> },
           { label: `Deleted This Month\n(${new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })})`, value: summary.deleted_this_month, bg: '#f0fdf4', color: '#16a34a', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg> },
           { label: 'Pending Deletion\n(Awaiting OTP)', value: summary.pending_deletion, bg: '#fff7ed', color: '#ea580c', icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg> },
         ].map(card => (
-          <div key={card.label} style={{ background: card.bg, borderRadius: 12, border: '1.5px solid rgba(0,0,0,0.05)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: card.color, flexShrink: 0 }}>
+          <div className="ss-card cd-card-stat" key={card.label} style={{ background: card.bg, borderRadius: 12, border: '1.5px solid rgba(0,0,0,0.05)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="ss-ic" style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: card.color, flexShrink: 0 }}>
               {card.icon}
             </div>
             <div>
@@ -419,7 +419,7 @@ export default function AdminCompanyDeletion() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      <div className="cd-filter" style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 240 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"
             style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)' }}>
@@ -445,7 +445,7 @@ export default function AdminCompanyDeletion() {
       </div>
 
       {/* Main table */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+      <div className="cd-card" style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
@@ -493,7 +493,7 @@ export default function AdminCompanyDeletion() {
         </table>
 
         {/* Bottom bar */}
-        <div style={{ padding: '12px 18px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="cd-bottom" style={{ padding: '12px 18px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 13, color: '#64748b' }}>{selected.size} company(ies) selected</span>
             {selected.size > 0 && (
@@ -504,7 +504,7 @@ export default function AdminCompanyDeletion() {
             )}
           </div>
           {total > 0 && (
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div className="cfg-pager" style={{ display: 'flex', gap: 6 }}>
               <PgBtn disabled={page <= 1} onClick={() => load(page - 1)}>‹</PgBtn>
               {Array.from({ length: lastPage }, (_, i) => i + 1).map(p => (
                 <PgBtn key={p} active={p === page} onClick={() => load(p)}>{p}</PgBtn>

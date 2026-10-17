@@ -47,37 +47,19 @@ class DashboardController extends Controller
         $inRange = fn ($q) => $q
             ->when($from, fn ($w) => $w->whereDate('created_at', '>=', $from))
             ->when($to, fn ($w) => $w->whereDate('created_at', '<=', $to));
-        $changeCounts = function (array $sections, bool $exclude = false) use ($inRange) {
-            $base = fn () => $inRange(ClientChangeRequest::query())
-                ->when($exclude, fn ($q) => $q->whereNotIn('section', $sections), fn ($q) => $q->whereIn('section', $sections));
-
-            return [
-                'total' => $base()->count(),
-                'pending' => $base()->where('status', 'pending')->count(),
-                'approved' => $base()->where('status', 'approved')->count(),
-                'rejected' => $base()->where('status', 'rejected')->count(),
-            ];
-        };
         $fromFeed = fn (array $types) => [
             'total' => array_sum(array_map(fn ($t) => $feed[$t]['total'], $types)),
             'pending' => array_sum(array_map(fn ($t) => $feed[$t]['pending'], $types)),
             'approved' => array_sum(array_map(fn ($t) => $feed[$t]['completed'], $types)),
             'rejected' => array_sum(array_map(fn ($t) => $feed[$t]['rejected'], $types)),
         ];
-        $merge = fn (array ...$parts) => array_map(fn ($k) => array_sum(array_column($parts, $k)), array_combine(['total', 'pending', 'approved', 'rejected'], ['total', 'pending', 'approved', 'rejected']));
 
-        $docEdits = [
-            'total' => $inRange(DocumentEditRequest::query())->count(),
-            'pending' => $inRange(DocumentEditRequest::query())->where('status', 'pending')->count(),
-            'approved' => $inRange(DocumentEditRequest::query())->where('status', 'approved')->count(),
-            'rejected' => $inRange(DocumentEditRequest::query())->where('status', 'rejected')->count(),
-        ];
-
+        // One source for the Dashboard and the Request page, so both always show the same numbers.
         $profileC = $fromFeed(['profile_update']);
-        $docC = $merge($fromFeed(['document_change']), $docEdits);
-        $bankC = $merge($fromFeed(['bank_details']), $changeCounts(['bank']));
-        $invC = $merge($fromFeed(['invoice_setting']), $changeCounts(['invoice_settings']));
-        $otherC = $merge($fromFeed(['other', 'invoice_amendment']), $changeCounts(['bank', 'invoice_settings'], true));
+        $docC = $fromFeed(['document_change']);
+        $bankC = $fromFeed(['bank_details']);
+        $invC = $fromFeed(['invoice_setting']);
+        $otherC = $fromFeed(['other', 'invoice_amendment']);
 
         [$docTotal, $docPending, $docApproved, $docRejected] = array_values($docC);
         [$bankTotal, $bankPending, $bankApproved, $bankRejected] = array_values($bankC);
@@ -103,7 +85,7 @@ class DashboardController extends Controller
                 'pending' => $docPending,
                 'approved' => $docApproved,
                 'rejected' => $docRejected,
-                'action_url' => '/admin/edit-requests',
+                'action_url' => '/admin/requests',
             ],
             [
                 'key' => 'bank_details',
@@ -113,7 +95,7 @@ class DashboardController extends Controller
                 'pending' => $bankPending,
                 'approved' => $bankApproved,
                 'rejected' => $bankRejected,
-                'action_url' => '/admin/pending-approval',
+                'action_url' => '/admin/requests',
             ],
             [
                 'key' => 'invoice_settings',
@@ -123,7 +105,7 @@ class DashboardController extends Controller
                 'pending' => $invPending,
                 'approved' => $invApproved,
                 'rejected' => $invRejected,
-                'action_url' => '/admin/pending-approval',
+                'action_url' => '/admin/requests',
             ],
             [
                 'key' => 'others',
@@ -133,7 +115,7 @@ class DashboardController extends Controller
                 'pending' => $otherPending,
                 'approved' => $otherApproved,
                 'rejected' => $otherRejected,
-                'action_url' => '/admin/pending-approval',
+                'action_url' => '/admin/requests',
             ],
         ];
 

@@ -169,7 +169,7 @@ class GstPeriodService
         $formatStatus = function (Carbon $dueDate) use ($today) {
             $dueDay = $dueDate->copy()->startOfDay();
             if ($dueDay->lt($today)) {
-                $days = $today->diffInDays($dueDay);
+                $days = (int) $today->diffInDays($dueDay);
                 return [
                     'label' => 'Overdue',
                     'type' => 'overdue',
@@ -182,7 +182,7 @@ class GstPeriodService
                     'days' => 0,
                 ];
             } else {
-                $days = $today->diffInDays($dueDay);
+                $days = (int) $today->diffInDays($dueDay);
                 return [
                     'label' => "In {$days} " . ($days === 1 ? 'Day' : 'Days'),
                     'type' => 'upcoming',

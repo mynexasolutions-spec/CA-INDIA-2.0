@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class ClientChangeRequest extends Model
 {
+    /** Files staged by the client before they press "Submit for Approval" — never shown to the admin. */
+    public const STATUS_DRAFT = 'draft';
     public const STATUS_PENDING = 'pending';
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
@@ -15,7 +17,8 @@ class ClientChangeRequest extends Model
     public const SECTION_BANK = 'bank';
     public const SECTION_INVOICE_SETTINGS = 'invoice_settings';
     public const SECTION_NUMBERING = 'numbering';
-    public const SECTIONS = [self::SECTION_BRANDING, self::SECTION_BANK, self::SECTION_INVOICE_SETTINGS, self::SECTION_NUMBERING];
+    public const SECTION_LAYOUT = 'layout';
+    public const SECTIONS = [self::SECTION_BRANDING, self::SECTION_BANK, self::SECTION_INVOICE_SETTINGS, self::SECTION_NUMBERING, self::SECTION_LAYOUT];
 
     public const TEXT_FIELDS = [
         'bank_name',
@@ -32,6 +35,7 @@ class ClientChangeRequest extends Model
         'credit_note_prefix',
         'debit_note_prefix',
         'quotation_prefix',
+        'delivery_challan_prefix',
         'terms_conditions',
     ];
 
@@ -45,13 +49,17 @@ class ClientChangeRequest extends Model
         'swift_code' => self::SECTION_BANK,
         'account_type' => self::SECTION_BANK,
         'upi_id' => self::SECTION_BANK,
-        'signatory_name' => self::SECTION_INVOICE_SETTINGS,
-        'terms_conditions' => self::SECTION_INVOICE_SETTINGS,
+        // Logo, signature, seal, signatory name and T&C are ONE Invoice Branding request.
+        'signatory_name' => self::SECTION_BRANDING,
+        'terms_conditions' => self::SECTION_BRANDING,
         'invoice_prefix' => self::SECTION_NUMBERING,
         'bill_of_supply_prefix' => self::SECTION_NUMBERING,
         'credit_note_prefix' => self::SECTION_NUMBERING,
         'debit_note_prefix' => self::SECTION_NUMBERING,
         'quotation_prefix' => self::SECTION_NUMBERING,
+        'delivery_challan_prefix' => self::SECTION_NUMBERING,
+        'layout_id' => self::SECTION_LAYOUT,
+        'colour_scheme' => self::SECTION_LAYOUT,
     ];
 
     public const ASSET_FIELDS = [
