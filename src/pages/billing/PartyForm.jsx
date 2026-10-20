@@ -22,10 +22,27 @@ function SaveIcon() {
   return <svg {...ICON_PROPS}><path d="M5 4h11l3 3v13H5z" /><path d="M8 4v5h8V4M8 14h8v6H8z" /></svg>;
 }
 
-function Field({ label, required, help, style, children }) {
+const SEC_ICONS = {
+  gst: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><polyline points="9 12 11 14 15 10" /></>,
+  biz: <><rect x="3" y="7" width="18" height="14" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="3" y1="13" x2="21" y2="13" /></>,
+  contact: <><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z" /></>,
+  addr: <><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></>,
+};
+
+function SecHead({ icon, title, sub }) {
+  return (
+    <div className="pf-sec">
+      <span className="pf-sec-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{SEC_ICONS[icon]}</svg></span>
+      <span className="pf-sec-t">{title}{sub && <small>{sub}</small>}</span>
+      <span className="pf-sec-line" />
+    </div>
+  );
+}
+
+function Field({ label, required, help, style, badge, children }) {
   return (
     <label style={style}>
-      <strong className="bp-field-title">{label}{required && ' *'}</strong>
+      <strong className="bp-field-title">{label}{required && ' *'}{badge && <span className="pf-auto-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>Auto-filled</span>}</strong>
       {children}
       {help && <span style={{ display: 'block', fontSize: 11, color: 'var(--bp-muted)', marginTop: 5 }}>{help}</span>}
     </label>
@@ -175,6 +192,7 @@ export default function PartyForm() {
         {err && <p className="bp-alert bp-alert-error">{err}</p>}
 
         <div className="bp-form two">
+          <SecHead icon="gst" title="GST Details" sub="Registration type and GSTIN" />
           <Field label="GST Registration Status" required>
             <div className="bp-gst-radio-row">
               <label className="bp-gst-radio" style={{ alignItems: 'flex-start' }}>
@@ -197,44 +215,55 @@ export default function PartyForm() {
           {form.gst_status === 'registered' ? (
             <Field label="GSTIN" required help="Enter 15 digit GST Identification Number">
               <div className="pf-gstin-row" style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
-                <input
-                  className="bp-input"
-                  value={form.gstin}
-                  maxLength={15}
-                  placeholder="E.g. 27ABCDE1234F1Z5"
-                  style={{ textTransform: 'uppercase', flex: 1, borderColor: gstinVerified ? '#16a34a' : undefined }}
-                  onChange={(e) => { set('gstin', e.target.value.toUpperCase()); setGstinError(''); setGstinVerified(false); setGstinFetchErr(''); }}
-                  required
-                />
-                <button type="button" className="pf-fetch" onClick={fetchGstin} disabled={gstinFetching}
+                <div className={`pf-gin${gstinVerified ? ' ok' : gstinFetchErr ? ' bad' : GSTIN_REGEX.test(form.gstin || '') ? ' valid' : ''}`}>
+                  <input
+                    className="bp-input"
+                    value={form.gstin}
+                    maxLength={15}
+                    placeholder="E.g. 27ABCDE1234F1Z5"
+                    style={{ textTransform: 'uppercase' }}
+                    onChange={(e) => { set('gstin', e.target.value.toUpperCase()); setGstinError(''); setGstinVerified(false); setGstinFetchErr(''); }}
+                    required
+                  />
+                  <span className="pf-gin-count">{(form.gstin || '').length}/15</span>
+                  <span className="pf-gin-bar"><i style={{ width: `${Math.min(100, ((form.gstin || '').length / 15) * 100)}%` }} /></span>
+                </div>
+                <button type="button" className={`pf-fetch${gstinFetching ? ' loading' : ''}`} onClick={fetchGstin} disabled={gstinFetching}
                   style={{ padding: '0 16px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: gstinFetching ? 'wait' : 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
                   {gstinFetching
-                    ? <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin 1s linear infinite' }}><path d="M21 12a9 9 0 1 1-2.6-6.4"/></svg> Fetching…</>
-                    : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Fetch GST Details</>}
+                    ? <><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: 'pf-spin .8s linear infinite' }}><path d="M21 12a9 9 0 1 1-2.6-6.4"/></svg> Fetching…</>
+                    : <><svg className="pf-fetch-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Fetch GST Details</>}
                 </button>
-                <div className="pf-gstin-note" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: '#15803d', background: '#e8f8ee', border: '1px solid #bbf0cf', borderRadius: 10, padding: '8px 12px', fontWeight: 600, maxWidth: 190, lineHeight: 1.35 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="#16a34a" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="11" x2="12" y2="16" stroke="white" strokeWidth="2.4" strokeLinecap="round"/><line x1="12" y1="7.5" x2="12.01" y2="7.5" stroke="white" strokeWidth="2.6" strokeLinecap="round"/></svg>
+                {!gstinFetchErr && !gstinVerified && <div className="pf-gstin-note" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: '#15803d', background: '#e8f8ee', border: '1px solid #bbf0cf', borderRadius: 10, padding: '8px 12px', fontWeight: 600, maxWidth: 190, lineHeight: 1.35 }}>
+                  <svg className="pf-note-ic" width="16" height="16" viewBox="0 0 24 24" fill="#16a34a" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="11" x2="12" y2="16" stroke="white" strokeWidth="2.4" strokeLinecap="round"/><line x1="12" y1="7.5" x2="12.01" y2="7.5" stroke="white" strokeWidth="2.6" strokeLinecap="round"/></svg>
                   GSTIN is mandatory for Registered (B2B) customers.
-                </div>
+                </div>}
               </div>
               {gstinVerified && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 12, fontWeight: 700, color: '#16a34a' }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                  GSTIN Verified — Legal Name, State and Address were filled in below. Please review before saving.
+                <div className="pf-msg pf-msg-ok">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
+                  <span>GSTIN Verified — Legal Name, State and Address were filled in below. Please review before saving.</span>
                 </div>
               )}
-              {gstinFetchErr && <span style={{ display: 'block', fontSize: 12, color: '#dc2626', marginTop: 6 }}>{gstinFetchErr}</span>}
+              {gstinFetchErr && (
+                <div key={gstinFetchErr} className="pf-msg pf-msg-err">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="#dc2626" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><rect x="11" y="6" width="2" height="7" fill="#fff"/><rect x="11" y="15" width="2" height="2.4" fill="#fff"/></svg>
+                  <span>{gstinFetchErr}</span>
+                </div>
+              )}
               {gstinError && <span className="bp-gstin-error">{gstinError}</span>}
             </Field>
           ) : <div />}
 
-          <Field label="Company Name" required help={tradeName ? `Legal name of the company · Trade name: ${tradeName}` : 'Enter the legal name of the company'}>
+          <SecHead icon="biz" title="Business Information" sub="Legal name and signatory" />
+          <Field label="Company Name" required badge={gstinVerified && Boolean(form.name)} help={tradeName ? `Legal name of the company · Trade name: ${tradeName}` : 'Enter the legal name of the company'}>
             <input className="bp-input" placeholder="Enter company name" value={form.name} onChange={(e) => set('name', e.target.value)} required />
           </Field>
           <Field label="Proprietor / Authorised Signatory" required help="Enter the name of proprietor or authorised signatory">
             <input className="bp-input" placeholder="Enter proprietor / authorised signatory name" value={form.proprietor_name} onChange={(e) => set('proprietor_name', e.target.value)} required />
           </Field>
 
+          <SecHead icon="contact" title="Contact Information" sub="How to reach this company" />
           <Field label="Contact Person" help="Contact Detail of Proprietor/Authorised Signatory">
             <input className="bp-input" placeholder="Enter contact person name" value={form.contact_person} onChange={(e) => set('contact_person', e.target.value)} />
           </Field>
@@ -245,11 +274,12 @@ export default function PartyForm() {
           <Field label="Email" help="Company Official Email ID">
             <input className="bp-input" type="email" placeholder="Enter email address" value={form.email} onChange={(e) => set('email', e.target.value)} />
           </Field>
-          <Field label="State" required help="Select the state">
+          <Field label="State" required badge={gstinVerified && Boolean(form.state_code)} help="Select the state">
             <StateSelect value={form.state_code} onChange={(code, name) => setForm((f) => ({ ...f, state_code: code, state: name }))} required />
           </Field>
 
-          <Field label="Billing Address" required help={`Registered / billing address of the company (${(form.billing_address || '').length}/100)`} style={{ gridColumn: '1 / -1' }}>
+          <SecHead icon="addr" title="Address Details" sub="Billing, branch and shipping" />
+          <Field label="Billing Address" required badge={gstinVerified && Boolean(form.billing_address)} help={`Registered / billing address of the company (${(form.billing_address || '').length}/100)`} style={{ gridColumn: '1 / -1' }}>
             <input
               className="bp-input"
               placeholder="Enter complete billing address"
@@ -276,7 +306,7 @@ export default function PartyForm() {
           </Field>
         </div>
 
-        <div className="bp-actions" style={{ marginTop: 20 }}>
+        <div className="bp-actions pf-actions" style={{ marginTop: 20 }}>
           <button type="submit" className="bp-btn bp-btn-blue" disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <SaveIcon /> {busy ? 'Saving…' : editing ? 'Save Changes' : 'Save Company'}
           </button>

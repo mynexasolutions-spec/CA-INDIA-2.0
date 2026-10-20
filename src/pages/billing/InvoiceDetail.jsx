@@ -5,10 +5,16 @@ import { useAuth } from '../../auth/AuthContext';
 import { LoadingBlock } from '../../components/Spinner';
 import CancelDocumentModal from './CancelDocumentModal';
 import { MarkAsPaidModal, UnmarkAsPaidModal } from './PaymentModals';
-import { billingDocEditPath, billingDocPath, docTypeLabel, formatDMY, formatDMYTime, reasonForTransportLabel } from './billingUtils';
+import { billingDocEditPath, billingDocPath, docTypeLabel, formatDMY, formatDMYTime, moneyFixed, reasonForTransportLabel } from './billingUtils';
 
 function money(n) {
   return `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+}
+
+/** Item-table amounts: whole numbers stay clean (750), fractional ones always show 2 decimals (5,000.80, never 5,000.8). */
+function moneyItem(n) {
+  const v = Number(n || 0);
+  return Number.isInteger(v) ? money(v) : moneyFixed(v);
 }
 
 /** Always exactly 2 decimal places, however many were entered/stored (5 -> 5.00, 5.567 -> 5.57). */
@@ -518,9 +524,9 @@ export default function InvoiceDetail() {
                 <td>{l.hsn_sac}</td>
                 <td>{fmtQty(l.qty)}</td>
                 <td>{l.unit}</td>
-                <td>{money(l.rate)}</td>
+                <td>{moneyItem(l.rate)}</td>
                 <td>{Number(l.gst_rate || 0)}%</td>
-                <td className="bp-doc-total">{money(l.taxable_amount)}</td>
+                <td className="bp-doc-total">{moneyItem(l.taxable_amount)}</td>
               </tr>
             ))}
             {!doc.line_items?.length && <tr><td colSpan={8} className="bp-table-empty">No line items</td></tr>}
@@ -533,33 +539,33 @@ export default function InvoiceDetail() {
           {/* Disc.% is removed from item entry (Invoice Item Table spec §3) — new documents
               never carry a discount, so this row only shows for older documents that do. */}
           {Number(doc.discount_total) > 0 && (
-            <div className="dv-row"><span>Discount</span><strong>{money(doc.discount_total)}</strong></div>
+            <div className="dv-row"><span>Discount</span><strong>{moneyFixed(doc.discount_total)}</strong></div>
           )}
-          <div className="dv-row"><span>Total Taxable Value</span><strong>{money(doc.taxable_amount)}</strong></div>
+          <div className="dv-row"><span>Total Taxable Value</span><strong>{moneyFixed(doc.taxable_amount)}</strong></div>
           {doc.is_inter_state ? (
-            <div className="dv-row"><span>IGST</span><strong>{money(doc.igst_amount)}</strong></div>
+            <div className="dv-row"><span>IGST</span><strong>{moneyFixed(doc.igst_amount)}</strong></div>
           ) : (
             <>
-              <div className="dv-row"><span>CGST</span><strong>{money(doc.cgst_amount)}</strong></div>
-              <div className="dv-row"><span>SGST/UTGST</span><strong>{money(doc.sgst_amount)}</strong></div>
+              <div className="dv-row"><span>CGST</span><strong>{moneyFixed(doc.cgst_amount)}</strong></div>
+              <div className="dv-row"><span>SGST/UTGST</span><strong>{moneyFixed(doc.sgst_amount)}</strong></div>
             </>
           )}
           {doc.tax_deduction_type ? (
             <>
-              <div className="dv-row"><span>Total Value (Post GST)</span><strong>{money(doc.total_amount)}</strong></div>
+              <div className="dv-row"><span>Total Value (Post GST)</span><strong>{moneyFixed(doc.total_amount)}</strong></div>
               <div className="dv-row" style={{ color: doc.tax_deduction_type === 'tds' ? 'var(--bp-red)' : 'var(--bp-green)' }}>
                 <span>
                   {doc.tax_deduction_type === 'tds' ? 'Less: TDS' : 'Add: TCS'}
                   {doc.tds_tcs_section ? ` (${Number(doc.tds_tcs_rate).toFixed(2)}% u/s ${doc.tds_tcs_section.code})` : ''}
                 </span>
-                <strong>{money(doc.tds_tcs_amount)}</strong>
+                <strong>{moneyFixed(doc.tds_tcs_amount)}</strong>
               </div>
             </>
           ) : (
             <div className="dv-row"><span>Round Off</span><strong>{money(doc.round_off)}</strong></div>
           )}
         </div>
-        <div className="dv-grand"><span>Grand Total</span><strong>{money(doc.grand_total || doc.total_amount)}</strong></div>
+        <div className="dv-grand"><span>Grand Total</span><strong>{moneyFixed(doc.grand_total || doc.total_amount)}</strong></div>
         {doc.amount_in_words && (
           <div className="dv-words">
             <small>Amount in Words</small>

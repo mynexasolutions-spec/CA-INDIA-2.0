@@ -26,9 +26,12 @@ class DocumentCanvasHelper
         int $borderRadius = 11,
         bool $drawFrame = true,
         int $rightInset = 22,
-        bool $mutedFooter = false
+        bool $mutedFooter = false,
+        bool $classicFooter = false
     ): void {
-        $font = $fontMetrics->getFont('DejaVu Sans');
+        // Classic boxed form (Layout 1): the footer is set in the same black serif as the form itself.
+        $font = $fontMetrics->getFont($classicFooter ? 'Times' : 'DejaVu Sans');
+        $leftInset = $classicFooter ? 19 : 22;
         $frameRgb = $theme['rgb'] ?? [0.247, 0.275, 0.314];
         $watermarkText = trim((string) $watermarkText);
 
@@ -40,7 +43,9 @@ class DocumentCanvasHelper
             $borderRadius,
             $drawFrame,
             $rightInset,
-            $mutedFooter
+            $mutedFooter,
+            $classicFooter,
+            $leftInset
         ) {
             // 1. Draw outer frame on canvas (rounded or square) if enabled
             if ($drawFrame) {
@@ -82,8 +87,11 @@ class DocumentCanvasHelper
 
             // 2. Footer outside frame: darker and slightly larger (tuned)
             $y = $canvas->get_height() - 20;
-            $fontSize = 9.2;
-            $darkColor = $mutedFooter ? [0.39, 0.45, 0.55] : [0.18, 0.22, 0.28];
+            $fontSize = $classicFooter ? 9.6 : 9.2;
+            $darkColor = $classicFooter ? [0.07, 0.07, 0.07] : ($mutedFooter ? [0.39, 0.45, 0.55] : [0.18, 0.22, 0.28]);
+            if ($classicFooter) {
+                $frameRgb = $darkColor; // the website name is plain black too, as on the printed form
+            }
 
             // Render watermark text ONLY when $showWatermark is true AND watermark text is not empty
             if ($showWatermark && $watermarkText !== '') {
@@ -92,12 +100,12 @@ class DocumentCanvasHelper
                 $lWidth = $fontMetrics->getTextWidth($watermarkText, $font, $fontSize);
                 $lHeight = $fontMetrics->getFontHeight($font, $fontSize);
 
-                $canvas->text(22, $y, $prefix, $font, $fontSize, $darkColor);
-                $canvas->text(22 + $pWidth, $y, $watermarkText, $font, $fontSize, $frameRgb);
+                $canvas->text($leftInset, $y, $prefix, $font, $fontSize, $darkColor);
+                $canvas->text($leftInset + $pWidth, $y, $watermarkText, $font, $fontSize, $frameRgb);
 
                 // Add clickable link if it looks like a URL or domain
                 $linkUrl = preg_match('#^https?://#i', $watermarkText) ? $watermarkText : 'https://' . $watermarkText;
-                $canvas->add_link($linkUrl, 22 + $pWidth, $y, $lWidth, $lHeight);
+                $canvas->add_link($linkUrl, $leftInset + $pWidth, $y, $lWidth, $lHeight);
             }
 
             // Page X of Y (Always displayed on the right)
@@ -131,8 +139,9 @@ class DocumentCanvasHelper
             $layoutId === 3 ? 16 : ($layoutId === 4 ? 11 : 0),
             $layoutId === 3,
             // keep "Page x of y" clear of the bottom-right corner ribbon
-            ($classic && ($theme['key'] ?? '') !== 'simple') ? ($layoutId === 2 ? 80 : 64) : 22,
-            true
+            ($classic && ($theme['key'] ?? '') !== 'simple') ? ($layoutId === 2 ? 80 : 74) : ($classic ? 19 : 22),
+            true,
+            $classic // Layouts 1 and 2 share the black serif footer of the printed form
         );
 
         if ($classic) {
@@ -152,13 +161,14 @@ class DocumentCanvasHelper
             return;
         }
 
-        $dark = $theme['rgb'];
-        $light = array_map(fn ($c) => $c + (1 - $c) * 0.55, $dark);
+        $dark = $theme['ribbon_dark'] ?? $theme['rgb'];
+        $light = $theme['ribbon_light'] ?? array_map(fn ($c) => $c + (1 - $c) * 0.55, $dark);
 
         // Shapes are defined from the top-left corner; the bottom-right corner is the same shape rotated 180 degrees.
+        // Compact (Layout 1): a dark triangle plus a lighter stripe parallel to its slanted edge, as on the approved form.
         $shapes = $style === 'large'
             ? [[$light, [0, 0, 96, 0, 0, 76]], [$dark, [0, 0, 68, 0, 0, 54]]]
-            : [[$light, [38, 0, 56, 0, 0, 56, 0, 38]], [$dark, [0, 0, 30, 0, 0, 30]]];
+            : [[$light, [58, 0, 76, 0, 0, 59, 0, 45]], [$dark, [0, 0, 48, 0, 0, 37]]];
 
         // The large style keeps its full size top-left and a smaller ribbon bottom-right, clear of the signature.
         $bottomScale = $style === 'large' ? 0.85 : 1.0;

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, getAuthToken } from '../../api/client';
 import { LoadingBlock } from '../../components/Spinner';
 import BillingDateFilters from './BillingDateFilters';
-import { currentFyRange, docTypeLabel, money } from './billingUtils';
+import { currentFyRange, docTypeLabel, money, formatDMY } from './billingUtils';
 import GstSummaryMatrix, { resolveGstMatrix } from './GstSummaryMatrix';
 import PartyWiseDetailTable from './PartyWiseDetailTable';
 
@@ -11,7 +11,7 @@ import PartyWiseDetailTable from './PartyWiseDetailTable';
 const REPORTS = [];
 
 function fmtDate(v) {
-  return v ? String(v).slice(0, 10) : '—';
+  return formatDMY(v);
 }
 
 function rowsFrom(payload) {

@@ -228,13 +228,20 @@ class Layout1ProductionRendererTest extends TestCase
             ]);
         }
 
+        // createDoc() already loaded the line_items relation; reload so the 19 rows added above are really rendered.
+        $doc = $doc->fresh();
+        $this->assertCount(20, $doc->lineItems);
+
         $path = $this->invoiceService->generatePdf($doc);
         $this->assertTrue(Storage::disk('public')->exists($path));
 
         $fullPath = Storage::disk('public')->path($path);
-        // Verify via DomPDF/PDF parser that document has > 1 page
+        // Count the real page objects (file size is a poor proxy: it changes with which fonts get embedded).
         $pdfBytes = file_get_contents($fullPath);
         $this->assertStringContainsString('/Count', $pdfBytes);
-        $this->assertGreaterThan(50000, strlen($pdfBytes));
+        // The page tree's /Count is the page total.
+        preg_match('/\/Type\s*\/Pages\b.*?\/Count\s+(\d+)/s', $pdfBytes, $m);
+        $pages = (int) ($m[1] ?? 0);
+        $this->assertGreaterThanOrEqual(2, $pages, "Expected the 20-item invoice to span 2+ pages, found {$pages}.");
     }
 }

@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import fs from 'fs'
+import path from 'path'
 
 // Vite's default build emits the entry <script type="module"> BEFORE its own
 // <link rel="stylesheet">, since the CSS is only discovered transitively (imported
@@ -28,9 +30,37 @@ function cssBeforeScripts() {
   };
 }
 
+// Copies the pdfjs worker file into the build output so it can be
+// referenced as a static URL (/pdf.worker.min.mjs) without using the
+// ?url import syntax that Rolldown (Vite 6) cannot resolve from node_modules.
+function pdfWorkerPlugin() {
+  const workerPath = path.resolve('node_modules/pdfjs-dist/build/pdf.worker.min.mjs');
+  return {
+    name: 'pdf-worker-copy',
+    // The dev server has no build step, so serve the same file at the same URL while developing.
+    configureServer(server) {
+      server.middlewares.use('/pdf.worker.min.mjs', (_req, res, next) => {
+        if (!fs.existsSync(workerPath)) return next();
+        res.setHeader('Content-Type', 'text/javascript');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.end(fs.readFileSync(workerPath));
+      });
+    },
+    generateBundle() {
+      if (fs.existsSync(workerPath)) {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'pdf.worker.min.mjs',
+          source: fs.readFileSync(workerPath, 'utf8'),
+        });
+      }
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), cssBeforeScripts()],
+  plugins: [react(), cssBeforeScripts(), pdfWorkerPlugin()],
   server: {
     proxy: {
       '/api': {

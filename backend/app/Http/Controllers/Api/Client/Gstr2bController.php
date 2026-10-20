@@ -305,22 +305,107 @@ class Gstr2bController extends Controller
         return $d;
     }
 
+    /** A date inside the tax period for the template's worked example: the 15th of the month (first month of a quarter). */
+    private static function sampleDateForPeriod(string $period): Carbon
+    {
+        if (preg_match('/^(\d{4})-Q([1-4])$/', $period, $m) === 1) {
+            // Quarter keys are fiscal: Q1 Apr–Jun, Q2 Jul–Sep, Q3 Oct–Dec, Q4 Jan–Mar of the following year.
+            $month = [1 => 4, 2 => 7, 3 => 10, 4 => 1][(int) $m[2]];
+            $year = (int) $m[1] + ((int) $m[2] === 4 ? 1 : 0);
+
+            return Carbon::create($year, $month, 15);
+        }
+        if (preg_match('/^(\d{4})-(\d{2})/', $period, $m) === 1) {
+            return Carbon::create((int) $m[1], (int) $m[2], 15);
+        }
+
+        return Carbon::now()->day(15);
+    }
+
     /** The predefined Excel template the client fills in and uploads. */
     public function projectedTemplate(Request $request, string $period)
     {
         $this->profileId($request);
 
+        // Data sheet: headings only (a sample row would be imported if left in), with date/number formats and
+        // validation on the first 500 rows. How-to and a worked example live on a separate "Instructions" sheet.
+        // Headings are matched by the importer after stripping punctuation, so "(₹)" / "*" are cosmetic.
         $sheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $ws = $sheet->getActiveSheet();
         $ws->setTitle('Projected ITC');
-        $ws->fromArray(self::TEMPLATE_HEADINGS, null, 'A1');
-        $ws->fromArray([['2026-08-15', 'INV-001', 'ABC Traders Pvt Ltd', '27ABCDE1234F1Z5', 10000, 0, 900, 900, 1800]], null, 'A2');
-        $ws->getStyle('A1:I1')->getFont()->setBold(true);
-        $ws->getStyle('A1:I1')->getFill()->setFillType('solid')->getStartColor()->setRGB('E8F0FE');
-        foreach (range('A', 'I') as $col) {
-            $ws->getColumnDimension($col)->setWidth(20);
+        $headings = ['Invoice Date *', 'Invoice No. *', 'Party Name *', 'GSTIN *', 'Taxable Value (₹) *', 'IGST (₹)', 'CGST (₹)', 'SGST/UTGST (₹)', 'ITC Amount (₹)'];
+        $ws->fromArray($headings, null, 'A1');
+        $last = 501;
+
+        $ws->getStyle('A1:I1')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
+            'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true],
+            'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '0F2A5F']],
+            'borders' => ['allBorders' => ['borderStyle' => 'thin', 'color' => ['rgb' => '3B5A94']]],
+        ]);
+        // Optional columns (IGST … ITC Amount) get a lighter blue so required ones stand out.
+        $ws->getStyle('F1:I1')->getFill()->getStartColor()->setRGB('2563EB');
+        $ws->getRowDimension(1)->setRowHeight(32);
+        foreach (['A' => 16, 'B' => 18, 'C' => 32, 'D' => 20, 'E' => 20, 'F' => 14, 'G' => 14, 'H' => 18, 'I' => 18] as $col => $w) {
+            $ws->getColumnDimension($col)->setWidth($w);
         }
-        $ws->setCellValue('A4', 'Notes: Invoice Date, Invoice No., Party Name, GSTIN and Taxable Value are required. Fill either IGST or CGST + SGST/UTGST. ITC Amount is optional (defaults to IGST + CGST + SGST). Delete this sample row and these notes before uploading.');
+        $ws->freezePane('A2');
+
+        $ws->getStyle("A2:A{$last}")->getNumberFormat()->setFormatCode('dd/mm/yyyy');
+        $ws->getStyle("B2:D{$last}")->getNumberFormat()->setFormatCode('@');
+        $ws->getStyle("E2:I{$last}")->getNumberFormat()->setFormatCode('#,##0.00');
+        $ws->getStyle("A2:A{$last}")->getAlignment()->setHorizontal('center');
+        $ws->getStyle("D2:D{$last}")->getFont()->setBold(true);
+        $ws->getStyle("A2:I{$last}")->getBorders()->getAllBorders()->setBorderStyle('thin')->getColor()->setRGB('D6E3F8');
+
+        $rule = function (string $range, \PhpOffice\PhpSpreadsheet\Cell\DataValidation $v, string $title, string $msg) use ($ws) {
+            $v->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP)
+                ->setAllowBlank(true)->setShowErrorMessage(true)->setErrorTitle($title)->setError($msg);
+            $ws->setDataValidation($range, $v);
+        };
+        $rule("A2:A{$last}", (new \PhpOffice\PhpSpreadsheet\Cell\DataValidation())
+            ->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_DATE)
+            ->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_GREATERTHAN)->setFormula1('36526'),
+            'Invalid date', 'Enter a valid date as DD/MM/YYYY, e.g. 15/08/2026.');
+        $rule("D2:D{$last}", (new \PhpOffice\PhpSpreadsheet\Cell\DataValidation())
+            ->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_TEXTLENGTH)
+            ->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_EQUAL)->setFormula1('15'),
+            'Invalid GSTIN', 'GSTIN must be exactly 15 characters, e.g. 27ABCDE1234F1Z5.');
+        $rule("E2:I{$last}", (new \PhpOffice\PhpSpreadsheet\Cell\DataValidation())
+            ->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_DECIMAL)
+            ->setOperator(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::OPERATOR_GREATERTHANOREQUAL)->setFormula1('0'),
+            'Invalid amount', 'Enter a number of 0 or more.');
+
+        // Instructions sit on the same sheet, in column K beside the data (column J is a spacer). The importer reads
+        // only the template's own columns, so this text is never mistaken for an invoice row.
+        $sample = self::sampleDateForPeriod($period)->format('d/m/Y');
+        $notes = [
+            'HOW TO FILL THIS TEMPLATE',
+            '1. Enter one invoice per row in columns A to I, starting from row 2. Do not change the headings.',
+            '2. Required (marked *): Invoice Date, Invoice No., Party Name, GSTIN and Taxable Value.',
+            '3. Invoice Date as DD/MM/YYYY. GSTIN must be exactly 15 characters.',
+            '4. Tax: fill either IGST (inter-state) OR CGST + SGST/UTGST (intra-state), never both.',
+            '5. ITC Amount is optional. If left blank it is IGST + CGST + SGST/UTGST.',
+            '6. Projected ITC is for your internal planning only. It is not final and is not used for GST filing.',
+            '',
+            'EXAMPLE (one row):',
+            "{$sample}  |  INV-001  |  ABC Traders Pvt Ltd  |  27ABCDE1234F1Z5  |  10,000.00  |  IGST 0  |  CGST 900  |  SGST 900  |  ITC 1,800.00",
+        ];
+        foreach ($notes as $i => $text) {
+            $ws->setCellValue('K'.($i + 1), $text);
+        }
+        $ws->getColumnDimension('J')->setWidth(4);
+        $ws->getColumnDimension('K')->setWidth(98);
+        $ws->getStyle('K1:K10')->applyFromArray([
+            'font' => ['color' => ['rgb' => '334155'], 'size' => 10.5],
+            'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => 'F3F8FF']],
+            'alignment' => ['horizontal' => 'left', 'vertical' => 'center', 'wrapText' => false],
+        ]);
+        $ws->getStyle('K1')->applyFromArray(['font' => ['bold' => true, 'size' => 12, 'color' => ['rgb' => '0F2A5F']]]);
+        $ws->getStyle('K9')->getFont()->setBold(true)->getColor()->setRGB('1D4ED8');
+        $ws->getStyle('K10')->getFont()->setBold(true)->getColor()->setRGB('0F2A5F');
+        $ws->getStyle('K1:K10')->getNumberFormat()->setFormatCode('@');
+        $sheet->setActiveSheetIndex(0);
 
         $tmp = tempnam(sys_get_temp_dir(), 'pitc');
         (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($sheet))->save($tmp);
@@ -340,7 +425,7 @@ class Gstr2bController extends Controller
 
         try {
             $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($request->file('file')->getRealPath());
-            $raw = $book->getActiveSheet()->toArray(null, true, false, false);
+            $raw = ($book->getSheetByName('Projected ITC') ?? $book->getActiveSheet())->toArray(null, true, false, false);
         } catch (\Throwable $e) {
             return response()->json(['message' => 'The file could not be read. Please upload the Excel template without changing its columns.'], 422);
         }
@@ -357,12 +442,18 @@ class Gstr2bController extends Controller
 
         $fy = $request->input('financial_year') ?: self::fyForPeriod($period);
 
+        // Only the template's own columns decide whether a row has data — the how-to notes beside them must not.
+        $own = array_flip(array_filter(
+            array_map(fn ($h) => $idx[$norm($h)] ?? null, self::TEMPLATE_HEADINGS),
+            fn ($v) => $v !== null
+        ));
+
         $rows = [];
         $errors = [];
         foreach (array_slice($raw, 1) as $i => $row) {
             $line = $i + 2;
             $row = array_values($row);
-            if (! array_filter($row, fn ($v) => $v !== null && trim((string) $v) !== '')) {
+            if (! array_filter(array_intersect_key($row, $own), fn ($v) => $v !== null && trim((string) $v) !== '')) {
                 continue;
             }
             if (stripos(trim((string) ($row[0] ?? '')), 'notes:') === 0) {
@@ -373,7 +464,10 @@ class Gstr2bController extends Controller
             try {
                 $date = is_numeric($dateRaw)
                     ? \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $dateRaw)->format('Y-m-d')
-                    : Carbon::createFromFormat(str_contains((string) $dateRaw, '/') ? 'd/m/Y' : 'Y-m-d', trim((string) $dateRaw))->format('Y-m-d');
+                    : Carbon::createFromFormat(
+                        str_contains((string) $dateRaw, '/') ? 'd/m/Y' : (preg_match('/^\d{2}-\d{2}-\d{4}$/', trim((string) $dateRaw)) === 1 ? 'd-m-Y' : 'Y-m-d'),
+                        trim((string) $dateRaw)
+                    )->format('Y-m-d');
             } catch (\Throwable $e) {
                 $date = null;
             }

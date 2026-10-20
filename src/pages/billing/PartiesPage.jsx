@@ -167,8 +167,10 @@ export default function PartiesPage() {
           <h2>Parties (Company Management)</h2>
           <p className="bp-section-desc">Manage your companies and billing parties.</p>
         </div>
-        <span className="bp-parties-count">{meta.total} {meta.total === 1 ? 'Company' : 'Companies'}</span>
-        <Link to="/portal/billing/parties/new" className="bp-btn bp-btn-blue">+ New Company</Link>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <span className="bp-parties-count">{meta.total} {meta.total === 1 ? 'Company' : 'Companies'}</span>
+          <Link to="/portal/billing/parties/new" className="bp-btn bp-btn-blue">+ New Company</Link>
+        </div>
       </div>
 
       <div className="bp-card">
@@ -310,46 +312,72 @@ export default function PartiesPage() {
         </>
       )}
 
-      {deleting && (
+      {deleting && (() => {
+        const typed = confirmName.length > 0;
+        const mismatch = typed && !nameMatches;
+        const canDelete = nameMatches && !deleteBusy;
+        return (
         <div role="presentation"
           onMouseDown={(e) => { if (e.target === e.currentTarget && !deleteBusy) setDeleting(null); }}
-          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, animation: 'dc-fade .2s ease' }}>
+          <style>{`
+            @keyframes dc-fade { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes dc-pop { 0% { opacity: 0; transform: translateY(14px) scale(.94); } 60% { transform: translateY(-2px) scale(1.01); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+            @keyframes dc-ring { 0%,100% { box-shadow: 0 12px 24px -10px rgba(220,38,38,.7), 0 0 0 0 rgba(239,68,68,.35); } 50% { box-shadow: 0 12px 24px -10px rgba(220,38,38,.7), 0 0 0 10px rgba(239,68,68,0); } }
+            @keyframes dc-in { from { opacity: 0; transform: translateY(4px) scale(.96); } to { opacity: 1; transform: none; } }
+            #dc-name:focus { outline: none; }
+          `}</style>
           <div role="alertdialog" aria-modal="true" aria-labelledby="dc-title"
-            style={{ width: '100%', maxWidth: 440, background: '#fff', borderRadius: 16, padding: '20px 24px 22px', boxShadow: '0 30px 70px -20px rgba(15,42,95,0.5)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
-              <h3 id="dc-title" style={{ margin: 0, flex: 1, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Delete Company</h3>
-              <button type="button" aria-label="Close" disabled={deleteBusy} onClick={() => setDeleting(null)}
-                style={{ border: 'none', background: 'none', fontSize: 20, lineHeight: 1, color: '#64748b', cursor: 'pointer' }}>×</button>
+            style={{ position: 'relative', overflow: 'hidden', width: '100%', maxWidth: 460, background: '#fff', borderRadius: 22, padding: '28px 28px 24px', boxShadow: '0 30px 70px -20px rgba(15,23,42,0.45)', animation: 'dc-pop .38s cubic-bezier(.34,1.56,.64,1)' }}>
+            <div aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: 0, height: 5, background: 'linear-gradient(90deg, #f87171, #dc2626, #991b1b)' }} />
+            <button type="button" aria-label="Close" disabled={deleteBusy} onClick={() => setDeleting(null)}
+              style={{ position: 'absolute', right: 16, top: 18, width: 32, height: 32, borderRadius: 10, border: 'none', background: '#f1f5f9', color: '#64748b', fontSize: 18, lineHeight: 1, cursor: 'pointer' }}>×</button>
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{ width: 64, height: 64, borderRadius: 20, background: 'linear-gradient(150deg, #f87171, #dc2626)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'dc-ring 2.4s ease-in-out infinite' }}>
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+              </div>
+              <h3 id="dc-title" style={{ margin: '16px 0 4px', fontSize: 20, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.3px' }}>Delete Company</h3>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#334155' }}>Are you sure you want to delete this company?</p>
+              <span style={{ marginTop: 12, maxWidth: '100%', padding: '6px 14px', borderRadius: 999, background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', boxSizing: 'border-box' }}>{deleting.name}</span>
+              <p style={{ margin: '10px 0 0', fontSize: 12.5, color: '#64748b', lineHeight: 1.55 }}>
+                This action cannot be undone. To confirm, please type the company name below.
+              </p>
             </div>
-            <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Are you sure you want to delete this company?</p>
-            <p style={{ margin: 0, fontSize: 12.5, color: '#475569', lineHeight: 1.5 }}>
-              This action cannot be undone. To confirm, please type the company name below.
-            </p>
-            <div style={{ marginTop: 14, background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 14px' }}>
-              <label htmlFor="dc-name" style={{ display: 'block', marginBottom: 6, fontSize: 12.5, fontWeight: 700, color: '#b91c1c' }}>Type company name to delete:</label>
-              <input id="dc-name" className="bp-input" autoFocus autoComplete="off" spellCheck={false}
-                value={confirmName} onChange={(e) => setConfirmName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && nameMatches && !deleteBusy) confirmRemove(); }}
-                placeholder={deleting.name}
-                style={{ width: '100%', boxSizing: 'border-box', background: '#fff' }} />
-              <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.5 }}>
+
+            <div style={{ marginTop: 18, background: 'linear-gradient(150deg, #fff5f5, #fffafa)', border: '1.5px solid #fecaca', borderRadius: 14, padding: '14px 16px' }}>
+              <label htmlFor="dc-name" style={{ display: 'block', marginBottom: 8, fontSize: 11.5, fontWeight: 800, letterSpacing: '.5px', textTransform: 'uppercase', color: '#b91c1c' }}>Type company name to delete</label>
+              <div style={{ position: 'relative' }}>
+                <input id="dc-name" autoFocus autoComplete="off" spellCheck={false}
+                  value={confirmName} onChange={(e) => setConfirmName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && canDelete) confirmRemove(); }}
+                  placeholder={deleting.name}
+                  style={{ width: '100%', boxSizing: 'border-box', height: 46, padding: '0 44px 0 14px', borderRadius: 12, fontSize: 14, fontWeight: 700, color: '#0f172a', background: nameMatches ? '#f0fdf4' : '#fff', border: `1.5px solid ${nameMatches ? '#4ade80' : mismatch ? '#f87171' : '#e2e8f0'}`, boxShadow: nameMatches ? '0 0 0 4px rgba(34,197,94,.14)' : mismatch ? '0 0 0 4px rgba(239,68,68,.10)' : '0 0 0 4px rgba(239,68,68,.06)', transition: 'border-color .15s, box-shadow .15s, background .15s' }} />
+                <span aria-hidden="true" style={{ position: 'absolute', right: 12, top: 0, bottom: 0, display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                  {nameMatches && <svg key="ok" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'dc-in .25s ease' }}><circle cx="12" cy="12" r="10" /><polyline points="8 12.5 11 15.5 16 9.5" /></svg>}
+                  {mismatch && <svg key="no" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.6" strokeLinecap="round" style={{ animation: 'dc-in .25s ease' }}><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></svg>}
+                </span>
+              </div>
+              <p style={{ margin: '10px 0 0', display: 'flex', gap: 8, fontSize: 11.5, color: '#64748b', lineHeight: 1.5 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 2 }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="11" x2="12" y2="17" /><line x1="12" y1="7.2" x2="12.01" y2="7.2" /></svg>
                 If this company already has invoices or documents, it is archived instead of deleted so your records stay safe. You can restore it from the Archived tab.
               </p>
             </div>
-            <div style={{ display: 'flex', gap: 12, marginTop: 18 }}>
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
               <button type="button" disabled={deleteBusy} onClick={() => setDeleting(null)}
-                style={{ flex: 1, height: 42, borderRadius: 10, border: '1.5px solid #dbe3ef', background: '#fff', color: '#334155', fontWeight: 700, fontSize: 14, cursor: deleteBusy ? 'not-allowed' : 'pointer' }}>
+                style={{ flex: 1, height: 46, borderRadius: 12, border: '1.5px solid #dbe3ef', background: '#fff', color: '#334155', fontWeight: 700, fontSize: 14, cursor: deleteBusy ? 'not-allowed' : 'pointer' }}>
                 Cancel
               </button>
-              <button type="button" disabled={!nameMatches || deleteBusy} onClick={confirmRemove}
-                style={{ flex: 1, height: 42, borderRadius: 10, border: 'none', background: '#dc2626', color: '#fff', fontWeight: 800, fontSize: 14, cursor: nameMatches && !deleteBusy ? 'pointer' : 'not-allowed', opacity: nameMatches && !deleteBusy ? 1 : 0.45 }}>
+              <button type="button" disabled={!canDelete} onClick={confirmRemove}
+                style={{ flex: 1.2, height: 46, borderRadius: 12, border: 'none', background: canDelete ? 'linear-gradient(150deg, #ef4444, #b91c1c)' : '#fca5a5', color: '#fff', fontWeight: 800, fontSize: 14, cursor: canDelete ? 'pointer' : 'not-allowed', boxShadow: canDelete ? '0 12px 22px -10px rgba(185,28,28,.8)' : 'none', transition: 'background .2s, box-shadow .2s' }}>
                 {deleteBusy ? 'Please wait…' : 'Delete Company'}
               </button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

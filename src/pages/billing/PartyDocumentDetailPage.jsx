@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, getAuthToken } from '../../api/client';
 import { LoadingBlock } from '../../components/Spinner';
 import { partyDocumentSections } from './billingProfile';
-import { filterDocsByPeriod } from './billingUtils';
+import { filterDocsByPeriod, formatDMY } from './billingUtils';
 import { useReportsEnv } from './ReportsContext';
 
 /* ── Icons ─────────────────────────────────────────────────── */
@@ -78,14 +78,7 @@ const TYPE_LABEL = {
   credit_note: 'Credit Note',
 };
 
-function fmtDate(v) {
-  if (!v) return '—';
-  const s = String(v).slice(0, 10);
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (!m) return s;
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${m[3]}-${months[Number(m[2]) - 1]}-${m[1]}`;
-}
+const fmtDate = formatDMY;
 
 function numFmt(v) {
   return Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -557,7 +557,7 @@ class GstFilingController extends Controller
             }
 
             [$status, $action] = self::resolvePeriodStatusAndAction($existing, $returnType, $reconciliationStatus);
-            $filedOn = $existing?->filing_date;
+            $filedOn = $existing?->filing_date?->toDateString();
             $ackNo = $existing?->ack_no;
 
             if ($filedReturn && $existing?->status !== 'GST Filed') {

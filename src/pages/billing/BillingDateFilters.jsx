@@ -66,7 +66,7 @@ export default function BillingDateFilters({
   const CTL = { height: 38, borderRadius: 10, border: '1px solid #d7e1ef', padding: '0 10px', fontSize: 13, color: '#1e293b', background: '#fff', outline: 'none', boxSizing: 'border-box', width: '100%' };
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', padding: '14px 16px', background: '#f8fbff', border: '1px solid #e3ebf6', borderRadius: 14, marginBottom: 16 }}>
+    <div className="bdf" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', padding: '14px 16px', background: '#f8fbff', border: '1px solid #e3ebf6', borderRadius: 14, marginBottom: 16 }}>
 
       {/* Search */}
       {showSearch && (

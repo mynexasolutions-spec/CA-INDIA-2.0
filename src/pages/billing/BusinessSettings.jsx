@@ -2,8 +2,8 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { LoadingBlock } from '../../components/Spinner';
-import { currentFyLabel } from './billingUtils';
-import LayoutPreview from '../../components/LayoutPreview';
+import { currentFyLabel, formatDMYTime } from './billingUtils';
+import LayoutPreview, { prefetchLayoutPreview } from '../../components/LayoutPreview';
 import layout1Img from '../../assets/layout-previews/layout-1.png';
 import layout2Img from '../../assets/layout-previews/layout-2.png';
 import layout3Img from '../../assets/layout-previews/layout-3.png';
@@ -110,16 +110,8 @@ function mergeDraft(approved, sections) {
   return base;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function formatDateTime(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  let h = d.getHours();
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${String(d.getDate()).padStart(2, '0')} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${h}:${min} ${ampm}`;
+  return iso ? formatDMYTime(iso).replace('—', '') : '';
 }
 
 const ICON_PROPS = { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
@@ -221,6 +213,7 @@ const ZOOM_STEP = 20;
 
 function LayoutPreviewModal({ layout, color, onClose }) {
   const [zoom, setZoom] = useState(100);
+  const [busy, setBusy] = useState(true); // true while the preview PDF is being fetched / drawn
   const clamp = (z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
 
   // Keyboard: Esc closes, +/- zoom, 0 resets.
@@ -241,6 +234,9 @@ function LayoutPreviewModal({ layout, color, onClose }) {
     <div className="bp-modal-backdrop" role="presentation" onClick={onClose}
       style={{ zIndex: 99999, backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', background: 'rgba(10, 25, 60, 0.55)' }}>
       <style>{`
+        .lpm-load { position: relative; flex: 0 0 4px; height: 4px; overflow: hidden; background: rgba(29, 78, 216, 0.12); transition: opacity .25s ease; }
+        .lpm-load::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 38%; border-radius: 4px; background: linear-gradient(90deg, #60a5fa, #1d4ed8, #60a5fa); animation: lpm-slide 1.1s ease-in-out infinite; }
+        @keyframes lpm-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(270%); } }
         .lpm-frame iframe { margin: -8px !important; width: calc(100% + 16px) !important; height: calc(100% + 16px) !important; }
         .lpm-range { -webkit-appearance: none; appearance: none; width: 120px; min-width: 0; height: 4px !important; padding: 0 !important; margin: 0 !important; border: 0 !important; border-radius: 4px; background: rgba(255,255,255,.35) !important; box-shadow: none !important; outline: none; }
         .lpm-pill button { flex-shrink: 0; }
@@ -249,27 +245,28 @@ function LayoutPreviewModal({ layout, color, onClose }) {
           /* beats the global phone rule  .bp-modal { padding: 22px 18px; width: 100% }  in billing.css */
           .bp-modal.lpm-modal { width: 100vw !important; max-width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; padding: 0 !important; margin: 0 !important; border-radius: 0 !important; border: 0 !important; box-sizing: border-box; }
           .lpm-modal h3 { font-size: 15px !important; }
-          .lpm-controls { box-sizing: border-box; }
-          .lpm-pill { box-sizing: border-box; overflow: hidden; }
-          .lpm-pill button, .lpm-pill input { max-width: none; }
           /* the global .bp-modal centres text; the page-frame no longer needs the iframe crop on phones */
           .bp-modal.lpm-modal { text-align: left !important; }
-          .lpm-head { overflow: hidden; }
-          .lpm-head > div:first-child { width: 100%; }
-          .lpm-head > div:first-child span { flex: 0 0 auto; }
-          .lpm-controls { height: 44px; }
-          .lpm-pill { height: 44px; justify-content: space-between; padding: 4px 10px !important; border-radius: 22px !important; }
+
+          /* Header: row 1 = title + colour chip (+ close button pinned top-right), row 2 = zoom bar */
+          .lpm-head { position: relative; display: flex !important; flex-direction: column !important; flex-wrap: nowrap !important; align-items: stretch !important; justify-content: flex-start !important; gap: 10px !important; padding: 12px 14px 12px !important; overflow: visible; }
+          .lpm-icon, .lpm-sub { display: none !important; }
+          .lpm-titles { width: 100%; padding-right: 44px; box-sizing: border-box; min-height: 34px; display: flex; align-items: center; }
+          .lpm-titles > div { flex-wrap: nowrap !important; gap: 8px !important; min-width: 0; }
+          .lpm-chip { font-size: 11.5px !important; }
+          .lpm-titles h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+          .lpm-chip { flex: 0 0 auto; width: auto; height: auto; }
+          /* more specific than the global mobile rule  .bp-card button { width: 100% !important }  in billing.css */
+          .bp-modal.lpm-modal .lpm-close { position: absolute !important; top: 12px; right: 12px; left: auto; width: 34px !important; min-width: 34px !important; height: 34px !important; flex: 0 0 34px; padding: 0; border-radius: 50% !important; }
+
+          /* Zoom bar: [ − ]  [   100%   ]  [ + ] across the full width, slider hidden */
+          .lpm-controls { display: flex !important; justify-content: flex-end; width: 100%; height: auto; }
+          .lpm-pill { display: inline-flex !important; align-items: center; justify-content: center; gap: 10px !important; width: auto !important; flex: 0 0 auto !important; height: 42px; padding: 3px 8px !important; border-radius: 21px !important; box-sizing: border-box; overflow: hidden; }
           .lpm-range { display: none !important; }
-          .lpm-pill button { height: 36px !important; }
-          .lpm-pill button:first-child, .lpm-pill button:nth-child(3) { width: 44px !important; }
-          .lpm-pill button:last-child { flex: 1; margin: 0 6px; }
-          .lpm-head { padding: 12px 56px 12px 14px !important; gap: 10px !important; position: relative; flex-wrap: nowrap !important; flex-direction: column; align-items: stretch !important; }
-          .lpm-sub { display: none; }
-          .lpm-icon { display: none !important; }
-          .lpm-controls { width: 100%; }
-          .lpm-pill { flex: 1; min-width: 0; }
-          .lpm-range { flex: 1; width: auto; }
-          .lpm-close { position: absolute; top: 12px; right: 12px; }
+          .bp-modal.lpm-modal .lpm-pill button { height: 34px !important; max-width: none; font-size: 20px !important; }
+          .bp-modal.lpm-modal .lpm-pill button:first-child { order: 1; flex: 0 0 38px; width: 38px !important; min-width: 38px !important; }
+          .bp-modal.lpm-modal .lpm-pill button:last-child { order: 2; flex: 0 0 auto; width: 96px !important; min-width: 96px !important; margin: 0; font-size: 13px !important; }
+          .bp-modal.lpm-modal .lpm-pill button:nth-child(3) { order: 3; flex: 0 0 38px; width: 38px !important; min-width: 38px !important; }
           .lpm-area { padding: 14px 10px !important; }
           .lpm-frame { width: calc(100% * var(--z)); min-width: 0; }
           .lpm-foot { padding: 10px 14px !important; }
@@ -292,10 +289,10 @@ function LayoutPreviewModal({ layout, color, onClose }) {
             <span className="lpm-icon" style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(255,255,255,0.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <EyeIcon />
             </span>
-            <div style={{ minWidth: 0 }}>
+            <div className="lpm-titles" style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>{layout.name}</h3>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '3px 11px 3px 6px', borderRadius: 999, background: 'rgba(255,255,255,0.16)', fontSize: 12, fontWeight: 700 }}>
+                <span className="lpm-chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '3px 11px 3px 6px', borderRadius: 999, background: 'rgba(255,255,255,0.16)', fontSize: 12, fontWeight: 700 }}>
                   <span style={{ width: 14, height: 14, borderRadius: '50%', background: color.hex, boxShadow: '0 0 0 2px rgba(255,255,255,0.9)' }} />
                   {color.label}
                 </span>
@@ -319,10 +316,13 @@ function LayoutPreviewModal({ layout, color, onClose }) {
           </div>
         </div>
 
+        {/* slim progress bar under the header — always in view, unlike the page below it which scrolls */}
+        <div className="lpm-load" role="progressbar" aria-busy={busy} aria-label="Loading preview" style={{ opacity: busy ? 1 : 0 }} />
+
         {/* page area — the page is `900px × zoom` wide; the area scrolls in both directions */}
         <div className="lpm-area" style={{ flex: 1, overflow: 'auto', padding: '28px 24px', background: 'radial-gradient(circle at 1px 1px, rgba(15,42,95,0.09) 1px, transparent 0) 0 0 / 18px 18px, #eaf0fa' }}>
           <div className="lpm-frame" style={{ '--z': zoom / 100, margin: '0 auto', background: '#fff', boxShadow: '0 24px 50px -18px rgba(15, 42, 95, 0.5), 0 0 0 1px rgba(15, 42, 95, 0.08)', borderRadius: 6, overflow: 'hidden' }}>
-            <LayoutPreview previewUrl={clientLayoutPreviewUrl(layout.id, color.id)} src={LAYOUT_IMAGES[layout.id]} alt={`${layout.name} preview`} />
+            <LayoutPreview previewUrl={clientLayoutPreviewUrl(layout.id, color.id)} debounceMs={0} onBusyChange={setBusy} src={LAYOUT_IMAGES[layout.id]} alt={`${layout.name} preview`} />
           </div>
         </div>
 
@@ -361,6 +361,14 @@ function LayoutsTab({ approved, sections, onSubmitted }) {
 
   // Re-sync when the server data arrives / changes (after a submit).
   useEffect(() => { setSelectedLayout(baseLayout); setSelectedColor(baseColour); }, [baseLayout, baseColour]);
+
+  // Warm the previews in the background (the server needs ~1.5 s per PDF): the selected layout first, then the
+  // others a moment apart, so "Preview Layout" opens instantly instead of after a wait.
+  useEffect(() => {
+    const order = [selectedLayout, ...LAYOUTS.map((l) => l.id).filter((id) => id !== selectedLayout)];
+    const timers = order.map((id, i) => window.setTimeout(() => prefetchLayoutPreview(clientLayoutPreviewUrl(id, selectedColor)), 200 + i * 700));
+    return () => timers.forEach(window.clearTimeout);
+  }, [selectedLayout, selectedColor]);
 
   const colorObj = COLORS.find((c) => c.id === selectedColor) || COLORS[0];
   const dirty = selectedLayout !== baseLayout || selectedColor !== baseColour;
@@ -733,7 +741,7 @@ export default function BusinessSettings() {
           <p className="bp-section-desc">Manage your billing and invoice preferences.</p>
         </div>
         <div className="bs-warn" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 16px', maxWidth: 340 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#92400e" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <svg width="16" height="16" viewBox="0 1 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9.5" x2="12" y2="13.5"/><line x1="12" y1="17.2" x2="12.01" y2="17.2"/></svg>
           <span style={{ fontSize: 12, color: '#92400e', fontWeight: 600 }}>
             Changes require administrator approval before they appear on invoices.
           </span>
@@ -815,60 +823,104 @@ export default function BusinessSettings() {
       {/* ── Bank Details Tab ─────────────────────────────────── */}
       {activeTab === 'bank' && (
         <div className="bp-card">
-          <h3 style={{ marginTop: 0, marginBottom: 4, color: 'var(--bp-navy)' }}>Bank Details</h3>
-          <p className="bp-section-desc" style={{ marginBottom: 20 }}>Manage and maintain the business bank account details that will be used for transactions and displayed on invoices.</p>
+          {/* Header */}
+          <div style={{ marginBottom: 24, paddingBottom: 18, borderBottom: '1.5px solid #e8f0fe' }}>
+            <h3 style={{ margin: 0, color: '#0f2a5f', fontSize: 18, fontWeight: 800 }}>Bank Details</h3>
+            <p style={{ margin: '3px 0 0', fontSize: 13, color: '#64748b', lineHeight: 1.4 }}>Manage and maintain the business bank account details that will be used for transactions and displayed on invoices.</p>
+          </div>
 
+          {/* IFSC Auto-Verification Block */}
+          <style>{`
+            @keyframes ifsc-slide-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+            @keyframes ifsc-pop { 0% { opacity: 0; transform: scale(0.75); } 60% { transform: scale(1.08); } 100% { opacity: 1; transform: scale(1); } }
+            @keyframes ifsc-success-in { 0% { opacity: 0; transform: translateY(4px) scale(0.95); } 60% { transform: translateY(-1px) scale(1.02); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+            @keyframes ifsc-err-shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-5px); } 40%,80% { transform: translateX(5px); } }
+            @keyframes ifsc-spin { to { transform: rotate(360deg); } }
+            @keyframes ifsc-field-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+          `}</style>
+          <div style={{ background: 'linear-gradient(135deg, #f0f7ff 0%, #eff6ff 100%)', border: '1.5px solid #bfdbfe', borderRadius: 14, padding: '16px 18px 18px', marginBottom: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="#dbeafe" stroke="#2563eb"/></svg>
+              <span style={{ fontSize: 11.5, fontWeight: 800, color: '#1d4ed8', letterSpacing: 0.6, textTransform: 'uppercase' }}>IFSC Auto-Verification</span>
+              <span style={{ marginLeft: 4, fontSize: 11, color: '#3b82f6', fontWeight: 500 }}>— Bank Name &amp; Branch are auto-filled</span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16 }}>
+              {/* IFSC Code */}
+              <label>
+                <strong className="bp-field-title">IFSC Code</strong>
+                <div style={{ position: 'relative', marginTop: 6 }}>
+                  <input className="bp-input" style={{ width: '100%', boxSizing: 'border-box', paddingRight: 36, background: '#fff', transition: 'border-color 0.2s, background 0.2s, box-shadow 0.2s', ...(ifscErr ? { borderColor: '#dc2626', background: '#fff8f8', boxShadow: '0 0 0 3px rgba(220,38,38,0.1)' } : ifscOk ? { borderColor: '#86efac', boxShadow: '0 0 0 3px rgba(22,163,74,0.1)' } : {}) }}
+                    value={form.bank_ifsc || ''}
+                    onChange={(e) => {
+                      const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11);
+                      setForm((f) => ({ ...f, bank_ifsc: v, ...(v.length !== 11 ? { bank_name: '', bank_branch: '' } : {}) }));
+                      setIfscErr(''); setIfscOk('');
+                      if (v.length === 11) fetchIfsc(v);
+                    }}
+                    placeholder="e.g. HDFC0001234" maxLength={11} />
+                  <button type="button" aria-label="Verify IFSC" title="Verify IFSC"
+                    disabled={ifscLoading || (form.bank_ifsc || '').length !== 11}
+                    onClick={() => fetchIfsc((form.bank_ifsc || '').toUpperCase())}
+                    style={{ position: 'absolute', right: 8, top: 0, bottom: 0, display: 'flex', alignItems: 'center', background: 'none', border: 'none', padding: '0 4px', cursor: ifscLoading ? 'wait' : 'pointer', color: '#3b82f6', transition: 'color 0.2s' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={ifscLoading ? { animation: 'ifsc-spin 0.8s linear infinite' } : {}}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                  </button>
+                </div>
+                {ifscLoading && <p style={{ fontSize: 11.5, color: '#3b82f6', marginTop: 4, marginBottom: 0, fontWeight: 600, animation: 'ifsc-slide-up 0.25s ease' }}>Verifying…</p>}
+                {ifscOk && (
+                  <p key={ifscOk} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#14532d', fontWeight: 700, marginTop: 6, marginBottom: 0, background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', border: '1px solid #86efac', borderRadius: 8, padding: '6px 10px', animation: 'ifsc-success-in 0.4s cubic-bezier(0.34,1.56,0.64,1)' }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10" /><polyline points="9 12 11 14 15 10" /></svg>
+                    {ifscOk}
+                  </p>
+                )}
+                {ifscErr && (
+                  <p key={ifscErr} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#991b1b', fontWeight: 600, marginTop: 6, marginBottom: 0, background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '6px 10px', animation: 'ifsc-err-shake 0.4s ease' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#dc2626" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10" /><rect x="11" y="6" width="2" height="7" fill="#fff" /><rect x="11" y="15" width="2" height="2.4" fill="#fff" /></svg>
+                    {ifscErr}
+                  </p>
+                )}
+              </label>
+
+              {/* Bank Name — read-only, auto-fetched */}
+              <label>
+                <strong className="bp-field-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  Bank Name
+                  {ifscOk && <span key="bn-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, color: '#16a34a', background: '#dcfce7', border: '1px solid #86efac', borderRadius: 999, padding: '2px 8px', animation: 'ifsc-pop 0.4s cubic-bezier(0.34,1.56,0.64,1)' }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Auto Fetched
+                  </span>}
+                </strong>
+                <div key={form.bank_name} style={{ position: 'relative', marginTop: 6, animation: form.bank_name ? 'ifsc-field-in 0.35s ease' : 'none' }}>
+                  <input className="bp-input" style={{ width: '100%', boxSizing: 'border-box', paddingRight: 34, background: 'linear-gradient(135deg, #eff6ff, #f0f7ff)', color: '#1e40af', fontWeight: 600, cursor: 'not-allowed', border: '1.5px solid #bfdbfe', transition: 'border-color 0.3s, box-shadow 0.3s', ...(ifscOk ? { boxShadow: '0 0 0 3px rgba(22,163,74,0.08)' } : {}) }}
+                    value={form.bank_name || ''} readOnly tabIndex={-1} placeholder="—" />
+                  <span style={{ position: 'absolute', right: 11, top: 0, bottom: 0, display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                  </span>
+                </div>
+              </label>
+
+              {/* Branch — read-only, auto-fetched */}
+              <label>
+                <strong className="bp-field-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  Branch
+                  {ifscOk && <span key="br-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, color: '#16a34a', background: '#dcfce7', border: '1px solid #86efac', borderRadius: 999, padding: '2px 8px', animation: 'ifsc-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) 0.07s both' }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Auto Fetched
+                  </span>}
+                </strong>
+                <div key={form.bank_branch} style={{ position: 'relative', marginTop: 6, animation: form.bank_branch ? 'ifsc-field-in 0.35s ease 0.07s both' : 'none' }}>
+                  <input className="bp-input" style={{ width: '100%', boxSizing: 'border-box', paddingRight: 34, background: 'linear-gradient(135deg, #eff6ff, #f0f7ff)', color: '#1e40af', fontWeight: 600, cursor: 'not-allowed', border: '1.5px solid #bfdbfe', transition: 'border-color 0.3s, box-shadow 0.3s', ...(ifscOk ? { boxShadow: '0 0 0 3px rgba(22,163,74,0.08)' } : {}) }}
+                    value={form.bank_branch || ''} readOnly tabIndex={-1} placeholder="—" />
+                  <span style={{ position: 'absolute', right: 11, top: 0, bottom: 0, display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                  </span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Account Details */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, marginBottom: 8 }}>
-            {/* IFSC Code — verified automatically as soon as 11 characters are entered */}
-            <label>
-              <strong className="bp-field-title">IFSC Code</strong>
-              <div style={{ position: 'relative', marginTop: 6 }}>
-                <input className="bp-input" style={{ width: '100%', boxSizing: 'border-box', paddingRight: 36, ...(ifscErr ? { borderColor: '#dc2626' } : {}) }}
-                  value={form.bank_ifsc || ''}
-                  onChange={(e) => {
-                    const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11);
-                    setForm((f) => ({ ...f, bank_ifsc: v, ...(v.length !== 11 ? { bank_name: '', bank_branch: '' } : {}) }));
-                    setIfscErr(''); setIfscOk('');
-                    if (v.length === 11) fetchIfsc(v);
-                  }}
-                  placeholder="e.g. HDFC0001234" maxLength={11} />
-                <button type="button" aria-label="Verify IFSC" title="Verify IFSC"
-                  disabled={ifscLoading || (form.bank_ifsc || '').length !== 11}
-                  onClick={() => fetchIfsc((form.bank_ifsc || '').toUpperCase())}
-                  style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', padding: 4, cursor: ifscLoading ? 'wait' : 'pointer', color: '#64748b', display: 'flex' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-                </button>
-              </div>
-              {ifscLoading && <p style={{ fontSize: 11.5, color: 'var(--bp-muted)', marginTop: 4, marginBottom: 0 }}>Verifying…</p>}
-              {ifscOk && <p style={{ fontSize: 11.5, color: '#16a34a', fontWeight: 600, marginTop: 4, marginBottom: 0 }}>✓ {ifscOk}</p>}
-              {ifscErr && (
-                <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: '#dc2626', marginTop: 4, marginBottom: 0 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10" /><rect x="11" y="6" width="2" height="7" fill="#fff" /><rect x="11" y="15" width="2" height="2.4" fill="#fff" /></svg>
-                  {ifscErr}
-                </p>
-              )}
-            </label>
-
-            {/* Bank Name — read-only, auto-fetched */}
-            <label>
-              <strong className="bp-field-title">Bank Name {ifscOk && <span style={{ fontWeight: 600, color: '#16a34a', fontSize: 11 }}>(Auto Fetched)</span>}</strong>
-              <div style={{ position: 'relative', marginTop: 6 }}>
-                <input className="bp-input" style={{ width: '100%', boxSizing: 'border-box', paddingRight: 34, background: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }}
-                  value={form.bank_name || ''} readOnly tabIndex={-1} placeholder="--" />
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
-              </div>
-            </label>
-
-            {/* Branch — read-only, auto-fetched */}
-            <label>
-              <strong className="bp-field-title">Branch {ifscOk && <span style={{ fontWeight: 600, color: '#16a34a', fontSize: 11 }}>(Auto Fetched)</span>}</strong>
-              <div style={{ position: 'relative', marginTop: 6 }}>
-                <input className="bp-input" style={{ width: '100%', boxSizing: 'border-box', paddingRight: 34, background: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }}
-                  value={form.bank_branch || ''} readOnly tabIndex={-1} placeholder="--" />
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
-              </div>
-            </label>
-
             {/* Account Number */}
             <label>
               <strong className="bp-field-title">Account Number</strong>
@@ -934,7 +986,6 @@ export default function BusinessSettings() {
                   <tr>
                     <th>Document Type</th>
                     <th>Prefix</th>
-                    <th>Separator</th>
                     <th>Next Number</th>
                     <th>Prefix Position</th>
                     <th>Number Format (Preview)</th>
@@ -950,26 +1001,17 @@ export default function BusinessSettings() {
                     return (
                       <tr key={key} className={sampleDoc === key ? 'dn-row-selected' : ''}>
                         <td className="dn-type">{label}</td>
-                        <td>
+                        <td data-label="Prefix">
                           <input className={`bp-input dn-input${fieldErr('prefix') ? ' dn-invalid' : ''}`} value={c.prefix} maxLength={20}
                             aria-label={`${label} prefix`} placeholder={defPrefix}
                             onChange={(e) => setNum(key, 'prefix', e.target.value)} />
                         </td>
-                        <td>
-                          <input className={`bp-input dn-input dn-sep${fieldErr('separator') ? ' dn-invalid' : ''}`} value={c.separator} maxLength={1}
-                            aria-label={`${label} separator`} placeholder={defSep}
-                            onChange={(e) => {
-                              const ch = e.target.value.slice(-1);
-                              if (!ch) setNum(key, 'separator', '');
-                              else if (ch === '-' || ch === '/') setNum(key, 'separator', ch);
-                            }} />
-                        </td>
-                        <td>
+                        <td data-label="Next Number">
                           <input className={`bp-input dn-input dn-next${fieldErr('next_number') ? ' dn-invalid' : ''}`} value={c.next_number} maxLength={9}
                             inputMode="numeric" aria-label={`${label} next number`} placeholder="01"
                             onChange={(e) => setNum(key, 'next_number', e.target.value.replace(/\D/g, ''))} />
                         </td>
-                        <td>
+                        <td data-label="Prefix Position">
                           <div className="dn-radios">
                             {[['first', 'Prefix First'], ['last', 'Prefix Last']].map(([val, text]) => (
                               <label key={val} className={c.prefix_position === val || (!c.prefix_position && val === 'first') ? 'on' : ''}>
@@ -981,15 +1023,15 @@ export default function BusinessSettings() {
                             ))}
                           </div>
                         </td>
-                        <td><span className="dn-preview">{formatDocNumber(c)}</span></td>
-                        <td>
+                        <td data-label="Number Format"><span className="dn-preview">{formatDocNumber(c)}</span></td>
+                        <td data-label="Status">
                           <button type="button" role="switch" aria-checked={active} aria-label={`${label} status`}
                             className={`dn-switch${active ? ' on' : ''}`}
                             onClick={() => setNum(key, 'status', active ? 'inactive' : 'active')}>
                             <span />
                           </button>
                         </td>
-                        <td>
+                        <td data-label="Actions">
                           <button type="button" className="dn-sample-btn" onClick={() => setSampleDoc(key)}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
                             View Sample
@@ -1026,7 +1068,7 @@ export default function BusinessSettings() {
           </div>
 
           {/* Important Information box */}
-          <div className="ly-info" style={{ background: '#eaf3ff', border: '1px solid #cfe2ff', borderRadius: 10, padding: '16px 20px', marginBottom: 8, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+          <div className="ly-info dn-info" style={{ background: '#eaf3ff', border: '1px solid #cfe2ff', borderRadius: 10, padding: '16px 20px', marginBottom: 8, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
             <span style={{ width: 38, height: 38, borderRadius: '50%', background: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="12" y1="11" x2="12" y2="17" /><line x1="12" y1="7" x2="12.01" y2="7" /></svg>
             </span>
@@ -1034,7 +1076,7 @@ export default function BusinessSettings() {
             <strong style={{ display: 'block', fontSize: 13.5, color: '#1d4ed8', marginBottom: 6 }}>Important Information</strong>
             <ul style={{ margin: 0, paddingLeft: 18, listStyle: 'disc', fontSize: 12.5, color: '#1e3a8a', lineHeight: 1.75 }}>
               <li>Document numbers will be automatically generated based on the configured prefix and sequence.</li>
-              <li>You only need to enter the prefix and separator. The system will maintain the numbering automatically.</li>
+              <li>You only need to enter the prefix. The system will maintain the numbering automatically.</li>
               <li>The prefix position will determine whether the prefix appears before or after the number.</li>
               <li>Numbering will continue sequentially for each document type.</li>
               <li>Duplicate document numbers will not be allowed.</li>

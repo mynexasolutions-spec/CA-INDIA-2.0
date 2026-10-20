@@ -2,15 +2,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api, getAuthToken } from '../../api/client';
 import { useReportsEnv } from './ReportsContext';
-import { currentFyRange } from './billingUtils';
+import { currentFyRange, formatDMY, formatDMYTime } from './billingUtils';
 
 /* ── helpers ── */
-const fmtDate = (s) => {
-  if (!s) return '—';
-  const d = new Date(s);
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
-};
+const fmtDate = formatDMY;
 
 const DOC_PATH_MAP = {
   tax_invoice:      '/portal/billing/invoices',
@@ -187,8 +182,8 @@ function DrillDownModal({ typeKey, typeLabel, row, from, to, onClose }) {
                     <tr key={doc.id} style={{ background: cancelled ? '#f4f5f7' : (i % 2 ? '#f9fbff' : '#fff') }}>
                       <td style={{ ...cell, color:'#64748b' }}>{i + 1}</td>
                       <td style={cell}>{link ? <Link to={link} onClick={onClose} style={{ color:'#1d4ed8', fontWeight:800, textDecoration:'underline' }}>{doc.number}</Link> : <b>{doc.number}</b>}</td>
-                      <td style={cell}>{doc.document_date || '—'}</td>
-                      <td style={{ ...cell, color:'#64748b' }}>{doc.created_at || '—'}</td>
+                      <td style={cell}>{formatDMY(doc.document_date)}</td>
+                      <td style={{ ...cell, color:'#64748b' }}>{formatDMYTime(doc.created_at)}</td>
                       <td style={cell}>{doc.filing_status === 'not_applicable' ? '—' : doc.filing_status === 'filed' ? pill('#d9f3e3', '#15803d', 'Filed') : pill('#ffe0e0', '#dc2626', 'Not Filed')}</td>
                       <td style={cell}>{cancelled ? pill('#e5e7eb', '#4b5563', 'Cancelled') : pill('#d9f3e3', '#15803d', 'Active')}</td>
                     </tr>
@@ -322,7 +317,7 @@ export default function DocumentNumberingPage() {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <div>
             <div style={{ fontSize:11.5, color:'#475569', fontWeight:600 }}>Last Updated</div>
-            <div style={{ fontSize:12.5, color:'#0f172a', fontWeight:600 }}>{new Date().toLocaleString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</div>
+            <div style={{ fontSize:12.5, color:'#0f172a', fontWeight:600 }}>{formatDMYTime(new Date())}</div>
           </div>
         </div>
       </div>

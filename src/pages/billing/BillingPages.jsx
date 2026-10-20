@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import GstRateSelect from '../../components/GstRateSelect';
 import { LoadingBlock } from '../../components/Spinner';
 import GstSummaryMatrix, { resolveGstMatrix } from './GstSummaryMatrix';
+import { formatDMY } from './billingUtils';
 
 const card = {
   background: '#fff',
@@ -143,7 +144,7 @@ export function BillingDocuments() {
             <tr key={d.id}>
               <td>{d.number}</td>
               <td>{d.type}</td>
-              <td>{d.document_date}</td>
+              <td>{formatDMY(d.document_date)}</td>
               <td>{d.customer?.name || '—'}</td>
               <td align="right">₹{Number(d.total_amount).toLocaleString('en-IN')}</td>
               <td>
@@ -275,7 +276,7 @@ export function BillingDocumentView() {
   return (
     <div style={card}>
       <h1 style={{ marginTop: 0 }}>{doc.type.replace('_', ' ')} {doc.number}</h1>
-      <p>Date: {doc.document_date} · Customer: {doc.customer?.name || '—'}</p>
+      <p>Date: {formatDMY(doc.document_date)} · Customer: {doc.customer?.name || '—'}</p>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead><tr><th align="left">Item</th><th align="right">Qty</th><th align="right">Rate</th><th align="right">Total</th></tr></thead>
         <tbody>

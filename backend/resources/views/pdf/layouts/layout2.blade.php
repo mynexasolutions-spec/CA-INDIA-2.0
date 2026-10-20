@@ -20,8 +20,16 @@
   $titleBg = '#FFFFFF';
   $fmt = fn ($n) => number_format((float) $n, 2);
 
-  $minRows = 8;
-  $fillRows = max(0, $minRows - count($data['items']));
+  // Blank rows shrink to make room for taller-than-standard content (wrapped addresses/terms/descriptions, a seal and
+  // signature), so a short document never pushes its terms/signature block onto a second page.
+  $wrap = fn ($text, $perLine) => max(1, (int) ceil(mb_strlen(trim((string) $text)) / $perLine));
+  $extraLines = max(0, max($wrap($data['bill_to']['address'] ?? '', 58), $wrap($data['ship_to']['address'] ?? '', 58)) - 1)
+      + max(0, $wrap($data['seller_address'] ?? '', 85) - 1)
+      + max(0, array_sum(array_map(fn ($t) => $wrap($t, 80), $data['terms'] ?? [])) - 3)
+      + ((!empty($data['seal_path']) || !empty($data['signature_path'])) ? 3 : 0)
+      + array_sum(array_map(fn ($i) => max(0, $wrap($i['particulars'] ?? '', 36) - 1) + (!empty($i['description']) ? 1 : 0), $data['items']));
+  $minRows = 9;
+  $fillRows = max(0, $minRows - count($data['items']) - (int) ceil($extraLines * 0.7));
   $cols = 6 + ($data['show_hsn'] ? 1 : 0) + ($data['has_tax'] ? 1 : 0);
   $tds = $data['summary']['tds_tcs_type'] ?? null;
 
@@ -29,7 +37,7 @@
   $nameSize = $nameLen <= 24 ? '27pt' : ($nameLen <= 32 ? '23pt' : ($nameLen <= 40 ? '19pt' : ($nameLen <= 50 ? '15pt' : '12pt')));
 @endphp
 <style>
-  @page { size: A4 portrait; margin: 9mm 9mm 13mm 9mm; }
+  @page { size: A4 portrait; margin: 7mm 7mm 13mm 7mm; }
   * { box-sizing: border-box; }
   body { font-family: "Times", "DejaVu Serif", serif; font-size: 12.2px; color: {{ $ink }}; margin: 0; padding: 0; line-height: 1.35; }
   table { width: 100%; border-collapse: collapse; }
@@ -47,7 +55,7 @@
   .co-line { font-size: 11.6px; line-height: 1.5; }
   .co-gstin { font-size: 11.2px; font-weight: bold; }
 
-  .doc-title { text-align: center; font-size: 27px; font-weight: bold; padding: 4px 4px 6px; background: #FFFFFF; text-transform: uppercase; letter-spacing: 0.3px; }}; text-transform: uppercase; }
+  .doc-title { text-align: center; font-size: 27px; font-weight: bold; padding: 4px 4px 6px; background: #FFFFFF; text-transform: uppercase; letter-spacing: 0.3px; }
   .m1 td { border: 1.2px solid {{ $ink }}; padding: 6px 8px; font-size: 13px; }
   .m1 td.k { font-weight: bold; text-transform: uppercase; width: 24%; }
   .m1 td.v { font-weight: bold; text-align: center; }
@@ -64,7 +72,7 @@
   .kv td.k { width: 54px; }
   .kv td.c { width: 10px; }
 
-  .items th { border: 1.2px solid {{ $ink }}; font-weight: bold; font-size: 11.6px; padding: 6px 3px; text-align: center; text-transform: uppercase; }
+  .items th { border: 1.2px solid {{ $ink }}; font-weight: bold; font-size: 11.6px; padding: 6px 3px; text-align: center; }
   .items td { border: 1.2px solid {{ $ink }}; font-size: 12px; padding: 4px 4px; text-align: center; height: 20px; }
   .items td.p { text-align: left; font-weight: bold; }
   .items td.r { text-align: right; }
@@ -139,10 +147,8 @@
       <td class="v">{{ $data['place_of_supply'] }}</td>
       <td class="k">PO No.</td>
       <td class="v">{{ $data['po_number'] ?? '—' }}</td>
-      @if(in_array($data['doc_type'], ['credit_note', 'debit_note'], true))
       <td class="k">Against</td>
       <td class="v">{{ !empty($data['against_number']) ? $data['against_number'] : '—' }}</td>
-      @endif
       <td class="k">Reverse Charge</td>
       <td class="v" style="text-align: center;">{{ $data['reverse_charge'] ? 'Yes' : 'No' }}</td>
     </tr>
@@ -174,7 +180,7 @@
   <table class="items">
     <thead>
       <tr>
-        <th style="width: 6%;">Sr. No.</th>
+        <th style="width: 8%;">Sr. No.</th>
         <th>PARTICULARS</th>
         @if($data['show_hsn'])<th style="width: 11%;">HSN/SAC</th>@endif
         <th style="width: 7%;">QTY</th>

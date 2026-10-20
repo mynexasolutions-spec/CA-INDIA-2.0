@@ -10,20 +10,34 @@
    * renderer draws on the page canvas ("Simple" has neither).
    */
   $simple = ($theme['key'] ?? '') === 'simple';
-  $accent = $simple ? '#111111' : $theme['primary'];
+  $accent = $simple ? '#111111' : ($theme['l1_title'] ?? $theme['primary']);
   $ink = '#111111';
   $fmt = fn ($n) => number_format((float) $n, 2);
 
   // Blank grid rows keep the items area looking like a printed form on short documents.
-  $minRows = 17;
-  $fillRows = max(0, $minRows - count($data['items']));
+  // The form is meant to fill one page. The blank rows shrink to make room for anything taller than the standard
+  // content (wrapped names/addresses/terms, wrapped item descriptions, a seal + signature), so a short document
+  // never spills its terms/signature block onto a second page. One wrapped line costs ~0.65 of a blank row.
+  $wrap = fn ($text, $perLine) => max(1, (int) ceil(mb_strlen(trim((string) $text)) / $perLine));
+  $extraLines = max(0, $wrap($data['company_name'] ?? '', 24) - 1)
+      + max(0, $wrap($data['seller_address'] ?? '', 50) - 2)
+      + max(0, max($wrap($data['bill_to']['address'] ?? '', 52), $wrap($data['ship_to']['address'] ?? '', 52)) - 1)
+      + max(0, $wrap(($data['bill_to']['name'] ?? ''), 36) - 1)
+      + max(0, array_sum(array_map(fn ($t) => $wrap($t, 95), $data['terms'] ?? [])) - 3)
+      + ((!empty($data['seal_path']) || !empty($data['signature_path'])) ? 3 : 0)
+      + (!empty($data['logo_path']) ? 1 : 0)
+      + array_sum(array_map(fn ($i) => max(0, $wrap($i['particulars'] ?? '', 34) - 1) + (!empty($i['description']) ? 1 : 0), $data['items']));
+  $minRows = 15;
+  $fillRows = max(0, $minRows - count($data['items']) - (int) ceil($extraLines * 0.65));
   $cols = 6 + ($data['show_hsn'] ? 1 : 0) + ($data['has_tax'] ? 1 : 0);   // Sr, Particulars, Qty, UQC, Rate, Amount (+HSN) (+GST)
 
   $tds = $data['summary']['tds_tcs_type'] ?? null;
 @endphp
 <style>
-  @page { size: A4 portrait; margin: 10mm 9mm 13mm 9mm; }
+  @page { size: A4 portrait; margin: 5mm 7mm 13mm 7mm; }
   * { box-sizing: border-box; }
+  /* The 2px side padding keeps the outer table borders inside the printable area; with a bare 100% width dompdf
+     clips one of the side borders at the page edge. */
   body { font-family: "Times", "DejaVu Serif", serif; font-size: 10.6px; color: {{ $ink }}; margin: 0; padding: 0; line-height: 1.35; }
   table { width: 100%; border-collapse: collapse; }
   td, th { vertical-align: top; }
@@ -32,9 +46,9 @@
   .title { text-align: center; font-size: 15.3px; font-weight: bold; color: {{ $accent }}; padding: 6px 4px; letter-spacing: 0.4px; }
   .cell { border-right: 1px solid {{ $ink }}; padding: 5px 7px; }
   .cell-last { padding: 5px 7px; }
-  .logo-cell { width: 17%; text-align: center; vertical-align: middle; border-right: 1px solid {{ $ink }}; padding: 6px; }
+  .logo-cell { width: 13.5%; text-align: center; vertical-align: middle; border-right: 1px solid {{ $ink }}; padding: 6px; }
   .logo-cell img { max-width: 84px; max-height: 76px; }
-  .seller-cell { width: 41%; border-right: 1px solid {{ $ink }}; padding: 5px 7px; }
+  .seller-cell { width: 39%; border-right: 1px solid {{ $ink }}; padding: 5px 7px; }
   .seller-name { font-size: 12.4px; font-weight: bold; text-transform: uppercase; }
   .seller-line { font-weight: bold; font-size: 10.1px; }
   .meta-cell { padding: 0; }
@@ -50,14 +64,14 @@
   .kv td { padding: 1px 0; font-size: 10.1px; }
   .kv td.k { width: 50px; }
   .kv td.c { width: 8px; }
-  .items th { border-bottom: 1px solid {{ $ink }}; border-right: 1px solid {{ $ink }}; font-weight: bold; font-size: 10.1px; padding: 5px 3px; text-align: center; text-transform: uppercase; }
+  .items th { border-bottom: 1px solid {{ $ink }}; border-right: 1px solid {{ $ink }}; font-weight: bold; font-size: 10.1px; padding: 5px 3px; text-align: center; }
   .items th:last-child { border-right: 0; }
-  .items td { border-bottom: 1px solid {{ $ink }}; border-right: 1px solid {{ $ink }}; font-size: 10.4px; padding: 4px 4px; text-align: center; height: 17px; }
+  .items td { border-bottom: 1px solid {{ $ink }}; border-right: 1px solid {{ $ink }}; font-size: 10.4px; padding: 4px 4px; text-align: center; height: 22px; }
   .items td:last-child { border-right: 0; }
   .items td.p { text-align: left; font-weight: bold; }
   .items td.r { text-align: right; }
   .items tr { page-break-inside: avoid; }
-  .bot td.left { width: 54%; padding: 0; border-right: 1px solid {{ $ink }}; }
+  .bot td.left { width: 62%; padding: 0; border-right: 1px solid {{ $ink }}; }
   .bot td.right { padding: 0; }
   .sec { padding: 5px 8px 6px; }
   .sec-h { font-weight: bold; font-size: 10.6px; text-transform: uppercase; }
@@ -66,7 +80,7 @@
   .bank td.k { width: 78px; }
   .sum td { border-bottom: 1px solid {{ $ink }}; padding: 4px 8px; font-size: 10.4px; }
   .sum tr:last-child td { border-bottom: 0; }
-  .sum td.l { border-right: 1px solid {{ $ink }}; width: 58%; }
+  .sum td.l { border-right: 1px solid {{ $ink }}; width: 64%; }
   .sum td.v { text-align: center; }
   .sum .b { font-weight: bold; text-transform: uppercase; }
   .sum .gt td { font-size: 12.4px; font-weight: bold; padding: 6px 8px; }
@@ -147,7 +161,7 @@
   <table class="blk nt items">
     <thead>
       <tr>
-        <th style="width: 6%;">Sr. No.</th>
+        <th style="width: 7%;">Sr. No.</th>
         <th>PARTICULARS</th>
         @if($data['show_hsn'])<th style="width: 11%;">HSN/SAC</th>@endif
         <th style="width: 7%;">QTY</th>

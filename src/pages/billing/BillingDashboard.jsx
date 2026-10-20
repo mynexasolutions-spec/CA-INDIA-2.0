@@ -11,6 +11,25 @@ import {
   formatDMY, formatDMYTime, money, paymentStatusBadge, paymentStatusLabel,
 } from './billingUtils';
 
+/** Counts up from 0 to `value` (ease-out) so the KPI numbers animate in when the dashboard loads. */
+function CountUp({ value, duration = 700 }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const target = Number(value) || 0;
+    if (target === 0) { setN(0); return undefined; }
+    let raf;
+    const t0 = performance.now();
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / duration);
+      setN(Math.round(target * (1 - (1 - p) ** 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return <>{n}</>;
+}
+
 /* ═══ ICON SVGs ═══ */
 const I = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' };
 function IcLayers() { return <svg {...I}><path d="M12 3 3 7.5 12 12l9-4.5L12 3Z" /><path d="M3 12l9 4.5L21 12" /><path d="M3 16.5l9 4.5 9-4.5" /></svg>; }
@@ -121,11 +140,20 @@ function DonutChart({ counts }) {
     <div className="bd-donut">
       <div className="bd-donut-ring">
         <svg viewBox="0 0 160 160" width="100%" height="100%" role="img" aria-label="Document distribution">
+          <defs>
+            {segs.map((sg) => (
+              <linearGradient key={sg.key} id={`bd-g-${sg.key}`} x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor={sg.color} stopOpacity="0.72" />
+                <stop offset="100%" stopColor={sg.color} />
+              </linearGradient>
+            ))}
+          </defs>
           <circle cx="80" cy="80" r={R} fill="none" stroke="#eef3fb" strokeWidth={SW} />
+          <circle cx="80" cy="80" r={R + SW / 2 + 5} fill="none" stroke="#e6eefb" strokeWidth="1" strokeDasharray="2 5" />
           {segs.map((sg) => sg.cnt > 0 && (
             <circle
               key={sg.key} cx="80" cy="80" r={R} fill="none"
-              stroke={sg.color}
+              stroke={`url(#bd-g-${sg.key})`}
               strokeWidth={active === sg.key ? SW + 7 : SW}
               strokeLinecap="butt"
               strokeDasharray={`${drawn ? Math.max(sg.len - GAP, 0.5) : 0} ${C}`}
@@ -150,7 +178,7 @@ function DonutChart({ counts }) {
             </>
           ) : (
             <>
-              <span className="bd-donut-num">{total}</span>
+              <span className="bd-donut-num"><CountUp value={total} /></span>
               <span className="bd-donut-sub">Total</span>
               <span className="bd-donut-sub">Documents</span>
             </>
@@ -171,7 +199,8 @@ function DonutChart({ counts }) {
             <span className="bd-legend-dot" style={{ background: sg.color }} />
             <span className="bd-legend-label">{sg.label}</span>
             <span className="bd-legend-cnt">{sg.cnt}</span>
-            <span className="bd-legend-pct">({sg.pct.toFixed(1)}%)</span>
+            <span className="bd-legend-pct">{sg.pct.toFixed(1)}%</span>
+            <span className="bd-legend-bar"><i style={{ width: `${sg.pct}%`, background: sg.color }} /></span>
           </button>
         ))}
       </div>
@@ -252,8 +281,8 @@ export default function BillingDashboard() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <CreateDocumentDropdown profile={profile} />
-          <button type="button" onClick={() => downloadReport('xlsx')} disabled={!totalCount} style={EXPORT_BTN('#16a34a')}><IcExcel /> Export Excel</button>
-          <button type="button" onClick={() => downloadReport('pdf')} disabled={!totalCount} style={EXPORT_BTN('#ef4444')}><IcPdf /> Export PDF</button>
+          <button type="button" className="bd-exp bd-exp-xls" onClick={() => downloadReport('xlsx')} disabled={!totalCount} style={EXPORT_BTN('#16a34a')}><IcExcel /> Export Excel</button>
+          <button type="button" className="bd-exp bd-exp-pdf" onClick={() => downloadReport('pdf')} disabled={!totalCount} style={EXPORT_BTN('#ef4444')}><IcPdf /> Export PDF</button>
         </div>
       </div>
 
@@ -263,11 +292,11 @@ export default function BillingDashboard() {
           <div className="bd-top" style={{ ...ROW }}>
             <div className="bd-cards">
               {CARDS.map(({ key, label, Ic, color, bg, tint, edge, viewLabel, viewTo }, i) => (
-                <div key={key} className="bd-card" style={{ background: tint, borderColor: edge, gridColumn: i < 4 ? 'span 3' : 'span 4' }}>
+                <div key={key} className="bd-card" style={{ background: tint, borderColor: edge, gridColumn: i < 4 ? 'span 3' : 'span 4', '--bd-c': color, animationDelay: `${i * 0.06}s` }}>
                   <span className="bd-card-ico" style={{ background: bg, color }}><Ic /></span>
                   <div className="bd-card-body">
                     <span className="bd-card-label">{label}</span>
-                    <span className="bd-card-num" style={{ color: key === 'total' ? '#0f2a5f' : color }}>{allCounts[key] ?? 0}</span>
+                    <span className="bd-card-num" style={{ color: key === 'total' ? '#0f2a5f' : color }}><CountUp value={allCounts[key] ?? 0} /></span>
                     {viewTo
                       ? <Link to={viewTo} className="bd-card-link">{viewLabel}</Link>
                       : <span className="bd-card-link">{viewLabel}</span>}
@@ -277,7 +306,10 @@ export default function BillingDashboard() {
             </div>
 
             <div className="bd-panel bd-dist">
-              <div className="bd-panel-title">Document Distribution</div>
+              <div className="bd-panel-title">
+                <span className="bd-panel-ico" style={{ background: '#dbe8ff', color: '#2563eb' }}><IcLayers /></span>
+                Document Distribution
+              </div>
               <DonutChart counts={typeCounts} />
             </div>
           </div>
@@ -295,18 +327,21 @@ export default function BillingDashboard() {
                 <div className="bd-ti-tiles">
                   <div className="bd-ti-tile bd-ti-total">
                     <div className="bd-ti-label">Total Tax Invoices</div>
-                    <div className="bd-ti-num">{tiTotal}</div>
+                    <div className="bd-ti-num"><CountUp value={tiTotal} /></div>
                     <div className="bd-ti-sub">All invoices</div>
+                    <div className="bd-ti-bar"><i style={{ width: tiTotal > 0 ? '100%' : '0%' }} /></div>
                   </div>
                   <div className="bd-ti-tile bd-ti-b2b">
                     <div className="bd-ti-label">B2B Invoices</div>
-                    <div className="bd-ti-num">{b2b}</div>
+                    <div className="bd-ti-num"><CountUp value={b2b} /></div>
                     <div className="bd-ti-sub">{tiTotal > 0 ? Math.round(b2b / tiTotal * 100) : 0}% of total</div>
+                    <div className="bd-ti-bar"><i style={{ width: `${tiTotal > 0 ? Math.round(b2b / tiTotal * 100) : 0}%` }} /></div>
                   </div>
                   <div className="bd-ti-tile bd-ti-b2c">
                     <div className="bd-ti-label">B2C Invoices</div>
-                    <div className="bd-ti-num">{b2c}</div>
+                    <div className="bd-ti-num"><CountUp value={b2c} /></div>
                     <div className="bd-ti-sub">{tiTotal > 0 ? Math.round(b2c / tiTotal * 100) : 0}% of total</div>
+                    <div className="bd-ti-bar"><i style={{ width: `${tiTotal > 0 ? Math.round(b2c / tiTotal * 100) : 0}%` }} /></div>
                   </div>
                 </div>
               </div>
@@ -325,6 +360,7 @@ export default function BillingDashboard() {
                   >
                     <span style={{ background: bg, color, width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Ic /></span>
                     {label}
+                    <svg className="bd-quick-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="13 6 19 12 13 18" /></svg>
                   </Link>
                 ))}
               </div>
@@ -338,8 +374,12 @@ export default function BillingDashboard() {
               <div className="bd-panel-title" style={{ marginBottom: 0 }}>
                 <span className="bd-panel-ico" style={{ background: '#dbe8ff', color: '#2563eb' }}><IcDoc /></span>
                 Recent Documents
+                {meta.total > 0 && <span className="bd-count">{meta.total} total</span>}
               </div>
-              <Link to="/portal/billing/invoices" style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}>View All Documents</Link>
+              <Link to="/portal/billing/invoices" className="bd-viewall">
+                View All Documents
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="13 6 19 12 13 18" /></svg>
+              </Link>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table className="bp-table bp-doc-table bd-table" style={{ width: '100%', fontSize: 13 }}>
@@ -359,15 +399,20 @@ export default function BillingDashboard() {
                   {rows.map((d, i) => {
                     const card = CARDS.find((c) => c.key === d.type);
                     return (
-                      <tr key={d.id}>
+                      <tr key={d.id} style={{ animationDelay: `${i * 0.05}s` }}>
                         <td>{(meta.current_page - 1) * meta.per_page + i + 1}</td>
                         <td><Link className="bp-doc-num-link" to={billingDocPath(d.type, d.id)}>{d.number}</Link></td>
-                        <td>{formatDMY(d.document_date)}</td>
-                        <td>{d.customer?.name || '—'}</td>
-                        <td style={{ whiteSpace: 'nowrap', color: card?.color || '#334155', fontWeight: 600 }}>{docTypeLabel(d.type)}</td>
-                        <td>{money(d.grand_total || d.total_amount)}</td>
-                        <td><span className={`bp-badge ${paymentStatusBadge(d.status)}`}>{paymentStatusLabel(d.status)}</span></td>
-                        <td style={{ whiteSpace: 'nowrap' }}>{formatDMYTime(d.created_at)}</td>
+                        <td className="bd-date">{formatDMY(d.document_date)}</td>
+                        <td className="bd-party">
+                          <span className="bd-party-name">{d.customer?.name || '—'}</span>
+                        </td>
+                        <td><span className="bd-type" style={{ '--tc': card?.color || '#334155' }}>{docTypeLabel(d.type)}</span></td>
+                        <td className="bd-amt">{money(d.grand_total || d.total_amount)}</td>
+                        <td><span className={`bp-badge bd-status ${paymentStatusBadge(d.status)}`}>{paymentStatusLabel(d.status)}</span></td>
+                        <td className="bd-created">
+                          <span>{formatDMYTime(d.created_at).split(', ')[0]}</span>
+                          <small>{formatDMYTime(d.created_at).split(', ')[1] || ''}</small>
+                        </td>
                       </tr>
                     );
                   })}

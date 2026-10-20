@@ -238,7 +238,9 @@ class Layout2ProductionRendererTest extends TestCase
                 $this->assertStringNotContainsString('GST (%)', $renderedHtml);
             }
             if ($type === 'tax_invoice') {
-                $this->assertStringNotContainsString('Against', $renderedHtml);
+                // The approved form shows the "Against" cell on every document; it only has a value on credit/debit notes.
+                $this->assertStringContainsString('Against', $renderedHtml);
+                $this->assertStringNotContainsString('INV-ORIG-2026', $renderedHtml);
             }
         }
     }

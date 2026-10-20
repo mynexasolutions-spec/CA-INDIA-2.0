@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../../api/client';
-import { localISODate, docTypeLabel, money } from './billingUtils';
+import { localISODate, docTypeLabel, money, formatDMY } from './billingUtils';
 
 /**
  * Payment workflow modals shared by Reports -> Outstanding and Billing -> Document View, so both places
@@ -12,12 +12,7 @@ export const CoinIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fi
 
 /* ── Helpers ───────────────────────────────────────────────── */
 export function fmtDate(v) {
-  if (!v) return '—';
-  const s = String(v).slice(0, 10);
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (!m) return s;
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${m[3]} ${months[Number(m[2]) - 1]} ${m[1]}`;
+  return formatDMY(v);
 }
 const today = () => localISODate();
 const PAGE_SIZES = [10, 25, 50];

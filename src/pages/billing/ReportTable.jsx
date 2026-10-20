@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { docTypeLabel, paymentStatusBadge, paymentStatusLabel } from './billingUtils';
+import { docTypeLabel, paymentStatusBadge, paymentStatusLabel, formatDMY } from './billingUtils';
 import GstSummaryMatrix, { resolveGstMatrix } from './GstSummaryMatrix';
 import PartyWiseDetailTable from './PartyWiseDetailTable';
 
@@ -18,8 +18,7 @@ function moneyFixed(n) {
 }
 
 function fmtDate(v) {
-  if (!v) return '—';
-  return String(v).slice(0, 10);
+  return formatDMY(v);
 }
 
 function asRows(data) {

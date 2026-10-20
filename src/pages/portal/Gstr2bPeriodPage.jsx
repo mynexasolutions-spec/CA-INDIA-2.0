@@ -132,17 +132,20 @@ function InvoiceForm({ initial = {}, period, onClose, onSaved, title, submitUrl,
 
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }} onClick={onClose} />
-      <div style={{ position: 'relative', background: '#fff', borderRadius: 14, padding: '26px 28px 22px', width: '100%', maxWidth: 560, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
+    <div className="g2b-ov" style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div className="g2b-ov-bg" style={{ position: 'absolute', inset: 0 }} onClick={onClose} />
+      <div className="g2b-modal" style={{ position: 'relative', background: '#fff', padding: '26px 28px 22px', width: '100%', maxWidth: 580, maxHeight: '92vh', overflowY: 'auto' }}>
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--bp-navy)' }}>{title}</h3>
-            <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--bp-muted)' }}>Projected ITC is for internal planning only — it is not final and is not used for GST filing.</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 20 }}>
+          <span className="g2b-modal-ic" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /><line x1="12" y1="12" x2="12" y2="18" /><line x1="9" y1="15" x2="15" y2="15" /></svg>
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: 'var(--bp-navy)', letterSpacing: '-0.2px' }}>{title}</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--bp-muted)', lineHeight: 1.45 }}>Projected ITC is for internal planning only — it is not final and is not used for GST filing.</p>
           </div>
-          <button type="button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <button type="button" onClick={onClose} aria-label="Close" className="g2b-modal-x">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
 
@@ -210,12 +213,12 @@ function InvoiceForm({ initial = {}, period, onClose, onSaved, title, submitUrl,
           </div>
 
           {/* ITC Amount — never editable, always IGST + CGST + SGST/UTGST */}
-          <div style={{ marginBottom: 16, padding: '12px 16px', background: '#eaf3ff', borderRadius: 12, border: '1px solid #cfe2ff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div className="g2b-itc" style={{ marginBottom: 18, padding: '14px 18px', background: '#eaf3ff', borderRadius: 14, border: '1px solid #cfe2ff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: 12.5, fontWeight: 800, color: '#1e40af' }}>ITC Amount (₹) <span style={{ fontWeight: 600, color: '#3b82f6' }}>(Auto-calculated)</span></div>
               <div style={{ fontSize: 11, color: '#3b82f6', marginTop: 2 }}>ITC Amount = IGST + CGST + SGST/UTGST</div>
             </div>
-            <span style={{ fontSize: 22, fontWeight: 800, color: '#1d4ed8' }}>{Number(itcAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            <span key={itcAmount} className="g2b-itc-num" style={{ fontSize: 26, fontWeight: 800, color: '#1d4ed8', fontVariantNumeric: 'tabular-nums' }}>₹ {Number(itcAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
           </div>
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
@@ -253,12 +256,12 @@ function Tile({ label, value, sub, tone, icon }) {
     orange: { bg: 'linear-gradient(135deg,#fff8ec,#fef0d6)', bd: '#f9e3bc', ic: '#fde4b8', fg: '#d97706' },
   }[tone];
   return (
-    <div style={{ background: T.bg, border: `1px solid ${T.bd}`, borderRadius: 14, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-      <span style={{ width: 44, height: 44, borderRadius: 12, background: T.ic, color: T.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</span>
-      <div style={{ minWidth: 0, lineHeight: 1.25 }}>
-        <div style={{ fontSize: 11.5, fontWeight: 800, color: '#334155' }}>{label}</div>
-        <div style={{ fontSize: 21, fontWeight: 800, color: T.fg, whiteSpace: 'nowrap' }}>{value}</div>
-        {sub && <div style={{ fontSize: 11, color: '#64748b' }}>{sub}</div>}
+    <div className="g2b-tile" style={{ background: T.bg, border: `1px solid ${T.bd}`, borderRadius: 16, padding: '16px 16px', display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+      <span style={{ width: 46, height: 46, borderRadius: 14, background: T.ic, color: T.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: `inset 0 0 0 1px ${T.bd}` }}>{icon}</span>
+      <div style={{ minWidth: 0, flex: 1, lineHeight: 1.25 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: '#334155', minHeight: 29, display: 'flex', alignItems: 'flex-end' }}>{label}</div>
+        <div style={{ fontSize: 21, fontWeight: 800, color: T.fg, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>{value}</div>
+        <div style={{ fontSize: 11, color: '#64748b', minHeight: 14 }}>{sub || ''}</div>
       </div>
     </div>
   );
@@ -275,7 +278,7 @@ function Toolbar({ q, setQ, filterOpen, setFilterOpen, onExport, exporting, chil
     <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
       <div style={{ position: 'relative' }}>
         <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}><IcSearch /></span>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by invoice no., supplier name or GSTIN…" style={{ ...CTRL, width: 300, paddingLeft: 34 }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search invoice no., supplier, GSTIN…" style={{ ...CTRL, width: 320, maxWidth: '100%', paddingLeft: 34 }} />
       </div>
       <div style={{ position: 'relative' }}>
         <button type="button" style={BTN_OUT} onClick={() => setFilterOpen((v) => !v)}><IcFilter /> Filter</button>
@@ -559,8 +562,8 @@ function ProjectedTab({ period }) {
 
   return (
     <div>
-      <div style={{ ...CARD, display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16, background: '#f5f9ff' }}>
-        <span style={{ width: 40, height: 40, borderRadius: '50%', background: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <div className="g2b-up" style={{ ...CARD, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16, background: '#f5f9ff' }}>
+        <span className="g2b-up-ic" style={{ width: 44, height: 44, borderRadius: 14, background: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="12" y1="11" x2="12" y2="17" /><line x1="12" y1="7" x2="12.01" y2="7" /></svg>
         </span>
         <div style={{ flex: 1, minWidth: 260 }}>
@@ -570,19 +573,27 @@ function ProjectedTab({ period }) {
             <b style={{ color: '#dc2626' }}>This is NOT FINAL</b> and will not be considered for filing. Once the actual GSTR-2B is available, the Admin user can delete the projected ITC data.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button type="button" style={BTN_OUT} onClick={downloadTemplate}>
-            <IcDownload /> <span style={{ lineHeight: 1.1 }}>Download Format<br /><small style={{ fontWeight: 500 }}>(Excel Template)</small></span>
+        <div className="g2b-up-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button type="button" className="g2b-up-btn" style={BTN_OUT} onClick={downloadTemplate}>
+            <IcDownload /> <span>Download Format<small>(Excel Template)</small></span>
           </button>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onFile} />
-          <button type="button" style={{ ...BTN_SOLID, height: 'auto', minHeight: 38 }} onClick={() => fileRef.current?.click()} disabled={uploading}>
-            <IcUpload /> <span style={{ lineHeight: 1.1 }}>{uploading ? 'Uploading…' : 'Upload Excel'}<br /><small style={{ fontWeight: 500 }}>(Use our template)</small></span>
+          <button type="button" className="g2b-up-btn g2b-up-primary" style={BTN_SOLID} onClick={() => fileRef.current?.click()} disabled={uploading}>
+            <IcUpload /> <span>{uploading ? 'Uploading…' : 'Upload Excel'}<small>(Use our template)</small></span>
           </button>
-          <button type="button" style={BTN_OUT} onClick={() => setShowAdd(true)}><IcPlus /> Add Invoice Manually</button>
+          <button type="button" className="g2b-up-btn" style={BTN_OUT} onClick={() => setShowAdd(true)}>
+            <IcPlus /> <span>Add Invoice Manually<small>(One by one)</small></span>
+          </button>
         </div>
       </div>
 
-      {ok && <p className="bp-alert bp-alert-success" style={{ marginBottom: 10 }}>{ok}</p>}
+      {ok && (
+        <div key={ok} className="g2b-ok">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10" /><polyline points="9 12 11 14 15 10" /></svg>
+          <span>{ok}</span>
+          <button type="button" aria-label="Dismiss" onClick={() => setOk('')} className="g2b-ok-x">×</button>
+        </div>
+      )}
       {err && (
         <div className="bp-alert bp-alert-error" style={{ marginBottom: 10 }}>
           <div>{err}</div>
@@ -621,22 +632,22 @@ function ProjectedTab({ period }) {
                 </thead>
                 <tbody>
                   {pageRows.map((r, i) => (
-                    <tr key={r.id} style={i % 2 ? { background: '#f9fbff' } : undefined}>
+                    <tr key={r.id} className="g2b-row">
                       <td style={{ ...TD, color: '#64748b' }}>{(curPage - 1) * perPage + i + 1}</td>
                       <td style={TD}>{fmt(r.invoice_date)}</td>
                       <td style={TD}><span style={{ color: '#1d4ed8', fontWeight: 700, textDecoration: 'underline' }}>{r.invoice_number || '—'}</span></td>
                       <td style={TD}>{r.party_name || '—'}</td>
-                      <td style={{ ...TD, fontFamily: 'monospace', fontSize: 12 }}>{r.gstin || '—'}</td>
+                      <td style={{ ...TD, fontSize: 12, fontWeight: 600, letterSpacing: '0.2px', fontVariantNumeric: 'tabular-nums' }}>{r.gstin || '—'}</td>
                       <td style={TD}>{inr(r.taxable_value)}</td>
                       <td style={TD}>{inr(r.igst)}</td>
                       <td style={TD}>{inr(r.cgst)}</td>
                       <td style={TD}>{inr(r.sgst_utgst)}</td>
                       <td style={{ ...TD, fontWeight: 800, color: '#0f2a5f' }}>{inr(r.itc_amount)}</td>
                       <td style={TD}>
-                        <button type="button" title="Edit" onClick={() => setEditing(r)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', padding: 4 }}>
+                        <button type="button" title="Edit" className="g2b-act g2b-act-edit" onClick={() => setEditing(r)}>
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
                         </button>
-                        <button type="button" title="Delete" disabled={deleting === r.id} onClick={() => handleDelete(r.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 4 }}>
+                        <button type="button" title="Delete" className="g2b-act g2b-act-del" disabled={deleting === r.id} onClick={() => handleDelete(r.id)}>
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                         </button>
                       </td>
@@ -655,11 +666,17 @@ function ProjectedTab({ period }) {
         )}
       </div>
 
-      <div style={{ marginTop: 14, background: '#fff8e8', border: '1px solid #f6dd9b', borderRadius: 12, padding: '12px 16px', color: '#7a4a00', fontSize: 12.5, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="#d97706" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="11" x2="12" y2="16" stroke="white" strokeWidth="2.2" strokeLinecap="round" /><line x1="12" y1="7.5" x2="12.01" y2="7.5" stroke="white" strokeWidth="2.4" strokeLinecap="round" /></svg>
-        <div>
-          <b>Note:</b> Projected ITC is for your internal planning purposes only. Once the actual GSTR-2B is available, the Admin user can delete the projected ITC data.
-          <div style={{ color: '#dc2626', fontWeight: 700, marginTop: 2 }}>This data will not be considered for filing.</div>
+      <div className="g2b-note" style={{ marginTop: 14 }}>
+        <span className="g2b-note-ic" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9.5" x2="12" y2="13.5" /><line x1="12" y1="17.2" x2="12.01" y2="17.2" /></svg>
+        </span>
+        <div className="g2b-note-body">
+          <div className="g2b-note-title">Note</div>
+          <p>Projected ITC is for your internal planning purposes only. Once the actual GSTR-2B is available, the Admin user can delete the projected ITC data.</p>
+          <span className="g2b-note-pill">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><line x1="4.9" y1="4.9" x2="19.1" y2="19.1" /></svg>
+            This data will not be considered for filing.
+          </span>
         </div>
       </div>
 

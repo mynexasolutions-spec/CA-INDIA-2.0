@@ -30,6 +30,10 @@ class DocumentThemeTokens
             'grand_line' => '#22A35A',
             'text_on_primary' => '#FFFFFF',
             'rgb' => [0.114, 0.251, 0.686],
+            // Layout 1 only (the approved form): brighter title blue and a two-tone corner ribbon.
+            'l1_title' => '#1368CA',
+            'ribbon_dark' => [0.024, 0.306, 0.667],
+            'ribbon_light' => [0.314, 0.58, 0.863],
         ],
         'slate_blue' => [
             'key' => 'slate_blue',
