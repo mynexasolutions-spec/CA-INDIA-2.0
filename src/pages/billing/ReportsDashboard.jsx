@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { billingMode } from './billingProfile';
-import { currentFyRange } from './billingUtils';
+import { currentFyRange, formatDMYTime } from './billingUtils';
 import { resolveGstMatrix, GST_MATRIX_COLS } from './GstSummaryMatrix';
 import { useReportsEnv } from './ReportsContext';
 
@@ -81,7 +81,7 @@ export default function ReportsDashboard() {
         setOutstandingTotal(outstandingOf(outstanding));
         const pt = prevGst ? totalsOf(prevGst) : null;
         setPrev({ gross: pt?.gross, taxable: pt?.taxable, gst: pt?.gst, outstanding: prevOut ? outstandingOf(prevOut) : null });
-        setLastUpdated(new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+        setLastUpdated(formatDMYTime(new Date()));
       })
       .catch((e) => setErr(e.message || 'Failed to load reports data'))
       .finally(() => setLoading(false));

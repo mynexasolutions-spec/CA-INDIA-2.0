@@ -2219,3 +2219,10 @@ form.bp-card:has(.bp-gst-radio-row) textarea.bp-input { height: auto; min-height
 .er-important:has(> div[style*="position: absolute"]) { padding-bottom: 96px !important; }
 .er-important > div[style*="align-self: flex-end"] { margin-top: 14px !important; }
 @media (max-width: 700px) { .er-important:has(> div[style*="position: absolute"]) { padding-bottom: 16px !important; } }
+
+/* Billing document lists: totals as a footer row aligned under the money columns */
+.il-table tfoot td { background: #eef4ff; border-top: 1px solid #d6e3fa; padding: 12px 10px; vertical-align: middle; }
+.il-table tfoot .il-totals-lead { text-align: left; font-weight: 800; color: #0f2a5f; font-size: 13px; }
+.il-table tfoot .il-totals-lead .il-totals-ico { margin-right: 10px; vertical-align: middle; }
+.il-table tfoot td b { display: block; font-size: 13.5px; color: #0f2a5f; }
+.il-table tfoot td small { display: block; font-size: 11px; color: #64748b; }

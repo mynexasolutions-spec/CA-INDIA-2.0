@@ -24,7 +24,9 @@ class DocumentCanvasHelper
         bool $showWatermark = false,
         ?string $watermarkText = null,
         int $borderRadius = 11,
-        bool $drawFrame = true
+        bool $drawFrame = true,
+        int $rightInset = 22,
+        bool $mutedFooter = false
     ): void {
         $font = $fontMetrics->getFont('DejaVu Sans');
         $frameRgb = $theme['rgb'] ?? [0.247, 0.275, 0.314];
@@ -36,26 +38,40 @@ class DocumentCanvasHelper
             $showWatermark,
             $watermarkText,
             $borderRadius,
-            $drawFrame
+            $drawFrame,
+            $rightInset,
+            $mutedFooter
         ) {
             // 1. Draw outer frame on canvas (rounded or square) if enabled
             if ($drawFrame) {
-                $fw = 1.3;
+                $fw = 2.4;
                 $x0 = 18;
                 $y0 = 14;
                 $x1 = $canvas->get_width() - 18;
                 $y1 = $canvas->get_height() - 28;
 
                 if ($borderRadius > 0) {
+                    // four straight edges + four quarter-circle corners made of short solid segments
                     $r = $borderRadius;
                     $canvas->line($x0 + $r, $y0, $x1 - $r, $y0, $frameRgb, $fw);
                     $canvas->line($x0 + $r, $y1, $x1 - $r, $y1, $frameRgb, $fw);
                     $canvas->line($x0, $y0 + $r, $x0, $y1 - $r, $frameRgb, $fw);
                     $canvas->line($x1, $y0 + $r, $x1, $y1 - $r, $frameRgb, $fw);
-                    $canvas->arc($x0 + $r, $y0 + $r, $r, $r, 90, 180, $frameRgb, $fw);
-                    $canvas->arc($x1 - $r, $y0 + $r, $r, $r, 0, 90, $frameRgb, $fw);
-                    $canvas->arc($x1 - $r, $y1 - $r, $r, $r, 270, 360, $frameRgb, $fw);
-                    $canvas->arc($x0 + $r, $y1 - $r, $r, $r, 180, 270, $frameRgb, $fw);
+                    $corner = function (float $cx, float $cy, float $from) use ($r, $canvas, $frameRgb, $fw) {
+                        $px = $cx + $r * cos(deg2rad($from));
+                        $py = $cy + $r * sin(deg2rad($from));
+                        for ($i = 1; $i <= 12; $i++) {
+                            $ang = deg2rad($from + (90 * $i / 12));
+                            $nx = $cx + $r * cos($ang);
+                            $ny = $cy + $r * sin($ang);
+                            $canvas->line($px, $py, $nx, $ny, $frameRgb, $fw);
+                            [$px, $py] = [$nx, $ny];
+                        }
+                    };
+                    $corner($x1 - $r, $y0 + $r, 270); // top-right
+                    $corner($x1 - $r, $y1 - $r, 0);   // bottom-right
+                    $corner($x0 + $r, $y1 - $r, 90);  // bottom-left
+                    $corner($x0 + $r, $y0 + $r, 180); // top-left
                 } else {
                     $canvas->line($x0, $y0, $x1, $y0, $frameRgb, $fw);
                     $canvas->line($x0, $y1, $x1, $y1, $frameRgb, $fw);
@@ -67,7 +83,7 @@ class DocumentCanvasHelper
             // 2. Footer outside frame: darker and slightly larger (tuned)
             $y = $canvas->get_height() - 20;
             $fontSize = 9.2;
-            $darkColor = [0.18, 0.22, 0.28];
+            $darkColor = $mutedFooter ? [0.39, 0.45, 0.55] : [0.18, 0.22, 0.28];
 
             // Render watermark text ONLY when $showWatermark is true AND watermark text is not empty
             if ($showWatermark && $watermarkText !== '') {
@@ -87,7 +103,81 @@ class DocumentCanvasHelper
             // Page X of Y (Always displayed on the right)
             $pageText = "Page {$pageNumber} of {$pageCount}";
             $w = $fontMetrics->getTextWidth($pageText, $font, $fontSize);
-            $canvas->text($canvas->get_width() - 22 - $w, $y, $pageText, $font, $fontSize, $darkColor);
+            $canvas->text($canvas->get_width() - $rightInset - $w, $y, $pageText, $font, $fontSize, $darkColor);
+        });
+    }
+
+    /**
+     * Page furniture for a layout: frame / corner ribbons plus the footer, in one call so generated invoices and
+     * layout previews always look the same.
+     *
+     *  - Layout 1: classic boxed form — black footer, compact corner ribbons, no canvas frame
+     *  - Layout 2: classic form with a letterhead — black footer, large corner ribbons, no canvas frame
+     *  - Layout 3: rounded frame in the theme colour
+     *  - Layout 4: footer only
+     */
+    public static function decorate($canvas, $fontMetrics, array $theme, int $layoutId, bool $watermark, ?string $watermarkText): void
+    {
+        $classic = in_array($layoutId, [1, 2], true);
+        // footer link takes the theme colour in every layout (black for 'Simple')
+        $footerTheme = $theme;
+
+        self::attachFrameAndFooter(
+            $canvas,
+            $fontMetrics,
+            $footerTheme,
+            $watermark,
+            $watermarkText,
+            $layoutId === 3 ? 16 : ($layoutId === 4 ? 11 : 0),
+            $layoutId === 3,
+            // keep "Page x of y" clear of the bottom-right corner ribbon
+            ($classic && ($theme['key'] ?? '') !== 'simple') ? ($layoutId === 2 ? 80 : 64) : 22,
+            true
+        );
+
+        if ($classic) {
+            self::attachRibbons($canvas, $theme, $layoutId === 2 ? 'large' : 'compact');
+        }
+    }
+
+    /**
+     * Diagonal corner ribbons (top-left and bottom-right) used by Layouts 1 and 2, drawn on every page in the
+     * theme colour. The "Simple" colour has no ribbons.
+     *
+     * @param string $style 'compact' (Layout 1) or 'large' (Layout 2)
+     */
+    public static function attachRibbons($canvas, array $theme, string $style = 'compact'): void
+    {
+        if (($theme['key'] ?? '') === 'simple' || empty($theme['rgb'])) {
+            return;
+        }
+
+        $dark = $theme['rgb'];
+        $light = array_map(fn ($c) => $c + (1 - $c) * 0.55, $dark);
+
+        // Shapes are defined from the top-left corner; the bottom-right corner is the same shape rotated 180 degrees.
+        $shapes = $style === 'large'
+            ? [[$light, [0, 0, 96, 0, 0, 76]], [$dark, [0, 0, 68, 0, 0, 54]]]
+            : [[$light, [38, 0, 56, 0, 0, 56, 0, 38]], [$dark, [0, 0, 30, 0, 0, 30]]];
+
+        // The large style keeps its full size top-left and a smaller ribbon bottom-right, clear of the signature.
+        $bottomScale = $style === 'large' ? 0.85 : 1.0;
+
+        $canvas->page_script(function ($pageNumber, $pageCount, $canvas) use ($shapes, $bottomScale) {
+            $w = $canvas->get_width();
+            $h = $canvas->get_height();
+            foreach (['top-left', 'bottom-right'] as $corner) {
+                foreach ($shapes as [$colour, $points]) {
+                    $flat = [];
+                    for ($i = 0; $i < count($points); $i += 2) {
+                        $x = $points[$i];
+                        $y = $points[$i + 1];
+                        $flat[] = $corner === 'top-left' ? $x : $w - $x * $bottomScale;
+                        $flat[] = $corner === 'top-left' ? $y : $h - $y * $bottomScale;
+                    }
+                    $canvas->polygon($flat, $colour, 0.1, [], true);
+                }
+            }
         });
     }
 
@@ -99,6 +189,9 @@ class DocumentCanvasHelper
         $normalizedKey = match ($themeKey) {
             'charcoal' => 'charcoal_grey',
             'plum' => 'dusty_plum',
+            // no dedicated icon sets for the two new colours: reuse the closest existing ones
+            'royal_blue' => 'slate_blue',
+            'simple' => 'charcoal_grey',
             default => $themeKey,
         };
 

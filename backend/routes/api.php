@@ -67,6 +67,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/dashboard', [ClientDashboard::class, 'index']);
             Route::get('/profile', [ClientDashboard::class, 'profile']);
             Route::put('/profile', [ClientDashboard::class, 'updateProfile']);
+            Route::get('/lookup/ifsc/{ifsc}', [LookupController::class, 'ifsc'])->middleware('throttle:30,1');
             Route::get('/change-requests/current', [ClientChangeRequestController::class, 'current']);
             Route::get('/change-requests/history', [ClientChangeRequestController::class, 'history']);
             Route::post('/change-requests', [ClientChangeRequestController::class, 'store']);

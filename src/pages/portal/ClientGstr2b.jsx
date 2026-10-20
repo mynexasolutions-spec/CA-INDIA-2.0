@@ -10,14 +10,22 @@ function money(n) {
   return `₹ ${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 }
 
+// available = official GSTR-2B loaded; open = the period has started but the official statement isn't out yet
+// (the client can already enter Projected ITC); upcoming = the period hasn't started.
+const STATUS_STYLE = {
+  available: { label: 'Available', bg: '#d9f3e3', fg: '#15803d' },
+  open: { label: 'Projected ITC', bg: '#dbeafe', fg: '#1d4ed8' },
+  upcoming: { label: 'Upcoming', bg: '#e8edf5', fg: '#64748b' },
+};
+
 function StatusBadge({ status }) {
-  const live = status === 'available';
+  const s = STATUS_STYLE[status] || STATUS_STYLE.upcoming;
   return (
     <span style={{
       display: 'inline-block', minWidth: 92, padding: '4px 14px', borderRadius: 999, fontSize: 11.5, fontWeight: 800,
-      background: live ? '#d9f3e3' : '#e8edf5', color: live ? '#15803d' : '#64748b', textAlign: 'center',
+      background: s.bg, color: s.fg, textAlign: 'center',
     }}>
-      {live ? 'Available' : 'Upcoming'}
+      {s.label}
     </span>
   );
 }
@@ -76,7 +84,8 @@ export default function ClientGstr2b() {
 
   const periods = data?.periods || [];
   const last = data?.last_gstr2b;
-  const nextUpcoming = periods.find((p) => p.status === 'upcoming');
+  // "Upcoming" = the first period whose official GSTR-2B hasn't been loaded yet.
+  const nextUpcoming = periods.find((p) => p.status !== 'available');
   const freq = data?.profile?.filing_frequency === 'quarterly' ? 'Quarterly' : 'Monthly';
   const regType = data?.profile?.registration_type || 'Regular';
 
@@ -164,6 +173,7 @@ export default function ClientGstr2b() {
               <tbody>
                 {periods.map((p) => {
                   const live = p.status === 'available';
+                  const enabled = p.status !== 'upcoming'; // opens on the 1st day of the month / quarter
                   return (
                     <tr key={p.period}>
                       <td style={{ fontWeight: 800, color: live ? '#0f2a5f' : '#475569', whiteSpace: 'nowrap' }}>{periodText(p.period, p.label)}</td>
@@ -175,14 +185,14 @@ export default function ClientGstr2b() {
                       <td>
                         <button
                           type="button"
-                          disabled={!live}
-                          onClick={() => live && navigate(`/portal/gstr-2b/${p.period}`)}
+                          disabled={!enabled}
+                          onClick={() => enabled && navigate(`/portal/gstr-2b/${p.period}`)}
                           style={{
                             height: 34, padding: '0 18px', borderRadius: 9, border: 'none', display: 'inline-flex', alignItems: 'center', gap: 8,
-                            fontWeight: 700, fontSize: 12.5, cursor: live ? 'pointer' : 'not-allowed',
-                            background: live ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : '#d5dce8',
-                            color: live ? '#fff' : '#8a97ad',
-                            boxShadow: live ? '0 8px 14px -8px rgba(29,78,216,.8)' : 'none',
+                            fontWeight: 700, fontSize: 12.5, cursor: enabled ? 'pointer' : 'not-allowed',
+                            background: enabled ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : '#d5dce8',
+                            color: enabled ? '#fff' : '#8a97ad',
+                            boxShadow: enabled ? '0 8px 14px -8px rgba(29,78,216,.8)' : 'none',
                           }}
                         >
                           <EyeIc /> View GSTR-2B

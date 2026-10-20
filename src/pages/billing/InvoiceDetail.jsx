@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { LoadingBlock } from '../../components/Spinner';
 import CancelDocumentModal from './CancelDocumentModal';
+import { MarkAsPaidModal, UnmarkAsPaidModal } from './PaymentModals';
 import { billingDocEditPath, billingDocPath, docTypeLabel, formatDMY, formatDMYTime, reasonForTransportLabel } from './billingUtils';
 
 function money(n) {
@@ -44,6 +45,8 @@ export default function InvoiceDetail() {
   const [actionErr, setActionErr] = useState('');
   const [busyAction, setBusyAction] = useState(''); // '' | 'download' | 'email' | 'whatsapp' | ...
   const [cancelling, setCancelling] = useState(false);
+  // Payment pop-ups shared with Reports -> Outstanding: { type: 'paid' } | { type: 'unpaid', log }
+  const [payModal, setPayModal] = useState(null);
   // Caches the in-flight/resolved PDF File Promise for the current doc, keyed by doc id.
   // The Web Share API only accepts a share() call while the browser still considers the
   // click a live "user gesture" — regenerating + fetching the PDF (a full server round
@@ -126,7 +129,7 @@ export default function InvoiceDetail() {
     <div className="bp-card">
       <div className="bp-toolbar">
         <div>
-          <h2 style={{ margin: 0 }}>{docTypeLabel(doc.type)} · {doc.number}</h2>
+          <h2 style={{ margin: 0 }}>{docTypeLabel(doc.type)} · <span style={{ color: 'var(--bp-blue)' }}>{doc.number}</span></h2>
           <div style={{ fontSize: 13, color: 'var(--bp-muted)' }}>
             {formatDMY(doc.document_date)}
             {doc.due_date ? ` · Due ${formatDMY(doc.due_date)}` : ''}
@@ -144,7 +147,7 @@ export default function InvoiceDetail() {
             {doc.edit_allowed ? <span className="bp-badge bp-badge-paid" style={{ marginLeft: 6 }}>Edit Allowed</span> : null}
           </div>
         </div>
-        <div className="bp-actions" style={{ marginTop: 0 }}>
+        <div className="bp-actions dv-actions" style={{ marginTop: 0 }}>
           <Link className="bp-btn bp-btn-outline" to={listBack}><ArrowLeftIcon /> Back</Link>
           {canEdit && editPath && (
             <Link className="bp-btn bp-btn-outline" to={editPath}><PencilIcon /> Edit</Link>
@@ -256,39 +259,29 @@ export default function InvoiceDetail() {
                 className="bp-btn bp-btn-danger"
                 disabled={busyAction === 'markUnpaid'}
                 onClick={async () => {
+                  // Same workflow as Reports -> Outstanding: a reason is required before the status changes.
                   setBusyAction('markUnpaid'); setMsg(''); setActionErr('');
+                  let log = null;
                   try {
-                    await api(`/billing/documents/${doc.id}/payment-status`, { method: 'POST', body: { status: 'unpaid' } });
-                    setMsg('Marked Unpaid — appears in Outstanding');
-                    load();
-                  } catch (e) {
-                    setActionErr(e.message || 'Failed to mark unpaid.');
-                  } finally {
-                    setBusyAction('');
-                  }
+                    log = (await api(`/billing/documents/${doc.id}/payment-log`)).latest || null;
+                  } catch (_) { /* the reason pop-up still works without the recorded payment */ }
+                  setPayModal({ type: 'unpaid', log });
+                  setBusyAction('');
                 }}
               >
-                {busyAction === 'markUnpaid' ? 'Updating…' : (<><UndoIcon /> Mark Unpaid</>)}
+                {busyAction === 'markUnpaid' ? 'Opening…' : (<><UndoIcon /> Mark Unpaid</>)}
               </button>
             ) : (
               <button
                 type="button"
                 className="bp-btn bp-btn-green"
-                disabled={busyAction === 'markPaid'}
-                onClick={async () => {
-                  setBusyAction('markPaid'); setMsg(''); setActionErr('');
-                  try {
-                    await api(`/billing/documents/${doc.id}/payment-status`, { method: 'POST', body: { status: 'paid' } });
-                    setMsg('Marked Paid — removed from Outstanding');
-                    load();
-                  } catch (e) {
-                    setActionErr(e.message || 'Failed to mark paid.');
-                  } finally {
-                    setBusyAction('');
-                  }
+                onClick={() => {
+                  // Same payment-details pop-up as Reports -> Outstanding; the status changes only once it is submitted.
+                  setMsg(''); setActionErr('');
+                  setPayModal({ type: 'paid' });
                 }}
               >
-                {busyAction === 'markPaid' ? 'Updating…' : (<><CheckIcon /> Mark Paid</>)}
+                <CheckIcon /> Mark Paid
               </button>
             )
           )}
@@ -417,30 +410,55 @@ export default function InvoiceDetail() {
         </div>
       )}
 
-      <div className="bp-split" style={{ marginTop: 14 }}>
-        <div>
-          <h3 style={{ marginTop: 0 }}>From (Seller)</h3>
-          <p style={{ margin: '4px 0' }}><strong>{doc.client_profile?.business_name || '—'}</strong></p>
-          <p style={{ margin: '4px 0', fontSize: 13, color: 'var(--bp-muted)' }}>
+      {/* Seller + Document Information side by side, Buyer full width below. */}
+      <div className="dv-top">
+        <section className="dv-card">
+          <h3 className="dv-card-title"><span className="dv-dot dv-dot-blue" />From (Seller)</h3>
+          <p className="dv-name">{doc.client_profile?.business_name || '—'}</p>
+          <p className="dv-line">
             GSTIN: {doc.client_profile?.gstin || '—'} · PAN: {doc.client_profile?.pan || '—'}
           </p>
-          <p style={{ margin: '4px 0', fontSize: 13 }}>{doc.client_profile?.address || ''}</p>
-        </div>
-        <div>
-          <h3 style={{ marginTop: 0 }}>To (Buyer)</h3>
-          <p style={{ margin: '4px 0' }}><strong>{doc.customer?.name || '—'}</strong></p>
-          <p style={{ margin: '4px 0', fontSize: 13, color: 'var(--bp-muted)' }}>
-            GSTIN: {doc.customer?.gstin_display || doc.customer?.gstin || 'Unregistered'} · State: {doc.customer?.state || doc.customer?.state_code || '—'}
-          </p>
-          <p style={{ margin: '4px 0', fontSize: 13 }}>
-            {doc.customer?.email || ''}{doc.customer?.phone ? ` · ${doc.customer.phone}` : ''}
-          </p>
-          <p style={{ margin: '4px 0', fontSize: 13 }}>{doc.customer?.billing_address || ''}</p>
-          <p style={{ margin: '4px 0', fontSize: 13 }}>
-            Place of supply: {doc.place_of_supply || '—'} · {doc.is_inter_state ? 'Inter-state (IGST)' : 'Intra-state (CGST/SGST)'}
-          </p>
-        </div>
+          <p className="dv-line">{doc.client_profile?.address || ''}</p>
+          {(doc.client_profile?.email || doc.client_profile?.mobile) && (
+            <p className="dv-line">
+              {doc.client_profile?.email ? `Email: ${doc.client_profile.email}` : ''}
+              {doc.client_profile?.email && doc.client_profile?.mobile ? ' | ' : ''}
+              {doc.client_profile?.mobile ? `Mob: ${doc.client_profile.mobile}` : ''}
+            </p>
+          )}
+        </section>
+
+        <section className="dv-card dv-info">
+          <dl>
+            <div><dt>{docTypeLabel(doc.type)} No.</dt><dd>{doc.number}</dd></div>
+            <div><dt>{docTypeLabel(doc.type)} Date</dt><dd>{formatDMY(doc.document_date)}</dd></div>
+            <div><dt>Creation Date</dt><dd>{formatDMYTime(doc.created_at)}</dd></div>
+            {['tax_invoice', 'bill_of_supply', 'debit_note', 'credit_note'].includes(doc.type) && (
+              <div>
+                <dt>GST Filed On</dt>
+                <dd className={doc.gst_return_filed ? 'dv-ok' : 'dv-bad'}>{doc.gst_return_filed ? 'Filed' : 'Not Filed'}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
       </div>
+
+      <section className="dv-card dv-buyer">
+        <h3 className="dv-card-title"><span className="dv-dot dv-dot-green" />To (Buyer)</h3>
+        <p className="dv-name">{doc.customer?.name || '—'}</p>
+        <p className="dv-line">
+          <strong>GSTIN:</strong> {doc.customer?.gstin_display || doc.customer?.gstin || 'Unregistered'} | <strong>State:</strong> {doc.customer?.state || doc.customer?.state_code || '—'}
+        </p>
+        {(doc.customer?.email || doc.customer?.phone) && (
+          <p className="dv-line">
+            {doc.customer?.email || ''}{doc.customer?.email && doc.customer?.phone ? ' | ' : ''}{doc.customer?.phone || ''}
+          </p>
+        )}
+        {doc.customer?.billing_address && <p className="dv-line"><strong>Address:</strong> {doc.customer.billing_address}</p>}
+        <p className="dv-line">
+          <strong>Place of Supply:</strong> {doc.place_of_supply || '—'} | {doc.is_inter_state ? 'Inter-state (IGST)' : 'Intra-state (CGST/SGST)'}
+        </p>
+      </section>
 
       {doc.reference_document && (
         <p style={{ marginTop: 12 }}>
@@ -474,22 +492,21 @@ export default function InvoiceDetail() {
         </div>
       )}
 
-      {(doc.payment_terms || doc.notes || doc.terms) && (
+      {(doc.payment_terms || doc.notes) && (
         <div style={{ marginTop: 12, fontSize: 13 }}>
           {doc.payment_terms && <p><strong>Payment terms:</strong> {doc.payment_terms}</p>}
           {doc.notes && <p><strong>Notes:</strong> {doc.notes}</p>}
-          {doc.terms && <p><strong>Terms:</strong> {doc.terms}</p>}
         </div>
       )}
 
       {/* Read-only, professional item table — same column set as the Create/Edit form
           (Invoice Item Table spec §3, Disc.% removed), just without the Action column
           and with no inputs/dropdowns of any kind. */}
-      <div className="bp-table-wrapper" style={{ marginTop: 16 }}>
+      <div className="bp-table-wrapper dv-items" style={{ marginTop: 16 }}>
         <table className="bp-table bp-doc-table" style={{ marginTop: 0 }}>
           <thead>
             <tr>
-              <th>Sr. No.</th><th>Particulars</th><th>HSN/SAC</th><th>Qty</th><th>UCQ</th>
+              <th>Sr. No.</th><th>Particulars</th><th>HSN/SAC</th><th>Qty</th><th>UQC</th>
               <th>Rate (₹)</th><th>GST %</th><th>Taxable Value (₹)</th>
             </tr>
           </thead>
@@ -511,48 +528,62 @@ export default function InvoiceDetail() {
         </table>
       </div>
 
-      <div className="bp-gst-box" style={{ maxWidth: 360, marginTop: 16, marginLeft: 'auto' }}>
-        {/* Disc.% is removed from item entry (Invoice Item Table spec §3) — new documents
-            never carry a discount, so this row only shows for older documents that do. */}
-        {Number(doc.discount_total) > 0 && (
-          <div className="bp-gst-row"><span>Discount</span><strong>{money(doc.discount_total)}</strong></div>
-        )}
-        <div className="bp-gst-row"><span>Total Taxable Value</span><strong>{money(doc.taxable_amount)}</strong></div>
-        {doc.is_inter_state ? (
-          <div className="bp-gst-row"><span>IGST</span><strong>{money(doc.igst_amount)}</strong></div>
-        ) : (
-          <>
-            <div className="bp-gst-row"><span>CGST</span><strong>{money(doc.cgst_amount)}</strong></div>
-            <div className="bp-gst-row"><span>SGST/UTGST</span><strong>{money(doc.sgst_amount)}</strong></div>
-          </>
-        )}
-        {doc.tax_deduction_type ? (
-          <>
-            <div className="bp-gst-row"><span>Total Value (Post GST)</span><strong>{money(doc.total_amount)}</strong></div>
-            <div className="bp-gst-row" style={{ color: doc.tax_deduction_type === 'tds' ? 'var(--bp-red)' : 'var(--bp-green)' }}>
-              <span>
-                {doc.tax_deduction_type === 'tds' ? 'Less: TDS' : 'Add: TCS'}
-                {doc.tds_tcs_section ? ` (${Number(doc.tds_tcs_rate).toFixed(2)}% u/s ${doc.tds_tcs_section.code})` : ''}
-              </span>
-              <strong>{money(doc.tds_tcs_amount)}</strong>
-            </div>
-            <div className="bp-gst-row"><span>Grand Total</span><strong>{money(doc.grand_total || doc.total_amount)}</strong></div>
-          </>
-        ) : (
-          <>
-            <div className="bp-gst-row"><span>Round Off</span><strong>{money(doc.round_off)}</strong></div>
-            <div className="bp-gst-row"><span>Grand Total</span><strong>{money(doc.grand_total || doc.total_amount)}</strong></div>
-          </>
-        )}
+      <div className="dv-summary">
+        <div className="dv-summary-rows">
+          {/* Disc.% is removed from item entry (Invoice Item Table spec §3) — new documents
+              never carry a discount, so this row only shows for older documents that do. */}
+          {Number(doc.discount_total) > 0 && (
+            <div className="dv-row"><span>Discount</span><strong>{money(doc.discount_total)}</strong></div>
+          )}
+          <div className="dv-row"><span>Total Taxable Value</span><strong>{money(doc.taxable_amount)}</strong></div>
+          {doc.is_inter_state ? (
+            <div className="dv-row"><span>IGST</span><strong>{money(doc.igst_amount)}</strong></div>
+          ) : (
+            <>
+              <div className="dv-row"><span>CGST</span><strong>{money(doc.cgst_amount)}</strong></div>
+              <div className="dv-row"><span>SGST/UTGST</span><strong>{money(doc.sgst_amount)}</strong></div>
+            </>
+          )}
+          {doc.tax_deduction_type ? (
+            <>
+              <div className="dv-row"><span>Total Value (Post GST)</span><strong>{money(doc.total_amount)}</strong></div>
+              <div className="dv-row" style={{ color: doc.tax_deduction_type === 'tds' ? 'var(--bp-red)' : 'var(--bp-green)' }}>
+                <span>
+                  {doc.tax_deduction_type === 'tds' ? 'Less: TDS' : 'Add: TCS'}
+                  {doc.tds_tcs_section ? ` (${Number(doc.tds_tcs_rate).toFixed(2)}% u/s ${doc.tds_tcs_section.code})` : ''}
+                </span>
+                <strong>{money(doc.tds_tcs_amount)}</strong>
+              </div>
+            </>
+          ) : (
+            <div className="dv-row"><span>Round Off</span><strong>{money(doc.round_off)}</strong></div>
+          )}
+        </div>
+        <div className="dv-grand"><span>Grand Total</span><strong>{money(doc.grand_total || doc.total_amount)}</strong></div>
         {doc.amount_in_words && (
-          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--bp-border)' }}>
-            <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 3 }}>Amount in Words</span>
-            <span style={{ fontSize: 12.5 }}>{doc.amount_in_words}</span>
+          <div className="dv-words">
+            <small>Amount in Words</small>
+            <strong>{doc.amount_in_words}</strong>
           </div>
         )}
       </div>
       {msg && <p style={{ color: 'var(--bp-green)' }}>{msg}</p>}
       {actionErr && <p style={{ color: 'var(--bp-red)' }}>{actionErr}</p>}
+      {payModal?.type === 'paid' && (
+        <MarkAsPaidModal
+          doc={doc}
+          onClose={() => setPayModal(null)}
+          onSuccess={() => { setPayModal(null); setMsg('Marked Paid — removed from Outstanding'); load(); }}
+        />
+      )}
+      {payModal?.type === 'unpaid' && (
+        <UnmarkAsPaidModal
+          doc={doc}
+          log={payModal.log}
+          onClose={() => setPayModal(null)}
+          onSuccess={() => { setPayModal(null); setMsg('Marked Unpaid — appears in Outstanding'); load(); }}
+        />
+      )}
       {cancelling && (
         <CancelDocumentModal
           docLabel={`${docTypeLabel(doc.type)} ${doc.number}`}

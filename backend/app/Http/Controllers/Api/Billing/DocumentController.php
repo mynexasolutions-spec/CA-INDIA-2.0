@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\DocumentPaymentLog;
 use App\Models\Product;
 use App\Services\Billing\BillingPolicy;
+use App\Services\Billing\DocumentNumberingSettings;
 use App\Services\Billing\InvoiceService;
 use Carbon\Carbon;
 
@@ -32,7 +33,7 @@ class DocumentController extends Controller
     /** Applies every list filter except `type` — shared by the row query and the
      *  type-breakdown summary cards, so cards reflect the same FY/date/status/search
      *  filters without being narrowed by the Document Type filter itself (spec §24). */
-    private function applyCommonFilters($q, Request $request)
+    private function applyCommonFilters($q, Request $request, bool $ignoreStatus = false)
     {
         // Listing/filtering/GST-period counting spec — driven by Date of Creation
         // (created_at), not the document's back-dated Document Date. whereDate() on
@@ -48,7 +49,9 @@ class DocumentController extends Controller
             $q->where('type', '!=', 'amendment');
         }
 
-        if ($request->filled('status')) {
+        if ($ignoreStatus) {
+            // Tab counts apply their own status condition per tab.
+        } elseif ($request->filled('status')) {
             $q->where('status', $request->status);
         } else {
             // Cancelled documents move out of the normal working views (§18/§19) —
@@ -100,40 +103,45 @@ class DocumentController extends Controller
     public function index(Request $request)
     {
         $profile = $this->profile($request);
-        $base = $this->applyCommonFilters(
+        // The "Deleted" tab reads the soft-deleted rows (deleted=1); every other view excludes them.
+        $deletedTab = $request->boolean('deleted');
+        $liveBase = $this->applyCommonFilters(
             CommercialDocument::where('client_profile_id', $profile->id),
             $request
         );
+        $base = $deletedTab
+            ? $this->applyCommonFilters(CommercialDocument::onlyTrashed()->where('client_profile_id', $profile->id), $request, true)
+            : $liveBase;
 
-        // Filtered aggregate totals (spec §24) and per-type summary counts —
-        // computed from the FULL filtered set, not just the current page.
+        // Per-tab record counts for the list's tab bar (All / B2B / B2C / Cancelled / Deleted), using the same
+        // date/search filters as the list but not the tab itself.
+        $tabCounts = null;
+        if ($request->filled('type')) {
+            $docType = $request->input('type');
+            $scoped = fn ($qq) => $this->applyCommonFilters($qq->where('client_profile_id', $profile->id)->where('type', $docType), $request, true);
+            $live = fn () => $scoped(CommercialDocument::query())->where('status', '!=', 'cancelled');
+            $registered = fn ($c) => $c->where('gst_status', 'registered');
+            $tabCounts = [
+                'all' => $live()->count(),
+                'b2b' => $live()->whereHas('customer', $registered)->count(),
+                'b2c' => $live()->whereDoesntHave('customer', $registered)->count(),
+                'cancelled' => $scoped(CommercialDocument::query())->where('status', 'cancelled')->count(),
+                'deleted' => $scoped(CommercialDocument::onlyTrashed())->count(),
+            ];
+        }
+
+        // Per-type summary counts — computed from the FULL filtered set, not just the current page.
         $summaryTypes = ['tax_invoice', 'bill_of_supply', 'debit_note', 'credit_note', 'quotation', 'delivery_challan'];
         $typeCounts = [];
         foreach ($summaryTypes as $t) {
-            $typeCounts[$t] = (clone $base)->where('type', $t)->count();
+            $typeCounts[$t] = (clone $liveBase)->where('type', $t)->count();
         }
         // B2B (registered) vs B2C (unregistered) breakdown for tax invoices.
-        $taxBase = (clone $base)->where('type', 'tax_invoice');
+        $taxBase = (clone $liveBase)->where('type', 'tax_invoice');
         $typeCounts['tax_invoice_b2b'] = (clone $taxBase)
             ->whereHas('customer', fn ($q) => $q->where('gst_status', 'registered'))->count();
         $typeCounts['tax_invoice_b2c'] = (clone $taxBase)
             ->whereHas('customer', fn ($q) => $q->where('gst_status', 'unregistered'))->count();
-        $totalsScope = clone $base;
-        if ($request->filled('type')) {
-            $totalsScope->where('type', $request->type);
-        }
-        // Credit Notes reduce value, everything else adds to it — but only flip the sign
-        // when the totals mix document types (no single type filter applied); a filtered
-        // "Credit Notes" view should still show its own plain positive total.
-        $signed = fn (string $expr) => $request->filled('type')
-            ? $expr
-            : "CASE WHEN type = 'credit_note' THEN -($expr) ELSE ($expr) END";
-        $totals = [
-            'count' => (clone $totalsScope)->count(),
-            'taxable_amount' => (float) (clone $totalsScope)->sum(DB::raw($signed('taxable_amount'))),
-            'gst_amount' => (float) (clone $totalsScope)->sum(DB::raw($signed('cgst_amount + sgst_amount + igst_amount'))),
-            'grand_total' => (float) (clone $totalsScope)->sum(DB::raw($signed('COALESCE(NULLIF(grand_total, 0), total_amount)'))),
-        ];
 
         $q = clone $base;
         if ($request->filled('type')) {
@@ -151,6 +159,24 @@ class DocumentController extends Controller
             // GSTR-1 lists show the GST % of each document.
             $q->with('lineItems:id,commercial_document_id,gst_rate');
         }
+
+        // Filtered aggregate totals (spec §24) — over every row the list is currently showing (all pages,
+        // current tab included), not just the visible page. Credit Notes reduce value, everything else adds
+        // to it, but the sign only flips when the totals mix document types (no single type filter); a
+        // filtered "Credit Notes" view shows its own plain positive total.
+        $signed = fn (string $expr) => $request->filled('type')
+            ? $expr
+            : "CASE WHEN type = 'credit_note' THEN -($expr) ELSE ($expr) END";
+        $totals = [
+            'count' => (clone $q)->count(),
+            'taxable_amount' => (float) (clone $q)->sum(DB::raw($signed('taxable_amount'))),
+            'igst_amount' => (float) (clone $q)->sum(DB::raw($signed('igst_amount'))),
+            'cgst_amount' => (float) (clone $q)->sum(DB::raw($signed('cgst_amount'))),
+            'sgst_amount' => (float) (clone $q)->sum(DB::raw($signed('sgst_amount'))),
+            'gst_amount' => (float) (clone $q)->sum(DB::raw($signed('cgst_amount + sgst_amount + igst_amount'))),
+            'grand_total' => (float) (clone $q)->sum(DB::raw($signed('COALESCE(NULLIF(grand_total, 0), total_amount)'))),
+        ];
+
         $q->with('customer:id,name,gstin,gst_status')->latest('created_at')->latest('id');
         if ($request->input('type') === 'amendment') {
             $q->with('referenceDocument:id,number,type');
@@ -175,6 +201,7 @@ class DocumentController extends Controller
         $result = $paginated->toArray();
         $result['totals'] = $totals;
         $result['type_counts'] = $typeCounts;
+        $result['tab_counts'] = $tabCounts;
 
         return response()->json($result);
     }
@@ -189,13 +216,38 @@ class DocumentController extends Controller
         ]);
         BillingPolicy::assertDocumentType($profile, $data['type']);
 
-        return response()->json(['number' => $this->invoices->nextNumber($profile, $data['type'])]);
+        // Manual types: the client types the number, so suggest the next one that is still free.
+        $manual = DocumentNumberingSettings::numberingType($profile, $data['type']) === 'manual';
+
+        return response()->json([
+            'number' => $manual
+                ? $this->invoices->suggestManualNumber($profile, $data['type'])
+                : $this->invoices->nextNumber($profile, $data['type']),
+            'numbering_type' => $manual ? 'manual' : 'auto',
+        ]);
+    }
+
+    /**
+     * A typed document number is only honoured for document types an admin switched to manual
+     * numbering; for auto types it is discarded so a client can never bypass the sequence.
+     */
+    private function guardManualNumber($profile, array $data, string $type): array
+    {
+        $number = isset($data['number']) ? trim((string) $data['number']) : '';
+        if ($number === '' || DocumentNumberingSettings::numberingType($profile, $type) !== 'manual') {
+            unset($data['number']);
+        } else {
+            $data['number'] = $number;
+        }
+
+        return $data;
     }
 
     public function store(Request $request)
     {
         $profile = $this->profile($request);
         $data = $this->validated($request, true, BillingPolicy::mode($profile) !== 'retail');
+        $data = $this->guardManualNumber($profile, $data, $data['type'] ?? 'tax_invoice');
         // GST-period counting spec — a new document's period is its Date of Creation
         // (i.e. now), not whatever back-dated Document Date is being submitted.
         BillingPolicy::assertNotLocked($profile, now()->toDateString());
@@ -221,6 +273,7 @@ class DocumentController extends Controller
         BillingPolicy::assertNotLocked($profile, $doc->created_at?->toDateString());
 
         $data = $this->validated($request, false, BillingPolicy::mode($profile) !== 'retail');
+        $data = $this->guardManualNumber($profile, $data, $doc->type);
 
         $this->assertOwnedRelations($profile, $data, $doc->type);
         $doc = $this->invoices->updateDraft($doc, $profile, $data);
@@ -326,6 +379,27 @@ class DocumentController extends Controller
             'remarks'          => 'nullable|string|max:500',
             'unmark_reason'    => 'nullable|string|max:500',
         ]);
+
+        // The status never changes without the information that justifies it — enforced here so every caller
+        // (Billing -> Document View and Reports -> Outstanding) follows the same rules as the pop-ups.
+        if ($data['status'] === 'paid') {
+            $request->validate([
+                'paid_on'          => 'required|date',
+                'payment_mode'     => ['required', Rule::in(['UPI', 'Bank Transfer', 'Cheque', 'Cash', 'Others'])],
+                'reference_number' => [Rule::requiredIf(fn () => in_array($request->input('payment_mode'), ['UPI', 'Bank Transfer', 'Cheque'], true)), 'nullable', 'string', 'max:120'],
+                'received_by'      => [Rule::requiredIf(fn () => $request->input('payment_mode') === 'Cash'), 'nullable', 'string', 'max:200'],
+            ], [
+                'paid_on.required'          => 'Payment date is required.',
+                'payment_mode.required'     => 'Payment mode is required.',
+                'reference_number.required' => 'Reference number is required for UPI, Bank Transfer and Cheque payments.',
+                'received_by.required'      => "'Received By' is required for Cash payments.",
+            ]);
+        } elseif ($data['status'] === 'unpaid') {
+            $request->validate(
+                ['unmark_reason' => ['required', 'string', 'max:500', 'regex:/\S/']],
+                ['unmark_reason.required' => 'Reason for unmarking is required.', 'unmark_reason.regex' => 'Reason for unmarking is required.']
+            );
+        }
 
         $newStatus = $data['status'] === 'unpaid' ? 'issued' : $data['status'];
 
@@ -463,6 +537,8 @@ class DocumentController extends Controller
     {
         $rules = [
             'type' => 'nullable|in:tax_invoice,bill_of_supply,credit_note,debit_note,quotation,amendment,proforma,delivery_challan',
+            // Only used for manual-numbering types (see guardManualNumber). GST: max 16 chars, letters/digits/-//.
+            'number' => ['nullable', 'string', 'max:16', 'regex:/^[A-Za-z0-9\/\-]+$/'],
             'customer_id' => 'nullable|integer',
             'reference_document_id' => 'nullable|integer',
             'document_date' => 'nullable|date',

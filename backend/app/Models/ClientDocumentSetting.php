@@ -23,6 +23,8 @@ class ClientDocumentSetting extends Model
     ];
 
     public const COLOUR_SCHEMES = [
+        'simple' => 'Simple',
+        'royal_blue' => 'Royal Blue',
         'slate_blue' => 'Slate Blue',
         'charcoal_grey' => 'Charcoal Grey',
         'dusty_plum' => 'Dusty Plum',

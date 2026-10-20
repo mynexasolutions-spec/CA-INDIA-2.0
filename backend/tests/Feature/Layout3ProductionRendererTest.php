@@ -233,8 +233,7 @@ class Layout3ProductionRendererTest extends TestCase
             'data' => DocumentPayloadBuilder::build($docFalse),
             'theme' => DocumentThemeTokens::get('dusty_plum'),
         ])->render();
-        $this->assertStringContainsString('Reverse Charge', $htmlFalse);
-        $this->assertStringContainsString('&#x2713;', $htmlFalse);
+        $this->assertMatchesRegularExpression('/Reverse Charge.*?:.*?No/s', $htmlFalse);
 
         // Case B: reverse_charge is true
         $docTrue = $this->createDoc('tax_invoice', ['number' => 'TAX-2026-RC-TRUE', 'is_reverse_charge' => true]);
@@ -242,7 +241,8 @@ class Layout3ProductionRendererTest extends TestCase
             'data' => DocumentPayloadBuilder::build($docTrue),
             'theme' => DocumentThemeTokens::get('dusty_plum'),
         ])->render();
-        $this->assertStringContainsString('&#x2713;', $htmlTrue);
+        $this->assertMatchesRegularExpression('/Reverse Charge.*?:.*?Yes/s', $htmlTrue);
+        $this->assertStringContainsString('Tax is payable on reverse charge basis.', $htmlTrue);
     }
 
     /**
@@ -285,15 +285,15 @@ class Layout3ProductionRendererTest extends TestCase
                 $this->assertStringContainsString('INV-ORIG-2026', $renderedHtml);
             }
             if ($type === 'bill_of_supply') {
-                $this->assertStringNotContainsString('GST<br>Rate (%)', $renderedHtml);
-                $this->assertStringNotContainsString('CGST @', $renderedHtml);
+                $this->assertStringNotContainsString('GST %', $renderedHtml);
+                $this->assertStringNotContainsString('CGST', $renderedHtml);
             }
             if ($type === 'tax_invoice') {
                 $this->assertStringContainsString('TAX INVOICE', $renderedHtml);
-                $this->assertStringContainsString('Taxable Amount (₹)', $renderedHtml);
+                $this->assertStringContainsString('TAXABLE VALUE', $renderedHtml);
             }
             if ($type === 'delivery_challan') {
-                $this->assertStringContainsString('Transportation Details', $renderedHtml);
+                $this->assertStringContainsString('TRANSPORTATION DETAILS', $renderedHtml);
             }
         }
     }

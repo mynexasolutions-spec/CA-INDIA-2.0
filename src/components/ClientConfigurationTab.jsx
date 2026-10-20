@@ -25,17 +25,15 @@ const LAYOUT_OPTIONS = [
   { id: 1, label: 'Layout 1 - Modern Professional' },
   { id: 2, label: 'Layout 2 - Clean & Simple' },
   { id: 3, label: 'Layout 3 - Structured & Detailed' },
-  { id: 4, label: 'Layout 4 - Modern Boxed' },
 ];
 
 // Strict 6 colour schemes (NO Forest Green, NO Burgundy)
 const COLOUR_SCHEMES = [
-  { id: 'slate_blue', name: 'Slate Blue', hex: '#2563eb' },
-  { id: 'charcoal_grey', name: 'Charcoal Grey', hex: '#334155' },
-  { id: 'dusty_plum', name: 'Dusty Plum', hex: '#703058' },
-  { id: 'mocha_brown', name: 'Mocha Brown', hex: '#6c4a38' },
-  { id: 'deep_teal', name: 'Deep Teal', hex: '#0f766e' },
-  { id: 'antique_gold', name: 'Antique Gold', hex: '#c59b27' },
+  { id: 'simple', name: 'Simple', hex: '#111111' },
+  { id: 'royal_blue', name: 'Royal Blue', hex: '#1d40af' },
+  { id: 'deep_teal', name: 'Deep Teal', hex: '#036070' },
+  { id: 'mocha_brown', name: 'Mocha Brown', hex: '#793312' },
+  { id: 'dusty_plum', name: 'Dusty Plum', hex: '#8c2f5f' },
 ];
 
 const LAYOUT_IMAGES = {
@@ -206,7 +204,7 @@ export default function ClientConfigurationTab({
     documents: DOCUMENT_TYPES.map((dt) => ({
       document_type: dt.key,
       layout_id: 1,
-      colour_scheme: 'slate_blue',
+      colour_scheme: 'royal_blue',
       watermark_applies: false,
     })),
   });
@@ -220,7 +218,7 @@ export default function ClientConfigurationTab({
     DOCUMENT_TYPES.map((dt) => ({
       document_type: dt.key,
       layout_id: 1,
-      colour_scheme: 'slate_blue',
+      colour_scheme: 'royal_blue',
       watermark_applies: false,
     }))
   );
@@ -257,7 +255,7 @@ export default function ClientConfigurationTab({
             docsMap[d.document_type] = {
               document_type: d.document_type,
               layout_id: Number(d.layout_id) || 1,
-              colour_scheme: d.colour_scheme || 'slate_blue',
+              colour_scheme: d.colour_scheme || 'royal_blue',
               watermark_applies: Boolean(d.watermark_applies),
             };
           });
@@ -268,7 +266,7 @@ export default function ClientConfigurationTab({
             docsMap[dt.key] || {
               document_type: dt.key,
               layout_id: 1,
-              colour_scheme: 'slate_blue',
+              colour_scheme: 'royal_blue',
               watermark_applies: false,
             }
           );
@@ -640,7 +638,7 @@ export default function ClientConfigurationTab({
                 {DOCUMENT_TYPES.map((dt) => {
                   const row = docRows.find((r) => r.document_type === dt.key) || {
                     layout_id: 1,
-                    colour_scheme: 'slate_blue',
+                    colour_scheme: 'royal_blue',
                   };
                   const currentColour = COLOUR_SCHEMES.find((c) => c.id === row.colour_scheme) || COLOUR_SCHEMES[0];
 

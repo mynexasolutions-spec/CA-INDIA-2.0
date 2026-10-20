@@ -61,14 +61,25 @@ class GstinLookupService
         try {
             $headers = ['Accept' => 'application/json'];
             $key = (string) config('services.gst.key');
-            $keyHeader = (string) (config('services.gst.key_header') ?: 'Authorization');
-            $headers[$keyHeader] = strcasecmp($keyHeader, 'Authorization') === 0 ? 'Bearer '.$key : $key;
+            $template = (string) config('services.gst.url');
+            // Providers that take the key in the URL (e.g. Appyflow's ?key_secret=) use a {key} placeholder
+            // and need no auth header; everyone else gets it as a header.
+            if (! str_contains($template, '{key}')) {
+                $keyHeader = (string) (config('services.gst.key_header') ?: 'Authorization');
+                $headers[$keyHeader] = strcasecmp($keyHeader, 'Authorization') === 0 ? 'Bearer '.$key : $key;
+            }
             if (filled(config('services.gst.secret'))) {
                 $headers['X-Api-Secret'] = (string) config('services.gst.secret');
             }
 
-            $url = str_replace('{gstin}', $gstin, (string) config('services.gst.url'));
-            $response = Http::timeout(12)->withHeaders($headers)->get($url);
+            $url = str_replace(['{gstin}', '{key}'], [$gstin, rawurlencode($key)], $template);
+            $request = Http::timeout(12)->withHeaders($headers);
+            // Verification is ON by default (the API key travels with this request). A dev machine whose PHP
+            // has no CA bundle can opt out with GST_API_VERIFY_SSL=false in its own .env — never on a server.
+            if (! config('services.gst.verify_ssl', true)) {
+                $request = $request->withoutVerifying();
+            }
+            $response = $request->get($url);
         } catch (\Throwable $e) {
             return $this->fail(503, 'The GST service could not be reached. Please try again, or enter the details manually.');
         }
@@ -85,9 +96,28 @@ class GstinLookupService
         }
 
         $body = $response->json();
+
+        // Some providers answer 200 with {"error": true, "message": "..."}.
+        if (is_array($body) && filter_var($body['error'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $msg = strtolower((string) ($body['message'] ?? ''));
+            // Key / credit problems are ours to fix, not the user's — don't show them as "GSTIN not found".
+            if (preg_match('/key|credit|balance|auth|limit|subscri/', $msg)) {
+                return $this->fail(503, 'GST verification is temporarily unavailable. Please enter the details manually.');
+            }
+
+            return $this->fail(404, 'GSTIN not found or not active on the GST portal. Please check the number and try again.');
+        }
+
         // Providers wrap the taxpayer record differently.
         $t = $body['data'] ?? $body['result'] ?? $body['taxpayerInfo'] ?? $body['taxpayer'] ?? $body;
         $t = $t['taxpayerInfo'] ?? $t;
+
+        // A provider's sandbox / trial mode can answer with a fixed demo taxpayer whatever was asked.
+        // Never auto-fill another business's details: the record must be for the GSTIN we looked up.
+        $returned = strtoupper(trim((string) ($t['gstin'] ?? $t['gstNo'] ?? '')));
+        if ($returned !== '' && $returned !== $gstin) {
+            return $this->fail(503, 'GST verification is temporarily unavailable. Please enter the details manually.');
+        }
 
         $legal = trim((string) ($t['lgnm'] ?? $t['legal_name'] ?? $t['legalName'] ?? ''));
         if ($legal === '' && empty($t['tradeNam'] ?? $t['trade_name'] ?? '')) {

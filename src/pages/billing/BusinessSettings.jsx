@@ -7,7 +7,6 @@ import LayoutPreview from '../../components/LayoutPreview';
 import layout1Img from '../../assets/layout-previews/layout-1.png';
 import layout2Img from '../../assets/layout-previews/layout-2.png';
 import layout3Img from '../../assets/layout-previews/layout-3.png';
-import layout4Img from '../../assets/layout-previews/layout-4.png';
 
 const ASSETS = [
   { field: 'logo',      pathKey: 'logo_path',       label: 'Business Logo',       recSize: '300 × 300 px' },
@@ -19,14 +18,31 @@ const ASSETS = [
 // up alone on the last row since this list has an odd length.
 const ACCOUNT_TYPES = ['Current', 'Savings', 'Cash Credit', 'Overdraft', 'Other (Specify)'];
 
-const PREFIX_FIELDS = [
-  ['invoice_prefix',        'Tax Invoice Prefix',       'INV'],
-  ['bill_of_supply_prefix', 'Bill of Supply Prefix',    'BOS'],
-  ['credit_note_prefix',    'Credit Note Prefix',       'CN'],
-  ['debit_note_prefix',     'Debit Note Prefix',        'DN'],
-  ['quotation_prefix',      'Quotation Prefix',         'QT'],
-  ['delivery_challan_prefix','Delivery Challan Prefix', 'DC'],
+// [doc key, label, default prefix, default separator] — same keys the backend's
+// DocumentNumberingSettings uses. The numbering TYPE (auto / manual) is admin-only, so it is
+// intentionally not part of this form.
+const NUMBERING_DOCS = [
+  ['invoice',          'Tax Invoice',      'INV', '-'],
+  ['bill_of_supply',   'Bill of Supply',   'BOS', '/'],
+  ['credit_note',      'Credit Note',      'CN',  '-'],
+  ['debit_note',       'Debit Note',       'DN',  '/'],
+  ['quotation',        'Quotation',        'QT',  '-'],
+  ['delivery_challan', 'Delivery Challan', 'DC',  '/'],
 ];
+const NUMBERING_PROPS = ['prefix', 'separator', 'next_number', 'prefix_position', 'status'];
+const NUMBERING_FIELDS = NUMBERING_DOCS.flatMap(([k]) => NUMBERING_PROPS.map((p) => `${k}_${p}`));
+
+/** Mirrors the backend's InvoiceService::formatDocNumber so the preview matches what gets generated. */
+function formatDocNumber(cfg, offset = 0) {
+  const prefix = (cfg.prefix || '').trim() || 'DOC';
+  const sep = cfg.separator || '-';
+  const raw = String(cfg.next_number || '01');
+  const padded = String((parseInt(raw, 10) || 1) + offset).padStart(Math.max(2, raw.length), '0');
+  if (cfg.prefix_position === 'last') {
+    return /^[/-]/.test(prefix) ? padded + prefix : padded + sep + prefix;
+  }
+  return /[/-]$/.test(prefix) ? prefix + padded : prefix + sep + padded;
+}
 
 /** Which Settings tab each editable field belongs to — mirrors the backend's
  * ClientChangeRequest::FIELD_SECTIONS. The backend re-enforces this itself; this copy is only
@@ -37,14 +53,13 @@ const FIELD_SECTION = {
   bank_name: 'bank', bank_branch: 'bank', account_holder_name: 'bank', bank_account: 'bank',
   bank_ifsc: 'bank', swift_code: 'bank', account_type: 'bank', upi_id: 'bank',
   signatory_name: 'branding', terms_conditions: 'branding',
-  invoice_prefix: 'numbering', bill_of_supply_prefix: 'numbering', credit_note_prefix: 'numbering',
-  debit_note_prefix: 'numbering', quotation_prefix: 'numbering', delivery_challan_prefix: 'numbering',
+  ...Object.fromEntries(NUMBERING_FIELDS.map((k) => [k, 'numbering'])),
 };
 
 const SECTION_FIELDS = {
   bank: BANK_KEYS,
   branding: ['signatory_name', 'terms_conditions'],
-  numbering: PREFIX_FIELDS.map(([k]) => k),
+  numbering: NUMBERING_FIELDS,
 };
 
 const SECTION_LABELS = {
@@ -72,6 +87,7 @@ function emptyForm() {
     bank_ifsc: '', bank_name: '', bank_branch: '',
     account_holder_name: '', bank_account: '', account_type: '', upi_id: '',
     signatory_name: '', terms_conditions: '',
+    ...Object.fromEntries(NUMBERING_FIELDS.map((k) => [k, ''])),
     ...fyPrefixDefaultsFull(),
     logo_path: '', signature_path: '', seal_path: '',
   };
@@ -140,14 +156,6 @@ function HashIcon() {
     </svg>
   );
 }
-function InfoIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 11v6M12 7.5v.01" />
-    </svg>
-  );
-}
 function UploadIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -168,22 +176,26 @@ function LayoutIcon() {
 /* ── Layout / Color constants ───────────────────────────────────── */
 const LAYOUTS = [
   { id: 1, name: 'Layout 1', recommended: true,  desc: 'Clean and professional layout with a top header and structured table format. Suitable for most businesses.' },
-  { id: 2, name: 'Layout 2', recommended: false, desc: 'Modern layout with a side accent and highlighted sections. Ideal for modern and elegant look.' },
+  { id: 2, name: 'Layout 2', recommended: false, desc: 'Modern layout with a prominent company header and structured sections. Ideal for modern and elegant look.' },
   { id: 3, name: 'Layout 3', recommended: false, desc: 'Minimal and clean layout with a classic design. Best for simple and professional invoices.' },
-  { id: 4, name: 'Layout 4', recommended: false, desc: 'Elegant and professional layout with a clean header and modern styling. Suitable for business invoices with better readability.' },
 ];
 
 const COLORS = [
-  { id: 'slate_blue',    label: 'Slate Blue',    hex: '#2563eb' },
-  { id: 'charcoal_grey', label: 'Charcoal Grey', hex: '#334155' },
-  { id: 'dusty_plum',    label: 'Dusty Plum',    hex: '#703058' },
-  { id: 'mocha_brown',   label: 'Mocha Brown',   hex: '#6c4a38' },
-  { id: 'deep_teal',     label: 'Deep Teal',     hex: '#0f766e' },
-  { id: 'antique_gold',  label: 'Antique Gold',  hex: '#c59b27' },
+  { id: 'simple',      label: 'Simple',      hex: '#111111' },
+  { id: 'royal_blue',  label: 'Royal Blue',  hex: '#1d40af' },
+  { id: 'deep_teal',   label: 'Deep Teal',   hex: '#036070' },
+  { id: 'mocha_brown', label: 'Mocha Brown', hex: '#793312' },
+  { id: 'dusty_plum',  label: 'Dusty Plum',  hex: '#8c2f5f' },
 ];
 
+// Colours retired from the picker still resolve on documents that already use them; show the closest offered one.
+const LEGACY_COLOUR = { slate_blue: 'simple', charcoal_grey: 'simple', antique_gold: 'simple' };
+const normaliseColour = (id) => (COLORS.some((c) => c.id === id) ? id : (LEGACY_COLOUR[id] || 'simple'));
+// A client that was on the retired Layout 4 sees (and can move off) Layout 1.
+const normaliseLayout = (id) => (LAYOUTS.some((l) => l.id === Number(id)) ? Number(id) : 1);
+
 /* ── Layouts tab ─────────────────────────────────────────────────── */
-const LAYOUT_IMAGES = { 1: layout1Img, 2: layout2Img, 3: layout3Img, 4: layout4Img };
+const LAYOUT_IMAGES = { 1: layout1Img, 2: layout2Img, 3: layout3Img };
 
 // One real-renderer thumbnail per layout x colour, so picking a colour recolours every card instantly.
 const COLOUR_THUMBS = import.meta.glob('../../assets/layout-previews/colours/*.jpg', { eager: true, query: '?url', import: 'default' });
@@ -202,32 +214,131 @@ function EyeIcon() {
   );
 }
 
-/** Larger preview of the selected layout + colour, rendered by the real document renderer. */
+/** Larger preview of the selected layout + colour, rendered by the real document renderer, with zoom. */
+const ZOOM_MIN = 60;
+const ZOOM_MAX = 250;
+const ZOOM_STEP = 20;
+
 function LayoutPreviewModal({ layout, color, onClose }) {
+  const [zoom, setZoom] = useState(100);
+  const clamp = (z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+
+  // Keyboard: Esc closes, +/- zoom, 0 resets.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === '+' || e.key === '=') setZoom((z) => clamp(z + ZOOM_STEP));
+      else if (e.key === '-' || e.key === '_') setZoom((z) => clamp(z - ZOOM_STEP));
+      else if (e.key === '0') setZoom(100);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const pill = { height: 34, border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+
   return (
-    <div className="bp-modal-backdrop" role="presentation" onClick={onClose} style={{ zIndex: 99999 }}>
+    <div className="bp-modal-backdrop" role="presentation" onClick={onClose}
+      style={{ zIndex: 99999, backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', background: 'rgba(10, 25, 60, 0.55)' }}>
+      <style>{`
+        .lpm-frame iframe { margin: -8px !important; width: calc(100% + 16px) !important; height: calc(100% + 16px) !important; }
+        .lpm-range { -webkit-appearance: none; appearance: none; width: 120px; min-width: 0; height: 4px !important; padding: 0 !important; margin: 0 !important; border: 0 !important; border-radius: 4px; background: rgba(255,255,255,.35) !important; box-shadow: none !important; outline: none; }
+        .lpm-pill button { flex-shrink: 0; }
+        .lpm-frame { width: calc(900px * var(--z)); min-width: 320px; }
+        @media (max-width: 760px) {
+          /* beats the global phone rule  .bp-modal { padding: 22px 18px; width: 100% }  in billing.css */
+          .bp-modal.lpm-modal { width: 100vw !important; max-width: 100vw !important; height: 100dvh !important; max-height: 100dvh !important; padding: 0 !important; margin: 0 !important; border-radius: 0 !important; border: 0 !important; box-sizing: border-box; }
+          .lpm-modal h3 { font-size: 15px !important; }
+          .lpm-controls { box-sizing: border-box; }
+          .lpm-pill { box-sizing: border-box; overflow: hidden; }
+          .lpm-pill button, .lpm-pill input { max-width: none; }
+          /* the global .bp-modal centres text; the page-frame no longer needs the iframe crop on phones */
+          .bp-modal.lpm-modal { text-align: left !important; }
+          .lpm-head { overflow: hidden; }
+          .lpm-head > div:first-child { width: 100%; }
+          .lpm-head > div:first-child span { flex: 0 0 auto; }
+          .lpm-controls { height: 44px; }
+          .lpm-pill { height: 44px; justify-content: space-between; padding: 4px 10px !important; border-radius: 22px !important; }
+          .lpm-range { display: none !important; }
+          .lpm-pill button { height: 36px !important; }
+          .lpm-pill button:first-child, .lpm-pill button:nth-child(3) { width: 44px !important; }
+          .lpm-pill button:last-child { flex: 1; margin: 0 6px; }
+          .lpm-head { padding: 12px 56px 12px 14px !important; gap: 10px !important; position: relative; flex-wrap: nowrap !important; flex-direction: column; align-items: stretch !important; }
+          .lpm-sub { display: none; }
+          .lpm-icon { display: none !important; }
+          .lpm-controls { width: 100%; }
+          .lpm-pill { flex: 1; min-width: 0; }
+          .lpm-range { flex: 1; width: auto; }
+          .lpm-close { position: absolute; top: 12px; right: 12px; }
+          .lpm-area { padding: 14px 10px !important; }
+          .lpm-frame { width: calc(100% * var(--z)); min-width: 0; }
+          .lpm-foot { padding: 10px 14px !important; }
+          .lpm-keys { display: none !important; }
+          .lpm-foot button { width: 100%; }
+        }
+        .lpm-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); cursor: pointer; }
+        .lpm-range::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); cursor: pointer; }
+        .lpm-pill button:hover:not(:disabled) { background: rgba(255,255,255,.16); }
+        .lpm-pill button:disabled { opacity: .4; cursor: not-allowed; }
+      `}</style>
       <div
-        className="bp-modal" role="dialog" aria-modal="true" aria-label="Layout Preview"
+        className="bp-modal lpm-modal" role="dialog" aria-modal="true" aria-label="Layout Preview"
         onClick={(e) => e.stopPropagation()}
-        style={{ width: 'min(920px, 95vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
+        style={{ width: 'min(1180px, 97vw)', height: '95vh', maxHeight: '95vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden', borderRadius: 22, boxShadow: '0 40px 90px -20px rgba(8, 20, 60, 0.65)', border: '1px solid rgba(255,255,255,0.25)' }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f2a5f' }}>{layout.name} · {color.label}</h3>
-            <span style={{ fontSize: 12, color: '#64748b' }}>This is how your documents will look once the layout is approved.</span>
+        {/* header */}
+        <div className="lpm-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', padding: '16px 22px', background: 'linear-gradient(120deg, #0f2a5f 0%, #1d4ed8 100%)', color: '#fff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+            <span className="lpm-icon" style={{ width: 42, height: 42, borderRadius: 12, background: 'rgba(255,255,255,0.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <EyeIcon />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>{layout.name}</h3>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '3px 11px 3px 6px', borderRadius: 999, background: 'rgba(255,255,255,0.16)', fontSize: 12, fontWeight: 700 }}>
+                  <span style={{ width: 14, height: 14, borderRadius: '50%', background: color.hex, boxShadow: '0 0 0 2px rgba(255,255,255,0.9)' }} />
+                  {color.label}
+                </span>
+              </div>
+              <span className="lpm-sub" style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.78)' }}>This is how your documents will look once the layout is approved.</span>
+            </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close"
-            style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: '#e2e8f0', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-          </button>
+
+          <div className="lpm-controls" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="lpm-pill" style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 999, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)' }}>
+              <button type="button" style={{ ...pill, width: 32, borderRadius: '50%', fontSize: 20, fontWeight: 700 }} onClick={() => setZoom((z) => clamp(z - ZOOM_STEP))} disabled={zoom <= ZOOM_MIN} aria-label="Zoom out" title="Zoom out (-)">−</button>
+              <input className="lpm-range" type="range" min={ZOOM_MIN} max={ZOOM_MAX} step={10} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} aria-label="Zoom" />
+              <button type="button" style={{ ...pill, width: 32, borderRadius: '50%', fontSize: 20, fontWeight: 700 }} onClick={() => setZoom((z) => clamp(z + ZOOM_STEP))} disabled={zoom >= ZOOM_MAX} aria-label="Zoom in" title="Zoom in (+)">+</button>
+              <button type="button" onClick={() => setZoom(100)} title="Reset zoom (0)"
+                style={{ ...pill, minWidth: 58, padding: '0 10px', borderRadius: 999, fontSize: 13, fontWeight: 800, background: 'rgba(255,255,255,0.2)' }}>{zoom}%</button>
+            </div>
+            <button type="button" className="lpm-close" onClick={onClose} aria-label="Close"
+              style={{ width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.18)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            </button>
+          </div>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 20, background: '#e2e8f0', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-          <div style={{ background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', borderRadius: 4, overflow: 'hidden', maxWidth: 820, width: '100%' }}>
+
+        {/* page area — the page is `900px × zoom` wide; the area scrolls in both directions */}
+        <div className="lpm-area" style={{ flex: 1, overflow: 'auto', padding: '28px 24px', background: 'radial-gradient(circle at 1px 1px, rgba(15,42,95,0.09) 1px, transparent 0) 0 0 / 18px 18px, #eaf0fa' }}>
+          <div className="lpm-frame" style={{ '--z': zoom / 100, margin: '0 auto', background: '#fff', boxShadow: '0 24px 50px -18px rgba(15, 42, 95, 0.5), 0 0 0 1px rgba(15, 42, 95, 0.08)', borderRadius: 6, overflow: 'hidden' }}>
             <LayoutPreview previewUrl={clientLayoutPreviewUrl(layout.id, color.id)} src={LAYOUT_IMAGES[layout.id]} alt={`${layout.name} preview`} />
           </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 20px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-          <button type="button" className="bp-btn bp-btn-outline" onClick={onClose}>Close Preview</button>
+
+        {/* footer */}
+        <div className="lpm-foot" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: '12px 22px', borderTop: '1px solid #dbe5f3', background: '#fff' }}>
+          <div className="lpm-keys" style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11.5, color: '#64748b' }}>
+            {[['+ / −', 'Zoom'], ['0', 'Reset'], ['Esc', 'Close']].map(([k, t]) => (
+              <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <kbd style={{ padding: '2px 7px', borderRadius: 6, border: '1px solid #cbd5e1', borderBottomWidth: 2, background: '#f8fafc', fontFamily: 'inherit', fontSize: 11, fontWeight: 700, color: '#334155' }}>{k}</kbd>{t}
+              </span>
+            ))}
+          </div>
+          <button type="button" onClick={onClose}
+            style={{ height: 40, padding: '0 26px', borderRadius: 11, border: 'none', background: 'linear-gradient(135deg, #1e3a8a, #1d4ed8)', color: '#fff', fontWeight: 800, fontSize: 13.5, cursor: 'pointer', boxShadow: '0 10px 18px -10px rgba(29,78,216,.8)' }}>
+            Close Preview
+          </button>
         </div>
       </div>
     </div>
@@ -235,12 +346,12 @@ function LayoutPreviewModal({ layout, color, onClose }) {
 }
 
 function LayoutsTab({ approved, sections, onSubmitted }) {
-  const approvedLayout = approved?.layout_id || 1;
-  const approvedColour = approved?.colour_scheme || 'slate_blue';
+  const approvedLayout = normaliseLayout(approved?.layout_id || 1);
+  const approvedColour = normaliseColour(approved?.colour_scheme || 'simple');
   const pendingPayload = sections?.layout?.pending?.payload;
   // What the client is currently proposing: the open request if there is one, else the approved design.
-  const baseLayout = Number(pendingPayload?.layout_id) || approvedLayout;
-  const baseColour = pendingPayload?.colour_scheme || approvedColour;
+  const baseLayout = pendingPayload?.layout_id ? normaliseLayout(pendingPayload.layout_id) : approvedLayout;
+  const baseColour = pendingPayload?.colour_scheme ? normaliseColour(pendingPayload.colour_scheme) : approvedColour;
 
   const [selectedLayout, setSelectedLayout] = useState(baseLayout);
   const [selectedColor, setSelectedColor] = useState(baseColour);
@@ -272,7 +383,7 @@ function LayoutsTab({ approved, sections, onSubmitted }) {
 
       {err && <p className="bp-alert bp-alert-error">{err}</p>}
 
-      <div className="ly-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16, marginBottom: 20 }}>
+      <div className="ly-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, marginBottom: 20 }}>
         {LAYOUTS.map((layout) => {
           const active = selectedLayout === layout.id;
           return (
@@ -298,17 +409,17 @@ function LayoutsTab({ approved, sections, onSubmitted }) {
               <p style={{ fontSize: 11.5, color: '#64748b', margin: '0 14px 10px', lineHeight: 1.5, minHeight: 52 }}>{layout.desc}</p>
 
               {/* the same invoice design thumbnails the admin sees */}
-              <div className="ly-thumb" style={{ margin: '0 12px 12px', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', background: '#fff', height: 300 }}>
+              <div className="ly-thumb" style={{ margin: '0 12px 12px', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
                 <img src={layoutThumb(layout.id, selectedColor)} alt={`${layout.name} design`} loading="lazy"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
+                  style={{ width: '100%', height: 'auto', display: 'block' }} />
               </div>
 
               {/* colours */}
               <div style={{ padding: '0 14px 10px' }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#0f2a5f', marginBottom: 8 }}>
-                  Choose Color <span style={{ fontWeight: 500, color: '#64748b' }}>(Default: {approvedColour === colorObj.id ? colorObj.label : (COLORS.find((c) => c.id === approvedColour)?.label || 'Slate Blue')})</span>
+                  Choose Color <span style={{ fontWeight: 500, color: '#64748b' }}>(Default: {approvedColour === colorObj.id ? colorObj.label : (COLORS.find((c) => c.id === approvedColour)?.label || 'Simple')})</span>
                 </div>
-                <div className="ly-swatches" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 4 }}>
+                <div className="ly-swatches" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4 }}>
                   {COLORS.map((col) => {
                     const on = selectedColor === col.id;
                     return (
@@ -458,6 +569,9 @@ export default function BusinessSettings() {
   const [busy, setBusy] = useState(false);
   const [ifscLoading, setIfscLoading] = useState(false);
   const [ifscErr,     setIfscErr]     = useState('');
+  const [ifscOk,      setIfscOk]      = useState('');
+  const [numErrors,   setNumErrors]   = useState({}); // server-side errors keyed by "<doc>_<prop>"
+  const [sampleDoc,   setSampleDoc]   = useState('invoice'); // document shown in the Format Preview panel
 
   const load = () => {
     api('/client/change-requests/current')
@@ -473,7 +587,7 @@ export default function BusinessSettings() {
 
   useEffect(() => { load(); }, []);
 
-  if (!form) return <LoadingBlock />;
+  if (!form) return <LoadingBlock minHeight="70vh" />;
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -502,22 +616,30 @@ export default function BusinessSettings() {
 
   const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
   const fetchIfsc = async (code) => {
-    if (code.length !== 11) return;
+    setIfscOk('');
+    if (code.length !== 11) {
+      setIfscErr('Please enter a valid 11-character IFSC code.');
+      return;
+    }
     if (!IFSC_RE.test(code)) {
       setForm((f) => ({ ...f, bank_name: '', bank_branch: '' }));
-      setIfscErr('Invalid IFSC code format (e.g. HDFC0001234).');
+      setIfscErr('Invalid IFSC Code. Please enter a valid IFSC Code.');
       return;
     }
     setIfscLoading(true); setIfscErr('');
+    // Ignore a response that arrives after the user has already edited the IFSC again.
+    const stillCurrent = (f) => f.bank_ifsc === code;
     try {
-      const res = await fetch(`https://ifsc.razorpay.com/${code}`);
-      if (!res.ok) throw new Error('IFSC code not found. Please check and re-enter.');
-      const d = await res.json();
-      setForm(f => ({ ...f, bank_name: d.BANK || '', bank_branch: d.BRANCH || '' }));
+      const d = await api(`/client/lookup/ifsc/${code}`);
+      const bank = d?.bank_name || d?.bank || '';
+      const branch = d?.branch || d?.bank_branch || '';
+      if (!d?.success || !bank) throw new Error('Invalid IFSC Code. Please enter a valid IFSC Code.');
+      setForm((f) => (stillCurrent(f) ? { ...f, bank_name: bank, bank_branch: branch } : f));
+      setIfscOk(`Verified: ${bank}${branch ? ` (${branch})` : ''}`);
     } catch (e) {
       // Never keep (or invent) bank / branch details for an IFSC that could not be verified.
-      setForm((f) => ({ ...f, bank_name: '', bank_branch: '' }));
-      setIfscErr(e.message || 'Invalid IFSC.');
+      setForm((f) => (stillCurrent(f) ? { ...f, bank_name: '', bank_branch: '' } : f));
+      setIfscErr(e.message || 'Invalid IFSC Code. Please enter a valid IFSC Code.');
     }
     finally { setIfscLoading(false); }
   };
@@ -546,6 +668,41 @@ export default function BusinessSettings() {
       load(); setPopup(successMsg);
     } catch (ex) { setErr(ex.message); }
     finally { setBusy(false); }
+  };
+
+  const numCfg = (key) => Object.fromEntries(NUMBERING_PROPS.map((p) => [p, form[`${key}_${p}`] ?? '']));
+  const setNum = (key, prop, value) => {
+    set(`${key}_${prop}`, value);
+    if (numErrors[`${key}_${prop}`]) setNumErrors((e) => ({ ...e, [`${key}_${prop}`]: undefined }));
+  };
+
+  const validateNumbering = () => {
+    const errors = {};
+    NUMBERING_DOCS.forEach(([key, label]) => {
+      const c = numCfg(key);
+      if (!String(c.prefix).trim()) errors[`${key}_prefix`] = `${label}: prefix is required.`;
+      if (!['-', '/'].includes(c.separator)) errors[`${key}_separator`] = `${label}: separator must be - or /.`;
+      if (!/^\d{1,9}$/.test(String(c.next_number)) || Number(c.next_number) < 1) errors[`${key}_next_number`] = `${label}: next number must be a positive number.`;
+    });
+    setNumErrors(errors);
+    return Object.values(errors)[0] || '';
+  };
+
+  const submitNumbering = async () => {
+    const problem = validateNumbering();
+    if (problem) { setMsg(''); setErr(problem); return; }
+    setBusy(true); setErr(''); setMsg('');
+    try {
+      const body = { section: 'numbering' };
+      SECTION_FIELDS.numbering.forEach((k) => { body[k] = form[k] ?? ''; });
+      await api('/client/change-requests', { method: 'POST', body });
+      load();
+      setPopup('Document Numbering & Prefix request submitted successfully.');
+    } catch (ex) {
+      const fieldErrors = ex.data?.errors;
+      if (fieldErrors) setNumErrors(Object.fromEntries(Object.entries(fieldErrors).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v])));
+      setErr(ex.message);
+    } finally { setBusy(false); }
   };
 
   const submitBranding = async () => {
@@ -587,7 +744,7 @@ export default function BusinessSettings() {
         {TABS.map(({ key, label, Icon }) => (
           <button key={key} type="button"
             className={`bp-uline-tab${activeTab === key ? ' active' : ''}`}
-            onClick={() => setActiveTab(key)}>
+            onClick={(e) => { setActiveTab(key); e.currentTarget.scrollIntoView?.({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }}>
             <Icon /> {label}
           </button>
         ))}
@@ -661,45 +818,55 @@ export default function BusinessSettings() {
           <h3 style={{ marginTop: 0, marginBottom: 4, color: 'var(--bp-navy)' }}>Bank Details</h3>
           <p className="bp-section-desc" style={{ marginBottom: 20 }}>Manage and maintain the business bank account details that will be used for transactions and displayed on invoices.</p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 8 }}>
-            {/* IFSC Code */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, marginBottom: 8 }}>
+            {/* IFSC Code — verified automatically as soon as 11 characters are entered */}
             <label>
               <strong className="bp-field-title">IFSC Code</strong>
-              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-                <input className="bp-input" style={{ flex: 1 }} value={form.bank_ifsc || ''}
+              <div style={{ position: 'relative', marginTop: 6 }}>
+                <input className="bp-input" style={{ width: '100%', boxSizing: 'border-box', paddingRight: 36, ...(ifscErr ? { borderColor: '#dc2626' } : {}) }}
+                  value={form.bank_ifsc || ''}
                   onChange={(e) => {
                     const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11);
                     setForm((f) => ({ ...f, bank_ifsc: v, ...(v.length !== 11 ? { bank_name: '', bank_branch: '' } : {}) }));
-                    setIfscErr('');
+                    setIfscErr(''); setIfscOk('');
                     if (v.length === 11) fetchIfsc(v);
                   }}
-                  onBlur={(e) => fetchIfsc(e.target.value.toUpperCase())}
                   placeholder="e.g. HDFC0001234" maxLength={11} />
-                {ifscLoading && <span style={{ alignSelf: 'center', fontSize: 12, color: 'var(--bp-muted)' }}>Fetching…</span>}
+                <button type="button" aria-label="Verify IFSC" title="Verify IFSC"
+                  disabled={ifscLoading || (form.bank_ifsc || '').length !== 11}
+                  onClick={() => fetchIfsc((form.bank_ifsc || '').toUpperCase())}
+                  style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', padding: 4, cursor: ifscLoading ? 'wait' : 'pointer', color: '#64748b', display: 'flex' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                </button>
               </div>
-              {ifscErr && <p style={{ fontSize: 11, color: '#dc2626', marginTop: 4, marginBottom: 0 }}>{ifscErr}</p>}
+              {ifscLoading && <p style={{ fontSize: 11.5, color: 'var(--bp-muted)', marginTop: 4, marginBottom: 0 }}>Verifying…</p>}
+              {ifscOk && <p style={{ fontSize: 11.5, color: '#16a34a', fontWeight: 600, marginTop: 4, marginBottom: 0 }}>✓ {ifscOk}</p>}
+              {ifscErr && (
+                <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: '#dc2626', marginTop: 4, marginBottom: 0 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10" /><rect x="11" y="6" width="2" height="7" fill="#fff" /><rect x="11" y="15" width="2" height="2.4" fill="#fff" /></svg>
+                  {ifscErr}
+                </p>
+              )}
             </label>
 
-            {/* Bank Name — read-only */}
+            {/* Bank Name — read-only, auto-fetched */}
             <label>
-              <strong className="bp-field-title">Bank Name</strong>
-              <input className="bp-input" style={{ marginTop: 6, background: '#f8fafc', color: '#64748b' }}
-                value={form.bank_name || ''} readOnly placeholder="Auto-populated from IFSC" />
+              <strong className="bp-field-title">Bank Name {ifscOk && <span style={{ fontWeight: 600, color: '#16a34a', fontSize: 11 }}>(Auto Fetched)</span>}</strong>
+              <div style={{ position: 'relative', marginTop: 6 }}>
+                <input className="bp-input" style={{ width: '100%', boxSizing: 'border-box', paddingRight: 34, background: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }}
+                  value={form.bank_name || ''} readOnly tabIndex={-1} placeholder="--" />
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+              </div>
             </label>
 
-            {/* Branch — read-only */}
+            {/* Branch — read-only, auto-fetched */}
             <label>
-              <strong className="bp-field-title">Branch</strong>
-              <input className="bp-input" style={{ marginTop: 6, background: '#f8fafc', color: '#64748b' }}
-                value={form.bank_branch || ''} readOnly placeholder="Auto-populated from IFSC" />
-            </label>
-
-            {/* Account Holder Name */}
-            <label>
-              <strong className="bp-field-title">Account Holder Name</strong>
-              <input className="bp-input" style={{ marginTop: 6 }} value={form.account_holder_name || ''}
-                onChange={(e) => set('account_holder_name', e.target.value)}
-                placeholder="Name on bank account" />
+              <strong className="bp-field-title">Branch {ifscOk && <span style={{ fontWeight: 600, color: '#16a34a', fontSize: 11 }}>(Auto Fetched)</span>}</strong>
+              <div style={{ position: 'relative', marginTop: 6 }}>
+                <input className="bp-input" style={{ width: '100%', boxSizing: 'border-box', paddingRight: 34, background: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }}
+                  value={form.bank_branch || ''} readOnly tabIndex={-1} placeholder="--" />
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+              </div>
             </label>
 
             {/* Account Number */}
@@ -708,6 +875,14 @@ export default function BusinessSettings() {
               <input className="bp-input" style={{ marginTop: 6 }} value={form.bank_account || ''}
                 onChange={(e) => set('bank_account', e.target.value.replace(/\D/g, '').slice(0, 18))}
                 inputMode="numeric" placeholder="Enter account number (9 to 18 digits)" />
+            </label>
+
+            {/* Account Holder Name */}
+            <label>
+              <strong className="bp-field-title">Account Holder Name</strong>
+              <input className="bp-input" style={{ marginTop: 6 }} value={form.account_holder_name || ''}
+                onChange={(e) => set('account_holder_name', e.target.value)}
+                placeholder="Name on bank account" />
             </label>
 
             {/* Account Type */}
@@ -752,21 +927,102 @@ export default function BusinessSettings() {
           <h3 style={{ marginTop: 0, marginBottom: 4, color: '#0f2a5f', fontSize: 18, fontWeight: 800 }}>Document Numbering &amp; Prefix Configuration</h3>
           <p className="bp-section-desc" style={{ marginBottom: 0 }}>Configure prefixes for your documents. Numbering will be automatically generated by the system.</p>
 
-          {/* 2 columns, filled top-to-bottom: each row = Label | Prefix | Sample badge | info */}
-          <div className="nm-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: 'repeat(3, auto)', gridAutoFlow: 'column', gap: '18px 56px', margin: '22px 0 26px' }}>
-            {PREFIX_FIELDS.map(([k, label, short]) => (
-              <div key={k} className="nm-row" style={{ display: 'grid', gridTemplateColumns: '172px 140px auto 1fr', gap: 12, alignItems: 'center' }}>
-                <strong style={{ fontSize: 13, fontWeight: 800, color: '#0f2a5f' }}>{label}</strong>
-                <input className="bp-input" value={form[k] || ''}
-                  onChange={(e) => set(k, e.target.value)} placeholder={short}
-                  maxLength={20}
-                  style={{ width: '100%', boxSizing: 'border-box', height: 40, borderRadius: 8, fontWeight: 600 }} />
-                <span className="nm-sample" style={{ background: '#e8f1ff', color: '#1d4ed8', fontSize: 11.5, fontWeight: 800, padding: '7px 12px', borderRadius: 6, whiteSpace: 'nowrap', letterSpacing: '0.01em' }}>
-                  Sample: {(form[k] || short).trim() || short}-0001
-                </span>
-                <span title="Numbers are generated automatically and continue sequentially" style={{ color: '#94a3b8', cursor: 'help', display: 'inline-flex', justifySelf: 'end' }}><InfoIcon /></span>
+          <div className="dn-layout">
+            <div className="dn-table-wrap">
+              <table className="dn-table">
+                <thead>
+                  <tr>
+                    <th>Document Type</th>
+                    <th>Prefix</th>
+                    <th>Separator</th>
+                    <th>Next Number</th>
+                    <th>Prefix Position</th>
+                    <th>Number Format (Preview)</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {NUMBERING_DOCS.map(([key, label, defPrefix, defSep]) => {
+                    const c = numCfg(key);
+                    const active = c.status !== 'inactive';
+                    const fieldErr = (prop) => numErrors[`${key}_${prop}`];
+                    return (
+                      <tr key={key} className={sampleDoc === key ? 'dn-row-selected' : ''}>
+                        <td className="dn-type">{label}</td>
+                        <td>
+                          <input className={`bp-input dn-input${fieldErr('prefix') ? ' dn-invalid' : ''}`} value={c.prefix} maxLength={20}
+                            aria-label={`${label} prefix`} placeholder={defPrefix}
+                            onChange={(e) => setNum(key, 'prefix', e.target.value)} />
+                        </td>
+                        <td>
+                          <input className={`bp-input dn-input dn-sep${fieldErr('separator') ? ' dn-invalid' : ''}`} value={c.separator} maxLength={1}
+                            aria-label={`${label} separator`} placeholder={defSep}
+                            onChange={(e) => {
+                              const ch = e.target.value.slice(-1);
+                              if (!ch) setNum(key, 'separator', '');
+                              else if (ch === '-' || ch === '/') setNum(key, 'separator', ch);
+                            }} />
+                        </td>
+                        <td>
+                          <input className={`bp-input dn-input dn-next${fieldErr('next_number') ? ' dn-invalid' : ''}`} value={c.next_number} maxLength={9}
+                            inputMode="numeric" aria-label={`${label} next number`} placeholder="01"
+                            onChange={(e) => setNum(key, 'next_number', e.target.value.replace(/\D/g, ''))} />
+                        </td>
+                        <td>
+                          <div className="dn-radios">
+                            {[['first', 'Prefix First'], ['last', 'Prefix Last']].map(([val, text]) => (
+                              <label key={val} className={c.prefix_position === val || (!c.prefix_position && val === 'first') ? 'on' : ''}>
+                                <input type="radio" name={`dn-pos-${key}`}
+                                  checked={(c.prefix_position || 'first') === val}
+                                  onChange={() => setNum(key, 'prefix_position', val)} />
+                                {text}
+                              </label>
+                            ))}
+                          </div>
+                        </td>
+                        <td><span className="dn-preview">{formatDocNumber(c)}</span></td>
+                        <td>
+                          <button type="button" role="switch" aria-checked={active} aria-label={`${label} status`}
+                            className={`dn-switch${active ? ' on' : ''}`}
+                            onClick={() => setNum(key, 'status', active ? 'inactive' : 'active')}>
+                            <span />
+                          </button>
+                        </td>
+                        <td>
+                          <button type="button" className="dn-sample-btn" onClick={() => setSampleDoc(key)}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                            View Sample
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {Object.values(numErrors).some(Boolean) && (
+                <ul className="dn-errors">
+                  {Object.values(numErrors).filter(Boolean).map((m) => <li key={m}>{m}</li>)}
+                </ul>
+              )}
+            </div>
+
+            <aside className="dn-panel">
+              <h4>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                Format Preview
+              </h4>
+              <label className="dn-panel-label">Document Type</label>
+              <select className="bp-input" value={sampleDoc} onChange={(e) => setSampleDoc(e.target.value)}>
+                {NUMBERING_DOCS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+              <div className="dn-panel-card">
+                <small>{NUMBERING_DOCS.find(([k]) => k === sampleDoc)?.[1].toUpperCase()}</small>
+                <strong>{formatDocNumber(numCfg(sampleDoc))}</strong>
+                <span>Next number will be</span>
+                <em>{formatDocNumber(numCfg(sampleDoc), 1)}</em>
               </div>
-            ))}
+            </aside>
           </div>
 
           {/* Important Information box */}
@@ -778,9 +1034,16 @@ export default function BusinessSettings() {
             <strong style={{ display: 'block', fontSize: 13.5, color: '#1d4ed8', marginBottom: 6 }}>Important Information</strong>
             <ul style={{ margin: 0, paddingLeft: 18, listStyle: 'disc', fontSize: 12.5, color: '#1e3a8a', lineHeight: 1.75 }}>
               <li>Document numbers will be automatically generated based on the configured prefix and sequence.</li>
-              <li>You only need to enter the prefix. The system will maintain the numbering automatically.</li>
+              <li>You only need to enter the prefix and separator. The system will maintain the numbering automatically.</li>
+              <li>The prefix position will determine whether the prefix appears before or after the number.</li>
               <li>Numbering will continue sequentially for each document type.</li>
               <li>Duplicate document numbers will not be allowed.</li>
+              {NUMBERING_DOCS.filter(([k]) => approved?.numbering_types?.[k] === 'manual').length > 0 && (
+                <li>
+                  Manual numbering is enabled for {NUMBERING_DOCS.filter(([k]) => approved?.numbering_types?.[k] === 'manual').map(([, l]) => l).join(', ')}
+                  {' '}— you enter the document number while creating the document.
+                </li>
+              )}
             </ul>
             </div>
           </div>
@@ -789,7 +1052,7 @@ export default function BusinessSettings() {
             data={sections?.numbering}
             busy={busy}
             dirty={isSectionDirty('numbering')}
-            onSubmit={() => submitWithPopup('numbering', 'Document Numbering & Prefix request submitted successfully.')} />
+            onSubmit={submitNumbering} />
         </div>
       )}
 

@@ -34,6 +34,12 @@ class InvoiceService
             );
 
             $allocateNumber = $status === 'issued';
+            // Manual numbering (an admin setting): the client types the number, nothing is generated.
+            abort_if(
+                $allocateNumber && empty($data['number']) && DocumentNumberingSettings::numberingType($profile, $type) === 'manual',
+                422,
+                'Enter the document number before issuing — this document type uses manual numbering.'
+            );
             if (! empty($data['number'])) {
                 $number = $data['number'];
             } elseif ($allocateNumber) {
@@ -82,7 +88,13 @@ class InvoiceService
                 $tdsRate
             );
             $status = $keepIssued ? $doc->status : 'draft';
-            $payload = $this->docPayload($profile, $data, $calc, $type, $doc->number, $isInter, $isRcm, $status, $keepIssued, $taxDeductionType, $tdsSection, $tdsRate);
+            // Manual numbering: a draft may have its typed number changed (never an issued one).
+            $number = $doc->number;
+            if ($doc->status === 'draft' && ! empty($data['number']) && $data['number'] !== $doc->number) {
+                BillingPolicy::assertUniqueNumber($profile, $data['number'], $doc->id);
+                $number = $data['number'];
+            }
+            $payload = $this->docPayload($profile, $data, $calc, $type, $number, $isInter, $isRcm, $status, $keepIssued, $taxDeductionType, $tdsSection, $tdsRate);
             if ($unlockedIssued) {
                 // The one-time admin-approved unlock is consumed on save; a direct edit
                 // of an already-unlocked period doesn't touch edit_allowed at all.
@@ -531,6 +543,11 @@ class InvoiceService
 
         return DB::transaction(function () use ($doc, $profile) {
             $wasDraftNumber = str_starts_with($doc->number, 'DRAFT-');
+            abort_if(
+                $wasDraftNumber && DocumentNumberingSettings::numberingType($profile, $doc->type) === 'manual',
+                422,
+                'Enter the document number before issuing — this document type uses manual numbering.'
+            );
             $number = $wasDraftNumber ? $this->allocateNextNumber($profile, $doc->type) : $doc->number;
             BillingPolicy::assertUniqueNumber($profile, $number, $doc->id);
 
@@ -591,6 +608,25 @@ class InvoiceService
         $seq = max(1, (int) ($profile->{$field} ?? 1));
 
         return $this->formatDocNumber($prefix, $seq, $separator, $position, $padLen);
+    }
+
+    /**
+     * Suggested number for a manual-numbering type: the next in sequence that no document uses yet.
+     * Purely informational — manual numbers never move the sequence counter.
+     */
+    public function suggestManualNumber(ClientProfile $profile, string $type): string
+    {
+        [$prefix, $separator, $position, $padLen] = $this->resolveNumberingConfig($profile, $type);
+        $seq = max(1, (int) ($profile->{$this->nextNumberField($type)} ?? 1));
+
+        for ($i = 0; $i < 1000; $i++, $seq++) {
+            $candidate = $this->formatDocNumber($prefix, $seq, $separator, $position, $padLen);
+            if (! CommercialDocument::where('client_profile_id', $profile->id)->where('number', $candidate)->exists()) {
+                return $candidate;
+            }
+        }
+
+        return $candidate;
     }
 
     /**
@@ -1032,7 +1068,7 @@ class InvoiceService
                     'data' => $data,
                     'theme' => $theme,
                 ];
-                if ($layoutId === 1) {
+                if (in_array($layoutId, [1, 3], true)) {
                     $viewData['icons'] = \App\Services\DocumentTemplate\DocumentCanvasHelper::resolveIcons($theme['key']);
                 }
 
@@ -1047,18 +1083,14 @@ class InvoiceService
                 $pdf->render();
                 $dompdf = $pdf->getDomPDF();
 
-                // Layout 1 uses rounded frame (radius = 11), Layout 2 and 3 use crisp square frame (radius = 0), Layout 4 has frame off
-                $borderRadius = in_array($layoutId, [2, 3], true) ? 0 : 11;
-                $drawFrame = $layoutId !== 4;
-
-                \App\Services\DocumentTemplate\DocumentCanvasHelper::attachFrameAndFooter(
+                // Frame / corner ribbons / footer for the chosen layout
+                \App\Services\DocumentTemplate\DocumentCanvasHelper::decorate(
                     $dompdf->getCanvas(),
                     $dompdf->getFontMetrics(),
                     $theme,
-                    $watermarkApplies,
-                    $watermarkText,
-                    $borderRadius,
-                    $drawFrame
+                    (int) $layoutId,
+                    (bool) $watermarkApplies,
+                    $watermarkText
                 );
 
                 $dir = 'invoices/' . $doc->client_profile_id;

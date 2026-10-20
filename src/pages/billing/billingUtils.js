@@ -70,25 +70,26 @@ export const CURRENCIES = [
   { code: 'AED', label: 'AED - UAE Dirham' },
 ];
 
-/** Billing Module spec §2 — mandatory DD:MM:YYYY, e.g. 15:08:2026. Accepts 'YYYY-MM-DD...' or Date. */
+/** Billing date standard — DD/MM/YYYY, e.g. 15/08/2026. Accepts 'YYYY-MM-DD...' or Date. */
 export function formatDMY(value) {
   if (!value) return '—';
   const s = String(value).slice(0, 10);
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (m) return `${m[3]}:${m[2]}:${m[1]}`;
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dd}:${mm}:${d.getFullYear()}`;
+  return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
-/** DD:MM:YYYY, hh:mm AM/PM — for "Created" timestamp columns. */
+/** DD/MM/YYYY, hh:mm AM/PM (12-hour, uppercase meridiem) — for "Created" timestamp columns. */
 export function formatDMYTime(value) {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  const h = d.getHours();
+  const time = `${String(h % 12 || 12).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
   return `${formatDMY(d)}, ${time}`;
 }
 

@@ -692,11 +692,38 @@ function periodLabel(period) {
   return month ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][month - 1]} ${year}` : period;
 }
 
+/** Financial year a period key belongs to: "2026-08" -> "2026-27", "2027-02" -> "2026-27", "2026-Q3" -> "2026-27". */
+function fyOfPeriod(period) {
+  const q = /^(\d{4})-Q[1-4]$/.exec(period || '');
+  const m = /^(\d{4})-(\d{2})$/.exec(period || '');
+  let start = new Date().getFullYear();
+  if (q) start = Number(q[1]);
+  else if (m) start = Number(m[2]) >= 4 ? Number(m[1]) : Number(m[1]) - 1;
+  return `${start}-${String(start + 1).slice(-2)}`;
+}
+
 export default function Gstr2bPeriodPage() {
   const { period }    = useParams();
   const navigate      = useNavigate();
   const [activeTab, setActiveTab] = useState('invoices');
+  // 'available' = official GSTR-2B loaded; 'open' = period started but the official statement isn't out yet.
+  const [periodStatus, setPeriodStatus] = useState(null);
   const label = periodLabel(period);
+
+  useEffect(() => {
+    let live = true;
+    setPeriodStatus(null);
+    api(`/client/gstr2b/periods?financial_year=${fyOfPeriod(period)}`)
+      .then((d) => {
+        if (!live) return;
+        const status = (d.periods || []).find((p) => p.period === period)?.status || 'available';
+        setPeriodStatus(status);
+        // Until the official statement arrives, the Projected ITC card is the useful part of the page.
+        if (status !== 'available') setActiveTab('projected');
+      })
+      .catch(() => { if (live) setPeriodStatus('available'); });
+    return () => { live = false; };
+  }, [period]);
 
   return (
     <div style={{ maxWidth: 1250 }}>
@@ -711,7 +738,11 @@ export default function Gstr2bPeriodPage() {
         <button type="button" onClick={() => navigate('/portal/gstr-2b')} style={{ background: 'none', border: 'none', padding: 0, marginBottom: 6, color: '#2563eb', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>‹ Back to GSTR-2B</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f2a5f', letterSpacing: '-0.01em' }}>GSTR-2B – {label}</h1>
-          <span style={{ padding: '4px 14px', borderRadius: 999, background: '#d9f3e3', color: '#15803d', fontSize: 12, fontWeight: 800 }}>Available</span>
+          {periodStatus && (
+            periodStatus === 'available'
+              ? <span style={{ padding: '4px 14px', borderRadius: 999, background: '#d9f3e3', color: '#15803d', fontSize: 12, fontWeight: 800 }}>Available</span>
+              : <span style={{ padding: '4px 14px', borderRadius: 999, background: '#dbeafe', color: '#1d4ed8', fontSize: 12, fontWeight: 800 }}>Official GSTR-2B awaited · Projected ITC open</span>
+          )}
         </div>
         <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>Detailed view of inward supplies, ITC summary and reconciliation.</p>
       </div>

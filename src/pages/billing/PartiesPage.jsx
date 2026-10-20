@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { INDIAN_STATES } from '../../data/indianStates';
-import ConfirmDialog from '../../components/ConfirmDialog';
 
 const AVATAR_COLORS = [
   { bg: '#e3ecfb', fg: '#1c4b9c' },
@@ -57,11 +56,43 @@ export default function PartiesPage() {
 
   const [deleting, setDeleting] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [confirmName, setConfirmName] = useState('');
+  // The Manage menu is fixed-positioned (table cells clip overflow), so it carries its own coordinates.
+  const [menu, setMenu] = useState(null); // { party, top, left }
 
-  const removeParty = (p) => setDeleting(p);
+  useEffect(() => {
+    if (!menu) return undefined;
+    const close = () => setMenu(null);
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [menu]);
+
+  const openMenu = (e, party) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenu({ party, top: r.bottom + 6, left: Math.max(8, r.right - 190) });
+  };
+
+  const removeParty = (p) => { setMenu(null); setConfirmName(''); setDeleting(p); };
+
+  // Accidental-deletion guard: the final Delete only unlocks on an exact match of the company name.
+  const nameMatches = Boolean(deleting) && confirmName === deleting.name;
+
+  useEffect(() => {
+    if (!deleting) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape' && !deleteBusy) setDeleting(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [deleting, deleteBusy]);
 
   const confirmRemove = async () => {
-    if (!deleting) return;
+    if (!deleting || !nameMatches) return;
     setDeleteBusy(true);
     try {
       const r = await api(`/billing/parties/${deleting.id}`, { method: 'DELETE' });
@@ -213,10 +244,12 @@ export default function PartiesPage() {
                     </span>
                   </td>
                   <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
-                    <Link to={`/portal/billing/parties/${p.id}/edit`} className="bp-btn bp-btn-outline" style={{ padding: '4px 8px' }}>Edit</Link>
-                    {status === 'archived'
-                      ? <button type="button" className="bp-btn bp-btn-outline" style={{ padding: '4px 8px', marginLeft: 6 }} onClick={() => restoreParty(p)}>Restore</button>
-                      : <button type="button" className="bp-btn bp-btn-outline" style={{ padding: '4px 8px', marginLeft: 6, color: '#b91c1c', borderColor: '#fca5a5' }} onClick={() => removeParty(p)}>Delete</button>}
+                    <button type="button" className="bp-btn bp-btn-outline" style={{ padding: '4px 12px', display: 'inline-flex', alignItems: 'center', gap: 6, color: '#1d4ed8', borderColor: '#bcd0f5' }}
+                      aria-haspopup="menu" aria-expanded={menu?.party.id === p.id}
+                      onClick={(e) => openMenu(e, p)}>
+                      Manage
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
                   </td>
                 </tr>
               );
@@ -250,16 +283,73 @@ export default function PartiesPage() {
           </div>
         )}
       </div>
-      <ConfirmDialog
-        open={Boolean(deleting)}
-        title="Delete this company?"
-        message={deleting ? `"${deleting.name}" will be removed from your parties.` : ''}
-        detail="If this company already has invoices or documents, it is archived instead of deleted, so your records stay safe. You can restore it later from the Archived tab."
-        confirmLabel="Yes, Delete"
-        busy={deleteBusy}
-        onConfirm={confirmRemove}
-        onCancel={() => { if (!deleteBusy) setDeleting(null); }}
-      />
+
+      {menu && (
+        <>
+          <div role="presentation" style={{ position: 'fixed', inset: 0, zIndex: 9000 }} onMouseDown={() => setMenu(null)} />
+          <div role="menu" style={{ position: 'fixed', top: menu.top, left: menu.left, width: 190, zIndex: 9001, background: '#fff', border: '1px solid #dfe8f6', borderRadius: 12, padding: 6, boxShadow: '0 18px 40px -16px rgba(15,42,95,0.45)' }}>
+            <Link role="menuitem" to={`/portal/billing/parties/${menu.party.id}/edit`} onClick={() => setMenu(null)}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, color: '#1e293b', fontWeight: 600, fontSize: 13, textDecoration: 'none' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+              Edit Company
+            </Link>
+            {status === 'archived' ? (
+              <button type="button" role="menuitem" onClick={() => { const p = menu.party; setMenu(null); restoreParty(p); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', borderRadius: 8, border: 'none', background: 'none', color: '#1e293b', fontWeight: 600, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10" /><path d="M3.5 15a9 9 0 1 0 2.1-9.4L1 10" /></svg>
+                Restore Company
+              </button>
+            ) : (
+              <button type="button" role="menuitem" onClick={() => removeParty(menu.party)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', borderRadius: 8, border: 'none', background: 'none', color: '#dc2626', fontWeight: 600, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                Delete Company
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {deleting && (
+        <div role="presentation"
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !deleteBusy) setDeleting(null); }}
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div role="alertdialog" aria-modal="true" aria-labelledby="dc-title"
+            style={{ width: '100%', maxWidth: 440, background: '#fff', borderRadius: 16, padding: '20px 24px 22px', boxShadow: '0 30px 70px -20px rgba(15,42,95,0.5)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+              <h3 id="dc-title" style={{ margin: 0, flex: 1, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>Delete Company</h3>
+              <button type="button" aria-label="Close" disabled={deleteBusy} onClick={() => setDeleting(null)}
+                style={{ border: 'none', background: 'none', fontSize: 20, lineHeight: 1, color: '#64748b', cursor: 'pointer' }}>×</button>
+            </div>
+            <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 700, color: '#0f172a' }}>Are you sure you want to delete this company?</p>
+            <p style={{ margin: 0, fontSize: 12.5, color: '#475569', lineHeight: 1.5 }}>
+              This action cannot be undone. To confirm, please type the company name below.
+            </p>
+            <div style={{ marginTop: 14, background: '#fff5f5', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 14px' }}>
+              <label htmlFor="dc-name" style={{ display: 'block', marginBottom: 6, fontSize: 12.5, fontWeight: 700, color: '#b91c1c' }}>Type company name to delete:</label>
+              <input id="dc-name" className="bp-input" autoFocus autoComplete="off" spellCheck={false}
+                value={confirmName} onChange={(e) => setConfirmName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && nameMatches && !deleteBusy) confirmRemove(); }}
+                placeholder={deleting.name}
+                style={{ width: '100%', boxSizing: 'border-box', background: '#fff' }} />
+              <p style={{ margin: '8px 0 0', fontSize: 11.5, color: '#64748b', lineHeight: 1.5 }}>
+                If this company already has invoices or documents, it is archived instead of deleted so your records stay safe. You can restore it from the Archived tab.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 12, marginTop: 18 }}>
+              <button type="button" disabled={deleteBusy} onClick={() => setDeleting(null)}
+                style={{ flex: 1, height: 42, borderRadius: 10, border: '1.5px solid #dbe3ef', background: '#fff', color: '#334155', fontWeight: 700, fontSize: 14, cursor: deleteBusy ? 'not-allowed' : 'pointer' }}>
+                Cancel
+              </button>
+              <button type="button" disabled={!nameMatches || deleteBusy} onClick={confirmRemove}
+                style={{ flex: 1, height: 42, borderRadius: 10, border: 'none', background: '#dc2626', color: '#fff', fontWeight: 800, fontSize: 14, cursor: nameMatches && !deleteBusy ? 'pointer' : 'not-allowed', opacity: nameMatches && !deleteBusy ? 1 : 0.45 }}>
+                {deleteBusy ? 'Please wait…' : 'Delete Company'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

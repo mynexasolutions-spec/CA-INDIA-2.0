@@ -81,6 +81,11 @@ export default function PartyForm() {
         state_code:      d.state_code  || f.state_code,
         billing_address: d.address     || f.billing_address,
         shipping_address: !shippingTouched ? (d.address || f.shipping_address) : f.shipping_address,
+        // For a proprietorship the registered legal name IS the proprietor's name; any other
+        // constitution has no single signatory in the GST record, so it stays for the user to fill.
+        proprietor_name: !f.proprietor_name && /^proprietor/i.test(d.business_type || '')
+          ? (d.legal_name || '')
+          : f.proprietor_name,
       }));
       setTradeName(d.trade_name || '');
       setGstinVerified(true);

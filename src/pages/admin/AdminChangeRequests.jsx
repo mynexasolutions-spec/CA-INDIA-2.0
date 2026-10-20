@@ -20,6 +20,19 @@ const TEXT_LABELS = {
   terms_conditions: 'Terms & Conditions',
 };
 
+// Numbering tab requests carry <doc>_<prop> fields; show them as "Tax Invoice — Separator" rows.
+const NUMBERING_DOC_LABELS = [
+  ['invoice', 'Tax Invoice'], ['bill_of_supply', 'Bill of Supply'], ['credit_note', 'Credit Note'],
+  ['debit_note', 'Debit Note'], ['quotation', 'Quotation'], ['delivery_challan', 'Delivery Challan'],
+];
+const NUMBERING_PROP_LABELS = [
+  ['prefix', 'Prefix'], ['separator', 'Separator'], ['next_number', 'Next Number'],
+  ['prefix_position', 'Prefix Position'], ['status', 'Status'],
+];
+const NUMBERING_LABELS = Object.fromEntries(
+  NUMBERING_DOC_LABELS.flatMap(([k, dl]) => NUMBERING_PROP_LABELS.map(([p, pl]) => [`${k}_${p}`, `${dl} — ${pl}`]))
+);
+
 const ASSET_KEYS = [
   ['logo_path', 'Logo'],
   ['signature_path', 'Signature'],
@@ -180,7 +193,7 @@ export function AdminChangeRequestDetail() {
               ) : <div style={{ color: 'var(--bp-muted)', fontSize: 12 }}>None</div>}
             </div>
           ))}
-          {Object.entries(TEXT_LABELS).map(([k, label]) => (
+          {Object.entries(data.section === 'numbering' ? NUMBERING_LABELS : TEXT_LABELS).map(([k, label]) => (
             <div key={k} className="bp-gst-row" style={{ fontSize: 13 }}>
               <span>{label}</span>
               <strong style={{ textAlign: 'right', maxWidth: '55%' }}>{approved.text?.[k] || '—'}</strong>
@@ -208,7 +221,7 @@ export function AdminChangeRequestDetail() {
               </div>
             );
           })}
-          {Object.entries(TEXT_LABELS).map(([k, label]) => {
+          {Object.entries(data.section === 'numbering' ? NUMBERING_LABELS : TEXT_LABELS).map(([k, label]) => {
             const a = approved.text?.[k] || '';
             const p = proposed.text?.[k] || '';
             const changed = a !== p;

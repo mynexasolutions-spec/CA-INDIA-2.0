@@ -91,7 +91,12 @@ class GstFilingReminderController extends Controller
             'due_date_raw'     => $due->format('Y-m-d'),
             'days_left'        => $days,
             'status'           => $status,
-            'filing_url'       => '/portal/gst-filing?return=' . urlencode($type) . '&period=' . urlencode($period['code']),
+            // Filing requests are raised from the return's own section (GSTR-1 / GSTR-3B / CMP-08).
+            'filing_url'       => match ($type) {
+                'GSTR-1' => '/portal/gstr-1',
+                'CMP-08' => '/portal/cmp-08',
+                default  => '/portal/gstr-3b',
+            } . '?period=' . urlencode($period['code']),
         ];
     }
 

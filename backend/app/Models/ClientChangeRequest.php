@@ -62,6 +62,33 @@ class ClientChangeRequest extends Model
         'colour_scheme' => self::SECTION_LAYOUT,
     ];
 
+    /** The settings tab a submitted field belongs to (numbering fields are generated, see DocumentNumberingSettings). */
+    public static function sectionOf(string $field): ?string
+    {
+        if (isset(self::FIELD_SECTIONS[$field])) {
+            return self::FIELD_SECTIONS[$field];
+        }
+
+        return \App\Services\Billing\DocumentNumberingSettings::isField($field) ? self::SECTION_NUMBERING : null;
+    }
+
+    /** Every text field shown in the approved / proposed comparison. */
+    public static function snapshotFields(): array
+    {
+        return array_values(array_unique(array_merge(
+            self::TEXT_FIELDS,
+            \App\Services\Billing\DocumentNumberingSettings::fields()
+        )));
+    }
+
+    /** Live value of a text field on the profile (numbering fields resolve through the numbering settings). */
+    public static function liveValue(ClientProfile $profile, string $field): mixed
+    {
+        return \App\Services\Billing\DocumentNumberingSettings::isField($field)
+            ? \App\Services\Billing\DocumentNumberingSettings::currentValue($profile, $field)
+            : $profile->{$field};
+    }
+
     public const ASSET_FIELDS = [
         'logo' => 'logo_path',
         'signature' => 'signature_path',

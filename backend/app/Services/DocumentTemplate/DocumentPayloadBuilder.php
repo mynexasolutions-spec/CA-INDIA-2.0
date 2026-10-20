@@ -16,6 +16,7 @@ class DocumentPayloadBuilder
             'customer',
             'clientProfile.user',
             'referenceDocument',
+            'tdsTcsSection',
         ]);
 
         $p = $doc->clientProfile;
@@ -227,6 +228,7 @@ class DocumentPayloadBuilder
                 'state' => $billStateLine,
                 'place_of_supply' => $c?->place_of_supply ?: ($c?->state ?: null),
                 'mobile' => $c?->phone,
+                'email' => $c?->email,
             ],
             'ship_to' => [
                 'name' => $c?->name ?: '—',
@@ -236,6 +238,7 @@ class DocumentPayloadBuilder
                 'state' => $shipStateLine,
                 'place_of_supply' => $c?->place_of_supply ?: ($c?->state ?: null),
                 'mobile' => $c?->phone,
+                'email' => $c?->email,
             ],
             'has_tax' => $hasTax,
             'show_hsn' => $showHsn,
@@ -267,6 +270,10 @@ class DocumentPayloadBuilder
                 'igst_rate' => $igstRate,
                 'igst_amount' => (float) $doc->igst_amount,
                 'round_off' => (float) $doc->round_off,
+                'tds_tcs_type' => $doc->tax_deduction_type ?: null,
+                'tds_tcs_amount' => (float) ($doc->tds_tcs_amount ?? 0),
+                'tds_tcs_rate' => $doc->tds_tcs_rate !== null ? (float) $doc->tds_tcs_rate : null,
+                'tds_tcs_section' => $doc->tdsTcsSection?->code,
                 'grand_total' => (float) ($doc->grand_total ?: $doc->total_amount),
             ],
             'seal_path' => $sealPath,

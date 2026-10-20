@@ -3,599 +3,559 @@
 <head>
 <meta charset="UTF-8">
 <title>{{ $data['document_title'] }} - {{ $data['invoice_no'] }}</title>
+@php
+  /*
+   * Layout 3 — rounded, icon-led layout (Simple / Royal Blue / Deep Teal / Mocha Brown / Dusty Plum).
+   *
+   * Every coloured element comes from the theme, so one template serves all five colours. "Simple" is the
+   * monochrome variant: no filled bars — black outlines and black text on white.
+   */
+  $icons = $icons ?? \App\Services\DocumentTemplate\DocumentCanvasHelper::resolveIcons($theme['key'] ?? 'slate_blue');
+  $simple = ($theme['key'] ?? '') === 'simple';
+  $accent = $theme['primary'];                                       // borders, headings, accents
+  $barBg  = $simple ? '#FFFFFF' : $theme['primary'];                 // filled header bars
+  $barFg  = $simple ? '#111111' : ($theme['text_on_primary'] ?? '#FFFFFF');
+  $tint   = $simple ? '#FFFFFF' : ($theme['grand_bg'] ?? $theme['light_tint'] ?? '#E6EEFD'); // grand-total band
+  $grandLine = $simple ? $accent : ($theme['grand_line'] ?? $accent);
+  $grandLabel = isset($theme['grand_line']) ? $accent : '#0F172A';
+  $barDivider = $simple ? 'border-bottom: 1.3px solid ' . $accent . ';' : '';
+
+  // Whole rupees print without decimals, anything else with two (so paise are never hidden).
+  $money = function ($n) {
+      $n = (float) $n;
+      return abs($n - round($n)) < 0.005 ? number_format($n, 0) : number_format($n, 2);
+  };
+
+  // Long business names step down so they stay on one line inside the header box.
+  $nameLen = mb_strlen((string) $data['company_name']);
+  $nameSize = $nameLen <= 22 ? '25pt' : ($nameLen <= 30 ? '21pt' : ($nameLen <= 40 ? '17pt' : ($nameLen <= 52 ? '14pt' : '11.5pt')));
+@endphp
 <style>
   @page {
     size: A4 portrait;
-    margin: 5.5mm 7.5mm 9.5mm 7.5mm;
+    margin: 8mm 10.2mm 8mm 10.2mm;
   }
-  * {
-    box-sizing: border-box;
-  }
+  * { box-sizing: border-box; }
   body {
     font-family: DejaVu Sans, sans-serif;
-    font-size: 9.5px;
-    color: #111827;
+    font-size: 10px;
+    color: #1E293B;
     margin: 0;
-    padding: 2px 2px 0;
-    line-height: 1.35;
+    padding: 4px 4px 0;
+    line-height: 1.4;
   }
-  table {
-    width: 100%;
-    border-collapse: collapse;
+  table { width: 100%; border-collapse: collapse; }
+  td, th { vertical-align: top; }
+
+  /* 1. Header: logo box + company name box */
+  .hdr-table { width: 100%; margin-bottom: 11px; border-collapse: separate; }
+  .hdr-logo-box {
+    width: 92px; height: 90px;
+    border: 1.3px solid {{ $accent }};
+    border-radius: 9px;
+    padding: 6px;
+    text-align: center; vertical-align: middle;
+    background: #ffffff;
   }
-  thead {
-    display: table-header-group;
+  .hdr-logo-box img { width: 76px; height: 76px; max-width: 76px; max-height: 76px; display: block; margin: 0 auto; }
+  .hdr-gap { width: 8px; }
+  .hdr-title-box {
+    height: 90px;
+    border: 1.3px solid {{ $accent }};
+    border-radius: 9px;
+    padding: 0 14px;
+    text-align: center; vertical-align: middle;
+    background: #ffffff;
   }
-  tfoot {
-    display: table-row-group;
+  .hdr-company-name {
+    color: {{ $simple ? '#111111' : $accent }};
+    font-size: {{ $nameSize }};
+    font-weight: 900;
+    margin: 0;
+    line-height: 1.25;
+    text-transform: uppercase;
+    white-space: nowrap;
   }
-  tr {
-    page-break-inside: avoid;
+
+  /* 2. Seller panel + document panel */
+  .panel-table { width: 100%; margin-bottom: 11px; }
+  .panel-left, .panel-right {
+    border: 1.3px solid {{ $accent }};
+    border-radius: 9px;
+    padding: 9px 12px;
+    background: #ffffff;
+    vertical-align: top;
   }
-  .avoid-break {
+  .panel-left { width: 53.5%; }
+  .panel-right { width: 45.3%; }
+  .panel-gap { width: 1.2%; }
+  .meta-tbl, .meta-right-tbl { width: 100%; }
+  .meta-tbl td, .meta-right-tbl td { padding: 3px 0; font-size: 9.6px; vertical-align: top; }
+  .meta-right-tbl td { vertical-align: middle; }
+  .meta-ico { width: 22px; padding-right: 5px; }
+  .meta-ico img { width: 17px; height: 17px; display: block; margin-top: 1px; }
+  .meta-label { width: 52px; font-weight: bold; color: #1E293B; white-space: nowrap; }
+  .meta-right-label { width: 104px; font-weight: bold; color: #1E293B; white-space: nowrap; }
+  .meta-colon { width: 10px; font-weight: bold; color: #1E293B; text-align: center; }
+  .meta-val { color: #0F172A; font-weight: bold; }
+  .pill-wrap { text-align: center; margin: 2px 0 8px; }
+  .tax-pill {
+    display: inline-block;
+    background-color: {{ $barBg }};
+    color: {{ $barFg }};
+    @if($simple) border: 1.3px solid {{ $accent }}; @endif
+    font-size: 11px; font-weight: bold; letter-spacing: 1.2px; text-transform: uppercase;
+    padding: 4.5px 24px;
+    border-radius: 18px;
+  }
+
+  /* 3. Receiver / consignee */
+  .party-table { width: 100%; margin-bottom: 11px; border-collapse: separate; border-spacing: 0; }
+  .party-box {
+    width: 49.4%;
+    border: 1.3px solid {{ $accent }};
+    border-radius: 9px;
+    background: #ffffff;
+    vertical-align: top;
+    padding: 0;
+  }
+  .party-hdr {
+    background-color: {{ $barBg }};
+    color: {{ $barFg }};
+    {!! $barDivider !!}
+    font-size: 9.2px; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase;
+    padding: 6.5px 12px;
+    border-top-left-radius: 9px; border-top-right-radius: 9px;
+    margin: -1.3px -1.3px 0 -1.3px;
+  }
+  .party-body { padding: 8px 12px 10px; }
+  .party-name { font-weight: bold; font-size: 11.2px; color: #0F172A; margin-bottom: 4px; }
+  .party-fields { width: 100%; }
+  .party-fields td { padding: 2px 0; font-size: 9.5px; vertical-align: top; }
+  .pf-lab { width: 52px; font-weight: bold; color: #1E293B; white-space: nowrap; }
+  .pf-colon { width: 10px; font-weight: bold; color: #1E293B; text-align: center; }
+  .pf-val { color: #1E293B; }
+
+  /* 4. Items */
+  .items-wrap {
+    border: 1.3px solid {{ $accent }};
+    border-radius: 9px;
+    margin-bottom: 11px;
+    overflow: hidden;
+    background: #ffffff;
+  }
+  .items-table { width: 100%; border-collapse: collapse; }
+  .items-table thead { display: table-header-group; }
+  .items-table th {
+    background-color: {{ $barBg }};
+    color: {{ $barFg }};
+    {!! $barDivider !!}
+    font-size: 8.8px; font-weight: bold; padding: 8px 4px; text-align: center; text-transform: uppercase;
+    border-right: 1px solid {{ $simple ? '#CBD5E1' : 'rgba(255, 255, 255, 0.25)' }};
+    line-height: 1.3;
+  }
+  .items-table th:last-child { border-right: none; }
+  .items-table th:first-child { border-top-left-radius: 7.7px; }
+  .items-table th:last-child { border-top-right-radius: 7.7px; }
+  .items-table td {
+    border-bottom: 1px solid #E2E8F0;
+    border-right: 1px solid #E2E8F0;
+    padding: 8.5px 5px; font-size: 10px; font-weight: bold; color: #0F172A; vertical-align: middle; text-align: center;
+  }
+  .items-table td:last-child { border-right: none; }
+  .items-table tr:last-child td { border-bottom: none; }
+  .items-table tr { page-break-inside: avoid; }
+  .items-table .desc-cell { text-align: center; font-weight: bold; color: #0F172A; text-transform: uppercase; }
+
+  /* 5. Bottom: cards (left) + summary and signatory (right) */
+  .bottom-table { width: 100%; margin-top: 4px; }
+  .bottom-left { width: 50.5%; vertical-align: top; }
+  .bottom-gap { width: 1.5%; }
+  .bottom-right { width: 48%; vertical-align: top; }
+  .card {
+    border: 1.3px solid {{ $accent }};
+    border-radius: 9px;
+    padding: 8px 12px;
+    background: #ffffff;
+    margin-bottom: 8px;
+    /* keep together handled by the row */
+  }
+  .card-hdr { color: {{ $accent }}; font-weight: bold; font-size: 9.6px; letter-spacing: 0.4px; text-transform: uppercase; }
+  .card-hdr img { width: 15px; height: 15px; vertical-align: -2.5px; margin-right: 5px; }
+  .card-sep { border-top: 1px dashed {{ $simple ? '#6B7280' : $accent }}; margin: 5px 0 6px; }
+  .card-val { font-size: 10px; font-weight: bold; color: #0F172A; line-height: 1.45; }
+  .bank-tbl { width: 100%; }
+  .bank-tbl td { padding: 1.5px 0; font-size: 9.6px; vertical-align: top; }
+  .bt-lab { width: 82px; font-weight: normal; color: #334155; white-space: nowrap; }
+  .bt-colon { width: 10px; font-weight: normal; color: #334155; text-align: center; }
+  .bt-val { color: #0F172A; }
+  .terms-list { margin: 0; padding-left: 15px; font-size: 9.2px; color: #1E293B; line-height: 1.45; }
+  .terms-list li { margin-bottom: 1px; }
+
+  .summary-box {
+    border: 1.3px solid {{ $accent }};
+    border-radius: 9px;
+    overflow: hidden;
+    background: #ffffff;
+    margin-bottom: 14px;
+
+  }
+  .sum-tbl { width: 100%; border-collapse: collapse; }
+  .sum-tbl td { padding: 6.5px 12px; font-size: 9.8px; border-bottom: 1px solid #E2E8F0; }
+  .sum-tbl .lab { color: #334155; font-weight: normal; }
+  .sum-tbl .val { text-align: right; color: #0F172A; font-weight: normal; }
+  .grand-row td {
+    background-color: {{ $tint }};
+    border-top: 2px solid {{ $grandLine }};
+    border-bottom: 2px solid {{ $grandLine }} !important;
+    padding: 11px 12px;
+  }};
+    border-top: 2px solid {{ $accent }};
+    border-bottom: none !important;
+    padding: 8.5px 12px;
+  }
+  .grand-row .lab { color: {{ $grandLabel }}; font-size: 11.5px; font-weight: bold; letter-spacing: 0.4px; }
+  .grand-row .val { color: #0F172A; font-size: 13.5px; font-weight: bold; }
+
+  .sign-wrap { page-break-inside: avoid; margin-top: 8px; }
+  .sign-company { text-align: right; font-size: 11.5px; font-weight: bold; color: {{ $simple ? '#111111' : $accent }}; margin-bottom: 10px; }
+  .sign-tbl { width: 210px; margin-left: auto; border-collapse: collapse; }
+  .seal-cell { width: 65px; vertical-align: middle; text-align: center; padding-right: 12px; }
+  .seal-cell img { width: 60px; height: 60px; max-width: 60px; max-height: 60px; display: block; margin: 0 auto; }
+  .sig-cell { vertical-align: middle; text-align: right; }
+  .sig-img { max-height: 30px; display: block; margin-left: auto; margin-bottom: 2px; }
+  .sig-name { font-size: 10px; font-weight: bold; color: #0F172A; margin-top: 2px; }}; margin-top: 2px; }
+  .sig-role { font-size: 8.6px; color: #64748B; margin-top: 2px; font-weight: bold; }
+  .rcm-box {
+    margin-top: 9px;
+    border: 1.2px solid {{ $accent }};
+    border-radius: 7px;
+    color: {{ $accent }};
+    font-weight: bold; font-size: 9.2px; padding: 5px 8px; text-align: center;
     page-break-inside: avoid;
   }
 </style>
 </head>
 <body>
 
-@php
-  // Deeper, richer header tints for Layout 3 table headers
-  $deepTints = [
-    'slate_blue' => '#D5DFEC',
-    'charcoal_grey' => '#CCD2DA',
-    'dusty_plum' => '#DEC5D8',
-    'mocha_brown' => '#E4D5CD',
-    'deep_teal' => '#C8E4E3',
-    'antique_gold' => '#EDE0BE',
-  ];
-  $headerTint = $deepTints[$theme['key']] ?? ($theme['light_tint'] ?? '#E6EBF2');
-@endphp
-
-  <!-- 1. Header Section: Larger Logo Box (Left) + 24pt Bold Company Details (Center) -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 7px;">
+  <!-- 1. Header: logo box + company name box -->
+  <table class="hdr-table">
     <tr>
-      <!-- Larger Logo Box -->
-      <td style="width: 106px; vertical-align: middle; padding: 0 10px 0 0;">
-        <div style="width: 96px; height: 96px; border: 1.5px solid #6B7280; background-color: #FFFFFF; text-align: center; vertical-align: middle; padding: 4px;">
-          @if(!empty($data['logo_path']))
-            <img src="{{ $data['logo_path'] }}" style="max-width: 86px; max-height: 86px; vertical-align: middle;" alt="Logo">
-          @else
-            <div style="font-size: 13px; font-weight: 800; color: #374151; line-height: 86px; text-align: center; letter-spacing: 0.5px;">
-              LOGO HERE
-            </div>
-          @endif
-        </div>
-      </td>
-
-      <!-- Company Details (Centered) -->
-      <td style="vertical-align: middle; text-align: center; padding: 0 8px;">
-        <div style="font-size: 24pt; font-weight: 800; color: {{ $theme['primary'] }}; letter-spacing: 0.8px; margin-bottom: 4px; text-transform: uppercase; line-height: 1.15;">
-          {{ $data['company_name'] }}
-        </div>
-        @if(!empty($data['seller_address']))
-        <div style="font-size: 8.5px; color: #374151; line-height: 1.35; margin-bottom: 3px; text-transform: uppercase;">
-          {{ $data['seller_address'] }}
-        </div>
+      <td class="hdr-logo-box">
+        @if(!empty($data['logo_path']))
+          <img src="{{ $data['logo_path'] }}" alt="Logo">
         @endif
-        <div style="font-size: 9px; color: #111827; line-height: 1.4;">
-          @if(!empty($data['seller_gstin']))
-            <b>GSTIN:</b> {{ $data['seller_gstin'] }}
+      </td>
+      <td class="hdr-gap"></td>
+      <td class="hdr-title-box">
+        <h1 class="hdr-company-name">{{ $data['company_name'] }}</h1>
+      </td>
+    </tr>
+  </table>
+
+  <!-- 2. Seller details + document details -->
+  <table class="panel-table">
+    <tr>
+      <td class="panel-left">
+        <table class="meta-tbl">
+          @if(!empty($data['seller_address']))
+          <tr>
+            <td class="meta-ico"><img src="{{ $icons['pin'] }}" alt=""></td>
+            <td class="meta-label">Address</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['seller_address'] }}</td>
+          </tr>
           @endif
-          @if(!empty($data['seller_pan']))
-            @if(!empty($data['seller_gstin'])) &nbsp;|&nbsp; @endif<b>PAN:</b> {{ $data['seller_pan'] }}
-          @endif
-          @if(!empty($data['seller_state']))
-            &nbsp;|&nbsp; <b>State:</b> {{ $data['seller_state'] }}
-          @endif
-        </div>
-        <div style="font-size: 9px; color: #111827; line-height: 1.4; margin-top: 2px;">
-          @if(!empty($data['seller_phone']))
-            <b>Contact:</b> {{ $data['seller_phone'] }}
+          @if(!empty($data['seller_gstin']) || !empty($data['seller_pan']))
+          <tr>
+            <td class="meta-ico"><img src="{{ $icons['gstin'] }}" alt=""></td>
+            <td class="meta-label">GSTIN</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">
+              {{ $data['seller_gstin'] ?: '—' }}@if(!empty($data['seller_pan'])) | PAN : {{ $data['seller_pan'] }}@endif
+            </td>
+          </tr>
           @endif
           @if(!empty($data['seller_email']))
-            @if(!empty($data['seller_phone'])) &nbsp;|&nbsp; @endif<b>Email:</b> {{ $data['seller_email'] }}
+          <tr>
+            <td class="meta-ico"><img src="{{ $icons['email'] }}" alt=""></td>
+            <td class="meta-label">Email</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['seller_email'] }}</td>
+          </tr>
           @endif
+          @if(!empty($data['seller_phone']))
+          <tr>
+            <td class="meta-ico"><img src="{{ $icons['phone'] }}" alt=""></td>
+            <td class="meta-label">Phone</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['seller_phone'] }}</td>
+          </tr>
+          @endif
+          @if(!empty($data['seller_state']))
+          <tr>
+            <td class="meta-ico"><img src="{{ $icons['pin'] }}" alt=""></td>
+            <td class="meta-label">State</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['seller_state'] }}</td>
+          </tr>
+          @endif
+        </table>
+      </td>
+      <td class="panel-gap"></td>
+      <td class="panel-right">
+        <div class="pill-wrap">
+          <span class="tax-pill">— {{ $data['document_title'] }} —</span>
         </div>
-      </td>
-    </tr>
-  </table>
-
-  <!-- 2. Full-Width Title Bar (Thicker & Larger Text) -->
-  <div style="background-color: {{ $theme['primary'] }}; color: #FFFFFF; font-size: 16px; font-weight: 800; text-align: center; letter-spacing: 1.5px; padding: 6px 0; text-transform: uppercase; margin-bottom: 0;">
-    {{ $data['document_title'] }}
-  </div>
-
-  <!-- 3. Meta Row Table (Bordered 5 Columns with Deeper Tint Header & Larger Text) -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; border-left: 1px solid #9CA3AF; border-right: 1px solid #9CA3AF; border-bottom: 1px solid #9CA3AF;">
-    <!-- Meta Header Row -->
-    <tr style="background-color: {{ $headerTint }};">
-      <td style="width: 20%; font-size: 9px; font-weight: 800; color: #111827; text-align: center; border: 1px solid #9CA3AF; padding: 4.5px 4px;">
-        {{ $data['doc_number_label'] }}
-      </td>
-      <td style="width: 20%; font-size: 9px; font-weight: 800; color: #111827; text-align: center; border: 1px solid #9CA3AF; padding: 4.5px 4px;">
-        {{ $data['doc_date_label'] }}
-      </td>
-      <td style="width: 24%; font-size: 9px; font-weight: 800; color: #111827; text-align: center; border: 1px solid #9CA3AF; padding: 4.5px 4px;">
-        Place of Supply
-      </td>
-      <td style="width: 20%; font-size: 9px; font-weight: 800; color: #111827; text-align: center; border: 1px solid #9CA3AF; padding: 4.5px 4px;">
-        Reverse Charge
-      </td>
-      <td style="width: 16%; font-size: 9px; font-weight: 800; color: #111827; text-align: center; border: 1px solid #9CA3AF; padding: 4.5px 4px;">
-        Against
-      </td>
-    </tr>
-    <!-- Meta Values Row -->
-    <tr style="background-color: #FFFFFF;">
-      <td style="font-size: 9.5px; font-weight: bold; color: #111827; text-align: center; border: 1px solid #9CA3AF; padding: 5px 4px;">
-        {{ $data['invoice_no'] }}
-      </td>
-      <td style="font-size: 9.5px; font-weight: bold; color: #111827; text-align: center; border: 1px solid #9CA3AF; padding: 5px 4px;">
-        {{ $data['invoice_date'] }}
-      </td>
-      <td style="font-size: 9px; color: #111827; text-align: center; border: 1px solid #9CA3AF; padding: 5px 4px;">
-        {{ $data['place_of_supply'] }}
-      </td>
-      <td style="font-size: 9px; color: #111827; text-align: center; border: 1px solid #9CA3AF; padding: 5px 4px; vertical-align: middle;">
-        <span style="display: inline-block; width: 10px; height: 10px; border: 1.2px solid #111827; text-align: center; line-height: 10px; font-size: 8.5px; vertical-align: middle; margin-right: 3px;">
-          {!! $data['reverse_charge'] ? '&#x2713;' : '&nbsp;' !!}
-        </span>
-        <span style="vertical-align: middle;">Yes</span>
-        &nbsp;&nbsp;
-        <span style="display: inline-block; width: 10px; height: 10px; border: 1.2px solid #111827; text-align: center; line-height: 10px; font-size: 8.5px; vertical-align: middle; margin-right: 3px;">
-          {!! !$data['reverse_charge'] ? '&#x2713;' : '&nbsp;' !!}
-        </span>
-        <span style="vertical-align: middle;">No</span>
-      </td>
-      <td style="font-size: 9px; color: #111827; text-align: center; border: 1px solid #9CA3AF; padding: 5px 4px;">
-        {{ in_array($data['doc_type'], ['credit_note', 'debit_note'], true) ? ($data['against_number'] ?: '—') : '—' }}
-      </td>
-    </tr>
-  </table>
-
-  <!-- 4. Bill To / Ship To Bordered Grid (Thicker Headers & Larger Font) -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px;">
-    <tr>
-      <!-- BILL TO -->
-      <td style="width: 49.3%; vertical-align: top; padding: 0;">
-        <table style="width: 100%; border-collapse: collapse; border: 1px solid #9CA3AF;">
+        <table class="meta-right-tbl">
           <tr>
-            <td style="background-color: {{ $headerTint }}; font-weight: 800; font-size: 9.5px; color: #111827; padding: 4.5px 8px; border-bottom: 1px solid #9CA3AF; letter-spacing: 0.8px;">
-              BILL TO
-            </td>
+            <td class="meta-ico"><img src="{{ $icons['doc'] }}" alt=""></td>
+            <td class="meta-right-label">{{ $data['doc_number_label'] ?? 'Invoice No.' }}</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['invoice_no'] }}</td>
           </tr>
           <tr>
-            <td style="padding: 5px 8px; font-size: 8.5px; line-height: 1.4; background-color: #FFFFFF;">
-              <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                  <td style="width: 50px; color: #374151; vertical-align: top; padding: 1.5px 0;">Name</td>
-                  <td style="width: 8px; color: #374151; vertical-align: top; padding: 1.5px 0;">:</td>
-                  <td style="font-weight: bold; color: #111827; vertical-align: top; padding: 1.5px 0;">{{ $data['bill_to']['name'] }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">Address</td>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">:</td>
-                  <td style="color: #1F2937; vertical-align: top; padding: 1.5px 0;">{{ $data['bill_to']['address'] ?: '—' }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">Contact</td>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">:</td>
-                  <td style="color: #1F2937; vertical-align: top; padding: 1.5px 0;">{{ $data['bill_to']['mobile'] ?: '—' }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">GSTIN</td>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">:</td>
-                  <td style="font-weight: bold; color: #111827; vertical-align: top; padding: 1.5px 0;">{{ $data['bill_to']['gstin'] ?: '—' }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">State</td>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">:</td>
-                  <td style="color: #1F2937; vertical-align: top; padding: 1.5px 0;">{{ $data['bill_to']['state'] ?: '—' }}</td>
-                </tr>
-              </table>
-            </td>
+            <td class="meta-ico"><img src="{{ $icons['calendar'] }}" alt=""></td>
+            <td class="meta-right-label">{{ $data['doc_date_label'] ?? 'Invoice Date' }}</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['invoice_date'] }}</td>
           </tr>
-        </table>
-      </td>
-
-      <!-- Spacer -->
-      <td style="width: 1.4%;"></td>
-
-      <!-- SHIP TO -->
-      <td style="width: 49.3%; vertical-align: top; padding: 0;">
-        <table style="width: 100%; border-collapse: collapse; border: 1px solid #9CA3AF;">
+          @unless(in_array($data['doc_type'] ?? '', ['credit_note', 'debit_note'], true))
           <tr>
-            <td style="background-color: {{ $headerTint }}; font-weight: 800; font-size: 9.5px; color: #111827; padding: 4.5px 8px; border-bottom: 1px solid #9CA3AF; letter-spacing: 0.8px;">
-              SHIP TO
-            </td>
+            <td class="meta-ico"><img src="{{ $icons['chart'] }}" alt=""></td>
+            <td class="meta-right-label">Financial Year</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['financial_year'] }}</td>
           </tr>
+          @endunless
+          @if(!empty($data['place_of_supply']))
           <tr>
-            <td style="padding: 5px 8px; font-size: 8.5px; line-height: 1.4; background-color: #FFFFFF;">
-              <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                  <td style="width: 50px; color: #374151; vertical-align: top; padding: 1.5px 0;">Name</td>
-                  <td style="width: 8px; color: #374151; vertical-align: top; padding: 1.5px 0;">:</td>
-                  <td style="font-weight: bold; color: #111827; vertical-align: top; padding: 1.5px 0;">{{ $data['ship_to']['name'] }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">Address</td>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">:</td>
-                  <td style="color: #1F2937; vertical-align: top; padding: 1.5px 0;">{{ $data['ship_to']['address'] ?: '—' }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">Contact</td>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">:</td>
-                  <td style="color: #1F2937; vertical-align: top; padding: 1.5px 0;">{{ $data['ship_to']['mobile'] ?: '—' }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">GSTIN</td>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">:</td>
-                  <td style="font-weight: bold; color: #111827; vertical-align: top; padding: 1.5px 0;">{{ $data['ship_to']['gstin'] ?: '—' }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">State</td>
-                  <td style="color: #374151; vertical-align: top; padding: 1.5px 0;">:</td>
-                  <td style="color: #1F2937; vertical-align: top; padding: 1.5px 0;">{{ $data['ship_to']['state'] ?: '—' }}</td>
-                </tr>
-              </table>
-            </td>
+            <td class="meta-ico"><img src="{{ $icons['pin'] }}" alt=""></td>
+            <td class="meta-right-label">Place of Supply</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['place_of_supply'] }}</td>
           </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-
-  <!-- 5. Items Table (Bordered Grid + Increased Padding + Prominent Total Bar) -->
-  <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px; border: 1px solid #9CA3AF;">
-    <thead>
-      <tr style="background-color: {{ $theme['primary'] }}; color: #FFFFFF;">
-        <th style="width: 5%; font-size: 9px; font-weight: 800; text-align: center; padding: 5px 2px; border: 1px solid #9CA3AF;">Sr.<br>No.</th>
-        <th style="width: {{ $data['has_tax'] ? '37%' : '47%' }}; font-size: 9px; font-weight: 800; text-align: center; padding: 5px 6px; border: 1px solid #9CA3AF;">Description of Goods / Services</th>
-        <th style="width: 10%; font-size: 9px; font-weight: 800; text-align: center; padding: 5px 3px; border: 1px solid #9CA3AF;">HSN / SAC</th>
-        <th style="width: 11%; font-size: 9px; font-weight: 800; text-align: center; padding: 5px 3px; border: 1px solid #9CA3AF;">Rate<br>(₹)</th>
-        <th style="width: 6%; font-size: 9px; font-weight: 800; text-align: center; padding: 5px 2px; border: 1px solid #9CA3AF;">Qty</th>
-        <th style="width: 7%; font-size: 9px; font-weight: 800; text-align: center; padding: 5px 2px; border: 1px solid #9CA3AF;">Unit</th>
-        @if($data['has_tax'])
-        <th style="width: 10%; font-size: 9px; font-weight: 800; text-align: center; padding: 5px 2px; border: 1px solid #9CA3AF;">GST<br>Rate (%)</th>
-        @endif
-        <th style="width: 14%; font-size: 9px; font-weight: 800; text-align: center; padding: 5px 4px; border: 1px solid #9CA3AF;">
-          {{ $data['has_tax'] ? 'Taxable Amount (₹)' : 'Amount (₹)' }}
-        </th>
-      </tr>
-    </thead>
-    <tbody>
-      @php $totalTaxableSum = 0; @endphp
-      @foreach($data['items'] as $item)
-      @php $totalTaxableSum += (float) $item['taxable_value']; @endphp
-      <tr style="background-color: #FFFFFF;">
-        <td style="text-align: center; font-size: 9px; padding: 4.5px 2px; border: 1px solid #9CA3AF; vertical-align: top;">{{ $item['sr_no'] }}</td>
-        <td style="text-align: left; font-size: 9px; padding: 4.5px 6px; border: 1px solid #9CA3AF; vertical-align: top;">
-          <div style="font-weight: bold; color: #111827;">{{ $item['particulars'] }}</div>
-          @if(!empty($item['description']))
-            <div style="font-size: 8px; color: #4B5563; line-height: 1.3; margin-top: 1.5px;">{{ $item['description'] }}</div>
           @endif
+          <tr>
+            <td class="meta-ico"><img src="{{ $icons['reverse'] }}" alt=""></td>
+            <td class="meta-right-label">Reverse Charge</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['reverse_charge'] ? 'Yes' : 'No' }}</td>
+          </tr>
+          @if(!empty($data['against_number']))
+          <tr>
+            <td class="meta-ico"><img src="{{ $icons['doc'] }}" alt=""></td>
+            <td class="meta-right-label">Against</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['against_number'] }}</td>
+          </tr>
+          @endif
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!-- 3. Details of receiver | details of consignee -->
+  <table class="party-table">
+    <tr>
+      @foreach([['DETAILS OF RECEIVER | BILL TO', $data['bill_to']], ['DETAILS OF CONSIGNEE | SHIP TO', $data['ship_to']]] as $i => [$partyTitle, $party])
+        @if($i === 1)<td class="panel-gap"></td>@endif
+        <td class="party-box">
+          <div class="party-hdr">{{ $partyTitle }}</div>
+          <div class="party-body">
+            <div class="party-name">{{ $party['name'] ?? '—' }}</div>
+            <table class="party-fields">
+              @if(!empty($party['address']))
+              <tr><td class="pf-lab">Address</td><td class="pf-colon">:</td><td class="pf-val">{{ $party['address'] }}</td></tr>
+              @endif
+              @if(!empty($party['gstin']))
+              <tr><td class="pf-lab">GSTIN</td><td class="pf-colon">:</td><td class="pf-val">{{ $party['gstin'] }}</td></tr>
+              @endif
+              @if(!empty($party['state']))
+              <tr><td class="pf-lab">State</td><td class="pf-colon">:</td><td class="pf-val">{{ $party['state'] }}</td></tr>
+              @endif
+              @if(!empty($party['mobile']))
+              <tr><td class="pf-lab">Mobile</td><td class="pf-colon">:</td><td class="pf-val">{{ $party['mobile'] }}</td></tr>
+              @endif
+            </table>
+          </div>
         </td>
-        <td style="text-align: center; font-size: 9px; padding: 4.5px 2px; border: 1px solid #9CA3AF; vertical-align: top;">{{ $item['hsn_sac'] ?: '—' }}</td>
-        <td style="text-align: right; font-size: 9px; padding: 4.5px 4px; border: 1px solid #9CA3AF; vertical-align: top;">{{ number_format((float) $item['rate'], 2) }}</td>
-        <td style="text-align: center; font-size: 9px; padding: 4.5px 2px; border: 1px solid #9CA3AF; vertical-align: top;">{{ $item['qty'] ?? '—' }}</td>
-        <td style="text-align: center; font-size: 9px; padding: 4.5px 2px; border: 1px solid #9CA3AF; vertical-align: top;">{{ $item['uqc'] ?: 'NOS' }}</td>
-        @if($data['has_tax'])
-        <td style="text-align: center; font-size: 9px; padding: 4.5px 2px; border: 1px solid #9CA3AF; vertical-align: top;">{{ $item['gst_pct'] }}</td>
-        @endif
-        <td style="text-align: right; font-size: 9px; font-weight: bold; padding: 4.5px 4px; border: 1px solid #9CA3AF; vertical-align: top;">
-          {{ number_format((float) $item['taxable_value'], 2) }}
-        </td>
-      </tr>
       @endforeach
-
-      <!-- Empty filler rows to maintain clean table height for single-page invoices -->
-      @php
-        $fillerRows = max(0, min(5, 6 - count($data['items'])));
-      @endphp
-      @for($f = 0; $f < $fillerRows; $f++)
-      <tr style="background-color: #FFFFFF;">
-        <td style="border: 1px solid #9CA3AF; padding: 4px 2px; font-size: 9px;">&nbsp;</td>
-        <td style="border: 1px solid #9CA3AF; padding: 4px 6px; font-size: 9px;">&nbsp;</td>
-        <td style="border: 1px solid #9CA3AF; padding: 4px 2px; font-size: 9px;">&nbsp;</td>
-        <td style="border: 1px solid #9CA3AF; padding: 4px 4px; font-size: 9px;">&nbsp;</td>
-        <td style="border: 1px solid #9CA3AF; padding: 4px 2px; font-size: 9px;">&nbsp;</td>
-        <td style="border: 1px solid #9CA3AF; padding: 4px 2px; font-size: 9px;">&nbsp;</td>
-        @if($data['has_tax'])
-        <td style="border: 1px solid #9CA3AF; padding: 4px 2px; font-size: 9px;">&nbsp;</td>
-        @endif
-        <td style="border: 1px solid #9CA3AF; padding: 4px 4px; font-size: 9px;">&nbsp;</td>
-      </tr>
-      @endfor
-
-      <!-- Total Row (Prominent Theme Coloured Bar) -->
-      <tr style="background-color: {{ $theme['primary'] }}; color: #FFFFFF;">
-        <td colspan="{{ $data['has_tax'] ? 7 : 6 }}" style="text-align: right; font-size: 11px; font-weight: 800; padding: 5px 8px; border: 1px solid #9CA3AF; letter-spacing: 0.5px;">
-          Total
-        </td>
-        <td style="text-align: right; font-size: 11px; font-weight: 800; padding: 5px 6px; border: 1px solid #9CA3AF;">
-          {{ number_format($totalTaxableSum, 2) }}
-        </td>
-      </tr>
-    </tbody>
+    </tr>
   </table>
 
-  <!-- 6. Bottom Split Section: Left (Words + Bank + Terms + Challan) vs Right (Summary + Signatory) -->
-  <table style="width: 100%; border-collapse: collapse; margin-top: 4px;" class="avoid-break">
-    <tr>
-      <!-- Left Column -->
-      <td style="width: 49.3%; vertical-align: top; padding: 0;">
-
-        <!-- Amount in Words Box -->
-        <table style="width: 100%; border-collapse: collapse; border: 1px solid #9CA3AF; margin-bottom: 5px;">
-          <tr>
-            <td style="background-color: {{ $headerTint }}; font-size: 8.5px; font-weight: 800; color: #111827; padding: 3px 6px; border-bottom: 1px solid #9CA3AF;">
-              Amount in Words (INR)
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 5px 6px; font-size: 8.5px; color: #111827; line-height: 1.4; background-color: #FFFFFF;">
-              {{ $data['amount_in_words'] }}
-            </td>
-          </tr>
-        </table>
-
-        <!-- Bank Details Box -->
-        <table style="width: 100%; border-collapse: collapse; border: 1px solid #9CA3AF; margin-bottom: 5px;">
-          <tr>
-            <td style="background-color: {{ $headerTint }}; font-size: 8.5px; font-weight: 800; color: #111827; padding: 3px 6px; border-bottom: 1px solid #9CA3AF;">
-              Bank Details
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 5px 6px; font-size: 8.5px; line-height: 1.4; background-color: #FFFFFF;">
-              <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                  <td style="width: 88px; color: #374151; padding: 1px 0;">Account Name</td>
-                  <td style="width: 8px; color: #374151; padding: 1px 0;">:</td>
-                  <td style="font-weight: bold; color: #111827; padding: 1px 0;">{{ $data['bank']['account_name'] ?: '—' }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; padding: 1px 0;">Bank Name</td>
-                  <td style="color: #374151; padding: 1px 0;">:</td>
-                  <td style="color: #111827; padding: 1px 0;">{{ $data['bank']['name'] ?: '—' }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; padding: 1px 0;">Account No.</td>
-                  <td style="color: #374151; padding: 1px 0;">:</td>
-                  <td style="font-weight: bold; color: #111827; padding: 1px 0;">{{ $data['bank']['account_no'] ?: '—' }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; padding: 1px 0;">IFSC Code</td>
-                  <td style="color: #374151; padding: 1px 0;">:</td>
-                  <td style="font-weight: bold; color: #111827; padding: 1px 0;">{{ $data['bank']['ifsc'] ?: '—' }}</td>
-                </tr>
-                <tr>
-                  <td style="color: #374151; padding: 1px 0;">Branch</td>
-                  <td style="color: #374151; padding: 1px 0;">:</td>
-                  <td style="color: #111827; padding: 1px 0;">{{ $data['bank']['branch'] ?: '—' }}</td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-
-        <!-- Delivery Challan Transportation Details Box (When applicable) -->
-        @if($data['is_delivery_challan'])
-        <table style="width: 100%; border-collapse: collapse; border: 1px solid #9CA3AF; margin-bottom: 5px;">
-          <tr>
-            <td style="background-color: {{ $headerTint }}; font-size: 8.5px; font-weight: 800; color: #111827; padding: 3px 6px; border-bottom: 1px solid #9CA3AF;">
-              Transportation Details
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 5px 6px; font-size: 8.5px; line-height: 1.4; background-color: #FFFFFF;">
-              <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                  <td style="width: 88px; color: #374151; padding: 1px 0;">Reason</td>
-                  <td style="width: 8px; color: #374151; padding: 1px 0;">:</td>
-                  <td style="font-weight: bold; color: #111827; padding: 1px 0;">{{ $data['challan']['reason'] }}</td>
-                </tr>
-                @if(!empty($data['challan']['vehicle_no']))
-                <tr>
-                  <td style="color: #374151; padding: 1px 0;">Vehicle No.</td>
-                  <td style="color: #374151; padding: 1px 0;">:</td>
-                  <td style="font-weight: bold; color: #111827; padding: 1px 0;">{{ $data['challan']['vehicle_no'] }}</td>
-                </tr>
-                @endif
-                @if(!empty($data['challan']['transporter_name']))
-                <tr>
-                  <td style="color: #374151; padding: 1px 0;">Transporter</td>
-                  <td style="color: #374151; padding: 1px 0;">:</td>
-                  <td style="font-weight: bold; color: #111827; padding: 1px 0;">{{ $data['challan']['transporter_name'] }}</td>
-                </tr>
-                @endif
-                @if(!empty($data['challan']['eway_bill_no']))
-                <tr>
-                  <td style="color: #374151; padding: 1px 0;">E-way Bill No.</td>
-                  <td style="color: #374151; padding: 1px 0;">:</td>
-                  <td style="font-weight: bold; color: #111827; padding: 1px 0;">{{ $data['challan']['eway_bill_no'] }}</td>
-                </tr>
-                @endif
-              </table>
-            </td>
-          </tr>
-        </table>
-        @endif
-
-        <!-- Terms & Conditions Box -->
-        <table style="width: 100%; border-collapse: collapse; border: 1px solid #9CA3AF;">
-          <tr>
-            <td style="background-color: {{ $headerTint }}; font-size: 8.5px; font-weight: 800; color: #111827; padding: 3px 6px; border-bottom: 1px solid #9CA3AF;">
-              Terms & Conditions
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 5px 6px; font-size: 8px; line-height: 1.38; background-color: #FFFFFF;">
-              <ol style="margin: 0; padding-left: 13px; color: #374151;">
-                @foreach($data['terms'] as $term)
-                  <li>{{ $term }}</li>
-                @endforeach
-              </ol>
-            </td>
-          </tr>
-        </table>
-
-      </td>
-
-      <!-- Spacer -->
-      <td style="width: 1.4%;"></td>
-
-      <!-- Right Column -->
-      <td style="width: 49.3%; vertical-align: top; padding: 0;">
-
-        <!-- Summary / Tax Bifurcation Box -->
-        <table style="width: 100%; border-collapse: collapse; border: 1px solid #9CA3AF; margin-bottom: 5px;">
-          <!-- Header -->
-          <tr style="background-color: {{ $headerTint }};">
-            <td style="font-size: 8.5px; font-weight: 800; color: #111827; padding: 3px 6px; border: 1px solid #9CA3AF;">
-              Summary / Tax Bifurcation
-            </td>
-            <td style="font-size: 8.5px; font-weight: 800; color: #111827; text-align: right; padding: 3px 6px; border: 1px solid #9CA3AF; width: 36%;">
-              Amount (₹)
-            </td>
-          </tr>
-
-          <!-- Taxable Amount Row -->
-          <tr style="background-color: #FFFFFF;">
-            <td style="font-size: 8.5px; color: #374151; padding: 3px 6px; border: 1px solid #9CA3AF;">
-              {{ $data['has_tax'] ? 'Total Taxable Amount' : 'Total Amount' }}
-            </td>
-            <td style="font-size: 8.5px; font-weight: bold; text-align: right; color: #111827; padding: 3px 6px; border: 1px solid #9CA3AF;">
-              {{ number_format((float) $data['summary']['taxable_value'], 2) }}
-            </td>
-          </tr>
-
-          <!-- Tax Rows (Omitted for Bill of Supply) -->
+  <!-- 4. Line items -->
+  <div class="items-wrap">
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width: 6%;">SR.<br>NO.</th>
+          <th style="width: {{ $data['has_tax'] ? '32%' : '44%' }};">PARTICULARS</th>
+          @if($data['show_hsn'])
+            <th style="width: 10%;">HSN /<br>SAC</th>
+          @endif
+          <th style="width: 8%;">QTY</th>
+          <th style="width: 8%;">UQC</th>
+          <th style="width: 11%;">RATE<br>(₹)</th>
           @if($data['has_tax'])
-            @if($data['summary']['show_split_tax'])
-              <tr style="background-color: #FFFFFF;">
-                <td style="font-size: 8.5px; color: #374151; padding: 3px 6px; border: 1px solid #9CA3AF;">
-                  CGST @ {{ $data['summary']['cgst_rate'] ?? '9' }} %
-                </td>
-                <td style="font-size: 8.5px; text-align: right; color: #111827; padding: 3px 6px; border: 1px solid #9CA3AF;">
-                  {{ number_format((float) $data['summary']['cgst_amount'], 2) }}
-                </td>
-              </tr>
-              <tr style="background-color: #FFFFFF;">
-                <td style="font-size: 8.5px; color: #374151; padding: 3px 6px; border: 1px solid #9CA3AF;">
-                  SGST @ {{ $data['summary']['sgst_rate'] ?? '9' }} %
-                </td>
-                <td style="font-size: 8.5px; text-align: right; color: #111827; padding: 3px 6px; border: 1px solid #9CA3AF;">
-                  {{ number_format((float) $data['summary']['sgst_amount'], 2) }}
-                </td>
-              </tr>
-              <tr style="background-color: #FFFFFF;">
-                <td style="font-size: 8.5px; color: #374151; padding: 3px 6px; border: 1px solid #9CA3AF;">
-                  IGST
-                </td>
-                <td style="font-size: 8.5px; text-align: right; color: #111827; padding: 3px 6px; border: 1px solid #9CA3AF;">
-                  {{ number_format((float) $data['summary']['igst_amount'], 2) }}
-                </td>
-              </tr>
-            @else
-              <tr style="background-color: #FFFFFF;">
-                <td style="font-size: 8.5px; color: #374151; padding: 3px 6px; border: 1px solid #9CA3AF;">
-                  IGST @ {{ $data['summary']['igst_rate'] ?? '18' }} %
-                </td>
-                <td style="font-size: 8.5px; text-align: right; color: #111827; padding: 3px 6px; border: 1px solid #9CA3AF;">
-                  {{ number_format((float) $data['summary']['igst_amount'], 2) }}
-                </td>
-              </tr>
+            <th style="width: 8%;">GST %</th>
+            <th style="width: 17%;">TAXABLE VALUE<br>(₹)</th>
+          @else
+            <th style="width: 17%;">TOTAL AMOUNT<br>(₹)</th>
+          @endif
+        </tr>
+      </thead>
+      <tbody>
+        @foreach($data['items'] as $index => $item)
+          <tr>
+            <td style="font-weight: bold;">{{ $item['sr_no'] ?? ($index + 1) }}</td>
+            <td class="desc-cell">
+              <div>{{ $item['particulars'] }}</div>
+              @if(!empty($item['description']))
+                <div style="font-size: 8.4px; color: #64748B; font-weight: normal; margin-top: 2px;">{{ $item['description'] }}</div>
+              @endif
+            </td>
+            @if($data['show_hsn'])
+              <td>{{ $item['hsn_sac'] ?: '—' }}</td>
             @endif
+            <td style="font-weight: bold;">{{ $item['qty'] }}</td>
+            <td>{{ $item['uqc'] }}</td>
+            <td>{{ number_format($item['rate'], 2) }}</td>
+            @if($data['has_tax'])
+              <td>{{ $item['gst_pct'] }}</td>
+            @endif
+            <td style="font-weight: bold; color: #0F172A;">{{ number_format($item['taxable_value'], 2) }}</td>
+          </tr>
+        @endforeach
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 5. Amount in words, bank, terms | summary, signatory -->
+  <table class="bottom-table">
+    <tr>
+      <td class="bottom-left">
+        <div class="card">
+          <div class="card-hdr"><img src="{{ $icons['rupee'] }}" alt=""> AMOUNT IN WORDS</div>
+          <div class="card-sep"></div>
+          <div class="card-val">{{ $data['amount_in_words'] }}</div>
+        </div>
+
+        @if($data['is_delivery_challan'])
+          <div class="card">
+            <div class="card-hdr">TRANSPORTATION DETAILS</div>
+            <div class="card-sep"></div>
+            <table class="bank-tbl">
+              <tr><td class="bt-lab">Reason</td><td class="bt-colon">:</td><td class="bt-val">{{ $data['challan']['reason'] ?? '—' }}</td></tr>
+              <tr><td class="bt-lab">Vehicle No.</td><td class="bt-colon">:</td><td class="bt-val">{{ $data['challan']['vehicle_no'] ?? '—' }}</td></tr>
+              <tr><td class="bt-lab">Transporter</td><td class="bt-colon">:</td><td class="bt-val">{{ $data['challan']['transporter_name'] ?? '—' }}</td></tr>
+              <tr><td class="bt-lab">E-Way Bill</td><td class="bt-colon">:</td><td class="bt-val">{{ $data['challan']['eway_bill_no'] ?? '—' }}</td></tr>
+              <tr><td class="bt-lab">Receiver</td><td class="bt-colon">:</td><td class="bt-val">{{ $data['challan']['receiver_name'] ?? '—' }}</td></tr>
+            </table>
+          </div>
+        @else
+          @if(!empty($data['bank']['name']) || !empty($data['bank']['account_no']))
+          <div class="card">
+            <div class="card-hdr"><img src="{{ $icons['bank'] }}" alt=""> BANK DETAILS (FOR RTGS/NEFT TRANSFERS)</div>
+            <div class="card-sep"></div>
+            <table class="bank-tbl">
+              @if(!empty($data['bank']['name']))
+              <tr><td class="bt-lab" style="font-weight: bold; color: #0F172A;">Bank Name</td><td class="bt-colon" style="font-weight: bold;">:</td><td class="bt-val"><strong>{{ $data['bank']['name'] }}</strong></td></tr>
+              @endif
+              @if(!empty($data['bank']['account_name']))
+              <tr><td class="bt-lab">Account Name</td><td class="bt-colon">:</td><td class="bt-val">{{ $data['bank']['account_name'] }}</td></tr>
+              @endif
+              @if(!empty($data['bank']['account_no']))
+              <tr>
+                <td class="bt-lab">Account Number</td><td class="bt-colon">:</td>
+                <td class="bt-val">{{ $data['bank']['account_no'] }}@if(!empty($data['bank']['ifsc'])) &nbsp;|&nbsp; IFSC Code : {{ $data['bank']['ifsc'] }}@endif</td>
+              </tr>
+              @endif
+              @if(!empty($data['bank']['branch']))
+              <tr><td class="bt-lab">Branch</td><td class="bt-colon">:</td><td class="bt-val">{{ $data['bank']['branch'] }}</td></tr>
+              @endif
+            </table>
+          </div>
           @endif
 
-          <!-- Round Off Row -->
-          <tr style="background-color: #FFFFFF;">
-            <td style="font-size: 8.5px; color: #374151; padding: 3px 6px; border: 1px solid #9CA3AF;">
-              Round Off
-            </td>
-            <td style="font-size: 8.5px; text-align: right; color: #111827; padding: 3px 6px; border: 1px solid #9CA3AF;">
-              {{ number_format((float) $data['summary']['round_off'], 2) }}
-            </td>
-          </tr>
+          @if(!empty($data['terms']))
+          <div class="card">
+            <div class="card-hdr"><img src="{{ $icons['terms'] }}" alt=""> TERMS AND CONDITIONS</div>
+            <div class="card-sep"></div>
+            <ol class="terms-list">
+              @foreach($data['terms'] as $term)
+                <li>{{ $term }}</li>
+              @endforeach
+            </ol>
+          </div>
+          @endif
+        @endif
+      </td>
 
-          <!-- Grand Total Row (Large & Bold Theme Bar) -->
-          <tr style="background-color: {{ $theme['primary'] }}; color: #FFFFFF;">
-            <td style="font-size: 11.5px; font-weight: 800; padding: 5px 6px; border: 1px solid #9CA3AF; letter-spacing: 0.3px;">
-              Grand Total (₹)
-            </td>
-            <td style="font-size: 11.5px; font-weight: 800; text-align: right; padding: 5px 6px; border: 1px solid #9CA3AF;">
-              {{ number_format((float) $data['summary']['grand_total'], 2) }}
-            </td>
-          </tr>
-        </table>
+      <td class="bottom-gap"></td>
 
-        <!-- For <company> Box (Larger Seal Circle + ~80px Signature Area + Name) -->
-        <table style="width: 100%; border-collapse: collapse; border: 1px solid #9CA3AF; background-color: #FFFFFF;">
-          <tr>
-            <td style="padding: 5px 8px; border-bottom: 0;">
-              <div style="font-size: 9px; font-weight: 800; color: #111827;">
-                For {{ $data['company_name'] }}
-              </div>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 2px 8px;">
-              <table style="width: 100%; border-collapse: collapse;">
+      <td class="bottom-right">
+        <div class="summary-box">
+          <table class="sum-tbl">
+            <tr>
+              <td class="lab">{{ $data['has_tax'] ? 'Total Taxable Value' : 'Total Amount' }}</td>
+              <td class="val">₹ {{ $money($data['summary']['taxable_value']) }}</td>
+            </tr>
+            @if($data['has_tax'])
+              @if(!empty($data['summary']['show_split_tax']))
                 <tr>
-                  <!-- Larger Company Seal Circle -->
-                  <td style="width: 45%; text-align: center; vertical-align: middle; padding: 2px 0;">
-                    @if(!empty($data['seal_path']))
-                      <img src="{{ $data['seal_path'] }}" style="max-width: 68px; max-height: 68px; vertical-align: middle;" alt="Seal">
-                    @else
-                      <div style="display: inline-block; width: 66px; height: 66px; border: 1.5px dashed #4B5563; border-radius: 50%; text-align: center; vertical-align: middle;">
-                        <div style="font-size: 8px; color: #4B5563; font-weight: bold; line-height: 1.25; padding-top: 20px;">
-                          Company<br>Seal
-                        </div>
-                      </div>
-                    @endif
-                  </td>
-
-                  <!-- Signature Area (~80px total height) & Title -->
-                  <td style="width: 55%; text-align: center; vertical-align: bottom; padding: 0 0 2px 0;">
-                    @if(!empty($data['signature_path']))
-                      <img src="{{ $data['signature_path'] }}" style="max-height: 48px; max-width: 110px; margin-bottom: 2px;" alt="Signature">
-                    @else
-                      <div style="height: 42px;"></div>
-                    @endif
-                    <div style="border-bottom: 1.2px solid #374151; width: 110px; margin: 0 auto 3px auto;"></div>
-                    <div style="font-size: 8px; color: #374151; font-weight: bold;">
-                      Authorized Signatory
-                    </div>
-                  </td>
+                  <td class="lab">CGST{{ !empty($data['summary']['cgst_rate']) ? ' ('.$data['summary']['cgst_rate'].'%)' : '' }}</td>
+                  <td class="val">₹ {{ $money($data['summary']['cgst_amount']) }}</td>
                 </tr>
-              </table>
-            </td>
-          </tr>
-          {{-- Signatory Name Line (only Name shown) --}}
-          <tr>
-            <td style="padding: 3px 8px 6px 8px; font-size: 8.5px;">
-              <table style="width: 100%; border-collapse: collapse;">
                 <tr>
-                  <td style="width: 52px; color: #374151;">Name</td>
-                  <td style="width: 8px; color: #374151;">:</td>
-                  <td style="font-weight: bold; color: #111827;">{{ $data['signatory_name'] }}</td>
+                  <td class="lab">SGST/UTGST{{ !empty($data['summary']['sgst_rate']) ? ' ('.$data['summary']['sgst_rate'].'%)' : '' }}</td>
+                  <td class="val">₹ {{ $money($data['summary']['sgst_amount']) }}</td>
                 </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
+              @else
+                <tr>
+                  <td class="lab">IGST{{ !empty($data['summary']['igst_rate']) ? ' ('.$data['summary']['igst_rate'].'%)' : '' }}</td>
+                  <td class="val">₹ {{ $money($data['summary']['igst_amount']) }}</td>
+                </tr>
+              @endif
+            @endif
+            <tr>
+              <td class="lab">Round Off</td>
+              <td class="val">{{ ($data['summary']['round_off'] ?? 0) < 0 ? '- ' : '' }}₹ {{ number_format(abs((float) ($data['summary']['round_off'] ?? 0)), 2) }}</td>
+            </tr>
+            <tr class="grand-row">
+              <td class="lab">GRAND TOTAL</td>
+              <td class="val">₹ {{ $money($data['summary']['grand_total']) }}</td>
+            </tr>
+          </table>
+        </div>
 
+        <div class="sign-wrap">
+          <div class="sign-company">For {{ $data['company_name_title_case'] }}</div>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="width: 46%; text-align: right; vertical-align: middle; padding: 0 8px 0 0;">
+                @if(!empty($data['seal_path']))<img src="{{ $data['seal_path'] }}" alt="Seal" style="max-width: 70px; max-height: 70px;">@endif
+              </td>
+              <td style="vertical-align: bottom; text-align: right; padding: 0;">
+                @if(!empty($data['signature_path']))<img src="{{ $data['signature_path'] }}" alt="Signature" style="max-height: 38px; max-width: 110px;"><br>@endif
+                <span class="sig-name">{{ $data['signatory_name'] }}</span><br>
+                <span class="sig-role">Authorised Signatory</span>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        @if(!empty($data['reverse_charge']))
+          <div class="rcm-box">Tax is payable on reverse charge basis.</div>
+        @endif
       </td>
     </tr>
   </table>
 
-  <!-- 7. Tagline Strip (Thicker Theme Colour Bar at Bottom of Frame) -->
   @if(!empty($data['tagline']))
-  <div style="background-color: {{ $theme['primary'] }}; color: #FFFFFF; font-size: 9.5px; font-weight: 800; letter-spacing: 3px; text-align: center; text-transform: uppercase; padding: 5px 6px; margin-top: 5px;">
-    {{ $data['tagline'] }}
-  </div>
+    <div style="margin-top: 8px; background-color: {{ $barBg }}; color: {{ $barFg }}; @if($simple) border: 1.3px solid {{ $accent }}; @endif font-size: 9.5px; font-weight: bold; letter-spacing: 3px; text-align: center; text-transform: uppercase; padding: 5px 6px; border-radius: 6px;">
+      {{ $data['tagline'] }}
+    </div>
   @endif
 
 </body>

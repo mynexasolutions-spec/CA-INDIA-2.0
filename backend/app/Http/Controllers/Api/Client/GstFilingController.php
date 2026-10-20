@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Client;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClientGstReturn;
 use App\Models\ClientProfile;
 use App\Models\CommercialDocument;
 use App\Models\GstFilingRequest;
@@ -530,8 +531,19 @@ class GstFilingController extends Controller
             ->get()
             ->keyBy('filing_period');
 
-        $periods = array_map(function (array $p) use ($existingRequests, $returnType, $clientProfileId, $quarterly) {
+        // The Admin Portal records a filing in two places: a filing-confirmation request (GstFilingRequest) and the
+        // return itself (ClientGstReturn, written by "Mark as Filed" on the GSTR-1 / GSTR-3B review screens). The
+        // client must see Filed + the ARN whichever one the admin used, so both feed each row.
+        $filedReturns = ClientGstReturn::where('client_profile_id', $clientProfileId)
+            ->where('return_type', str_replace('-', '', $returnType))
+            ->where('status', 'filed')
+            ->get()
+            ->keyBy('tax_period');
+
+        $periods = array_map(function (array $p) use ($existingRequests, $filedReturns, $returnType, $clientProfileId, $quarterly) {
             $existing = $existingRequests->get($p['period']);
+            $filedReturn = $filedReturns->get($p['period'])
+                ?? ($quarterly ? $filedReturns->get(self::quarterEndMonthKey($p['period'])) : null);
 
             $reconciliationStatus = null;
             $reconciliationBreakdown = null;
@@ -545,14 +557,27 @@ class GstFilingController extends Controller
             }
 
             [$status, $action] = self::resolvePeriodStatusAndAction($existing, $returnType, $reconciliationStatus);
+            $filedOn = $existing?->filing_date;
+            $ackNo = $existing?->ack_no;
+
+            if ($filedReturn && $existing?->status !== 'GST Filed') {
+                // Filed by the admin without (or ahead of) a confirmation request.
+                $status = 'Filed Successfully';
+                $action = $existing ? 'view_details' : null;
+                $filedOn = $filedReturn->filed_on?->toDateString();
+                $ackNo = $filedReturn->ack_no;
+            } elseif ($filedReturn) {
+                $filedOn = $filedOn ?: $filedReturn->filed_on?->toDateString();
+                $ackNo = $ackNo ?: $filedReturn->ack_no;
+            }
 
             return [
                 'period' => $p['period'],
                 'period_label' => $p['period_label'],
                 'due_date' => $p['due_date'],
                 'status' => $status,
-                'filed_on' => $existing?->filing_date,
-                'ack_no' => $existing?->ack_no,
+                'filed_on' => $filedOn,
+                'ack_no' => $ackNo,
                 'filing_request_id' => $existing?->id,
                 'reconciliation_status' => $reconciliationStatus,
                 'reconciliation_month_breakdown' => $reconciliationBreakdown,
@@ -585,8 +610,11 @@ class GstFilingController extends Controller
             default => $gstr2bQuarterly ? 'Monthly (QRMP)' : 'Monthly',
         };
 
-        $lastFiledRequest = $existingRequests->where('status', 'GST Filed')
-            ->sortByDesc(fn ($r) => $r->filing_date ?? $r->filing_period)
+        // Last filed = the most recent period that reads "Filed Successfully" in the grid, so it covers a filing
+        // recorded either as a confirmation request or directly by the admin, and carries its ARN.
+        $lastFiled = collect($periods)
+            ->where('status', 'Filed Successfully')
+            ->sortByDesc(fn ($p) => ($p['filed_on'] ? (string) $p['filed_on'] : '').'|'.$p['period'])
             ->first();
 
         $nextDuePeriod = collect($periods)->first(fn ($p) => $p['status'] !== 'Filed Successfully');
@@ -594,9 +622,11 @@ class GstFilingController extends Controller
         return [
             'dealer_type' => $profile->dealer_type,
             'filing_frequency_label' => $frequencyLabel,
-            'last_filed' => $lastFiledRequest ? [
-                'period' => $lastFiledRequest->filing_period,
-                'filed_on' => $lastFiledRequest->filing_date,
+            'last_filed' => $lastFiled ? [
+                'period' => $lastFiled['period'],
+                'period_label' => $lastFiled['period_label'],
+                'filed_on' => $lastFiled['filed_on'],
+                'ack_no' => $lastFiled['ack_no'],
             ] : null,
             'next_due' => $nextDuePeriod ? [
                 'period' => $nextDuePeriod['period'],
@@ -604,6 +634,22 @@ class GstFilingController extends Controller
                 'date' => $nextDuePeriod['due_date'],
             ] : null,
         ];
+    }
+
+    /** "2026-Q3" (Oct-Dec) -> "2026-12": the month a quarterly return is recorded against when the admin
+     *  marks it filed from the monthly review screens. Anything that isn't a quarter key is returned as is. */
+    private static function quarterEndMonthKey(string $period): string
+    {
+        if (preg_match('/^(\d{4})-Q([1-4])$/', $period, $m) !== 1) {
+            return $period;
+        }
+
+        return match ((int) $m[2]) {
+            1 => "{$m[1]}-06",
+            2 => "{$m[1]}-09",
+            3 => "{$m[1]}-12",
+            default => ((int) $m[1] + 1).'-03',
+        };
     }
 
     /** Row status label + action ('request_filing' | 'view_details' | 'view_reconciliation')

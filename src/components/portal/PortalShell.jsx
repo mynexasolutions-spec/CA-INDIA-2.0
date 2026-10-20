@@ -516,7 +516,7 @@ function NeedHelpCard() {
 
 export function RequireAuth({ roles }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="section container"><LoadingBlock /></div>;
+  if (loading) return <LoadingBlock minHeight="100vh" style={{ minHeight: '100dvh' }} />;
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -950,7 +950,6 @@ export function ClientPortalLayout() {
           { to: '/portal/gstr-1', label: 'GSTR-1' },
           { to: '/portal/gstr-2b', label: 'GSTR-2B' },
           { to: '/portal/gstr-3b', label: 'GSTR-3B' },
-          { to: '/portal/gst-filing', label: 'GST Filing Confirmation' },
         ],
     },
     {
@@ -982,6 +981,7 @@ export function ClientPortalLayout() {
       <PortalFrame
         shellClassName="bp-shell-client"
         loginPath="/login"
+        logoClickable={false}
         nav={nav}
         headerContent={<ClientTopbarHeader />}
         rightContent={

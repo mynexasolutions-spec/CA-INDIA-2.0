@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Client;
 use App\Http\Controllers\Controller;
 use App\Models\ClientChangeRequest;
 use App\Models\ClientProfile;
+use App\Services\Billing\DocumentNumberingSettings;
 use Illuminate\Http\Request;
 
 class ChangeRequestController extends Controller
@@ -20,12 +21,14 @@ class ChangeRequestController extends Controller
     private function approvedSnapshot(ClientProfile $profile): array
     {
         $text = [];
-        foreach (ClientChangeRequest::TEXT_FIELDS as $field) {
-            $text[$field] = $profile->{$field};
+        foreach (ClientChangeRequest::snapshotFields() as $field) {
+            $text[$field] = ClientChangeRequest::liveValue($profile, $field);
         }
 
         return [
             'text' => $text,
+            // Auto / Manual is controlled by the admin only — the client just needs to know it.
+            'numbering_types' => DocumentNumberingSettings::numberingTypes($profile),
             'layout_id' => (int) ($profile->default_layout_id ?: 1),
             'colour_scheme' => (string) ($profile->default_colour_scheme ?: 'slate_blue'),
             'logo_path' => $profile->logo_path,
@@ -116,9 +119,24 @@ class ChangeRequestController extends Controller
         return response()->json($page);
     }
 
+    /** Separator / next number / prefix position / status for every document type. */
+    private function numberingRules(): array
+    {
+        $rules = [];
+        foreach (array_keys(DocumentNumberingSettings::DOCS) as $key) {
+            // GST document numbers may only contain letters, digits, "-" and "/".
+            $rules["{$key}_separator"] = ['nullable', 'string', 'in:-,/'];
+            $rules["{$key}_next_number"] = ['nullable', 'regex:/^\d{1,9}$/'];
+            $rules["{$key}_prefix_position"] = ['nullable', 'string', 'in:first,last'];
+            $rules["{$key}_status"] = ['nullable', 'string', 'in:active,inactive'];
+        }
+
+        return $rules;
+    }
+
     private function validationRules(): array
     {
-        return [
+        return array_merge($this->numberingRules(), [
             'bank_name' => 'nullable|string|max:120',
             'bank_branch' => 'nullable|string|max:120',
             'account_holder_name' => 'nullable|string|max:120',
@@ -137,7 +155,7 @@ class ChangeRequestController extends Controller
             'layout_id' => 'nullable|integer|in:1,2,3,4',
             'colour_scheme' => ['nullable', 'string', \Illuminate\Validation\Rule::in(array_keys(\App\Models\ClientDocumentSetting::COLOUR_SCHEMES))],
             'terms_conditions' => 'nullable|string',
-        ];
+        ]);
     }
 
     public function store(Request $request)
@@ -153,8 +171,17 @@ class ChangeRequestController extends Controller
         // Only accept fields that actually belong to this section — a bank-tab submit can't
         // sneak in a numbering-prefix change, even if the client sent one.
         $payload = [];
+        $unchanged = [];
         foreach ($data as $field => $value) {
-            if ((ClientChangeRequest::FIELD_SECTIONS[$field] ?? null) === $section) {
+            if (ClientChangeRequest::sectionOf($field) === $section) {
+                // The form posts every field of the tab; numbering fields equal to what is already
+                // live aren't a change, so they stay out of the request (and out of the admin's diff).
+                if (DocumentNumberingSettings::isField($field)) {
+                    if ($value === null || DocumentNumberingSettings::isUnchanged($profile, $field, $value)) {
+                        $unchanged[] = $field;
+                        continue;
+                    }
+                }
                 $payload[$field] = $value;
             }
         }
@@ -170,6 +197,16 @@ class ChangeRequestController extends Controller
             ->latest('id')
             ->first();
 
+        // A field changed back to its live value drops out of a still-pending request too.
+        $withoutUnchanged = fn (array $p) => array_diff_key($p, array_flip($unchanged));
+
+        if ($section === ClientChangeRequest::SECTION_NUMBERING) {
+            $effective = array_merge($withoutUnchanged($pending?->payload ?? []), $payload);
+            abort_if(! $effective, 422, 'No changes to submit.');
+            // Duplicate / already-used-number guard (also re-run when the admin approves).
+            DocumentNumberingSettings::assertValid($profile, $effective);
+        }
+
         if ($draft && $pending) {
             // Files staged after a submit belong to the same open request: fold them in.
             foreach (ClientChangeRequest::ASSET_FIELDS as $column) {
@@ -183,7 +220,7 @@ class ChangeRequestController extends Controller
         }
 
         if ($pending) {
-            $merged = array_merge($pending->payload ?? [], $payload);
+            $merged = array_merge($withoutUnchanged($pending->payload ?? []), $payload);
             $pending->update([
                 'payload' => $merged,
                 'submitted_by' => $request->user()->id,

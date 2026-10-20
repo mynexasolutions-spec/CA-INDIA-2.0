@@ -108,7 +108,8 @@ export default function GstFilingReminderPopup() {
 
   const go = useCallback((url) => {
     dismiss();
-    navigate(url || '/portal/gst-filing');
+    // Each reminder links to its own return's section (GSTR-1 / GSTR-3B / CMP-08), where the filing request is raised.
+    navigate(url || '/portal');
   }, [dismiss, navigate]);
 
   if (!reminders || reminders.length === 0) return null;
@@ -253,14 +254,6 @@ export default function GstFilingReminderPopup() {
                 <span style={{ display: 'block', fontSize: 10.5, color: '#64748b' }}>(It will appear again on next login)</span>
               </span>
             </label>
-            <button
-              type="button"
-              onClick={() => go('/portal/gst-filing')}
-              style={{ background: '#1d5fe0', color: '#fff', border: 'none', borderRadius: 9, padding: '11px 20px', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 18px -8px rgba(29,95,224,0.8)' }}
-            >
-              Go to GST Filing Confirmation
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
-            </button>
           </div>
         </div>
       </div>

@@ -161,6 +161,9 @@ export default function InvoiceForm({
   const [docId, setDocId] = useState(id || null);
   const [docNumber, setDocNumber] = useState('');
   const [previewNumber, setPreviewNumber] = useState('');
+  // Auto / Manual is set by the admin per document type. Manual = the client types the number.
+  const [numberingType, setNumberingType] = useState('auto');
+  const [manualNumber, setManualNumber] = useState('');
   const [docStatus, setDocStatus] = useState('draft');
   const [editAllowed, setEditAllowed] = useState(false);
   const [taxDeductionType, setTaxDeductionType] = useState(''); // '', 'tds', 'tcs'
@@ -256,13 +259,24 @@ export default function InvoiceForm({
   // Read-only preview of the number Generate/Issue will allocate — never reserved,
   // purely informational (Reference 2 mockup shows Document No. locked from the start).
   useEffect(() => {
-    if (id || initialDocument || readOnlyNumber) return undefined;
+    if (initialDocument || readOnlyNumber) return undefined;
     let cancelled = false;
     api(`/billing/documents/next-number?type=${docType}`)
-      .then((d) => { if (!cancelled) setPreviewNumber(d.number || ''); })
+      .then((d) => {
+        if (cancelled) return;
+        setPreviewNumber(d.number || '');
+        setNumberingType(d.numbering_type === 'manual' ? 'manual' : 'auto');
+      })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [id, docType, initialDocument, readOnlyNumber]);
+  }, [docType, initialDocument, readOnlyNumber]);
+
+  // Only a draft of a manual-numbering type has an editable number (an issued number is final).
+  const isManualNumber = numberingType === 'manual' && !staffEditMode && !readOnlyNumber && !initialDocument && docStatus === 'draft';
+  useEffect(() => {
+    if (!isManualNumber || manualNumber) return;
+    setManualNumber(docNumber && !docNumber.startsWith('DRAFT-') ? docNumber : previewNumber);
+  }, [isManualNumber, manualNumber, docNumber, previewNumber]);
 
   // Prefill credit/debit notes and amendments from original document (?ref= or dropdown)
   useEffect(() => {
@@ -289,6 +303,7 @@ export default function InvoiceForm({
       type: docType,
       customer_id: partyId ? +partyId : null,
       reference_document_id: refId ? +refId : null,
+      ...(isManualNumber ? { number: manualNumber.trim() } : {}),
       document_date: documentDate,
       place_of_supply: placeOfSupply,
       payment_terms: paymentTerms,
@@ -535,10 +550,16 @@ export default function InvoiceForm({
         <form className="bp-form two">
           <label>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Document No. <InfoDotIcon /></span>
-            <div style={{ position: 'relative' }}>
-              <input className="bp-input" style={{ paddingRight: 30, color: 'var(--bp-muted)', background: '#f4f7fa' }} value={readOnlyNumber || docNumber || previewNumber} readOnly disabled />
-              <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--bp-muted)' }}><LockIcon /></span>
-            </div>
+            {isManualNumber ? (
+              <input className="bp-input" value={manualNumber} maxLength={16}
+                onChange={(e) => setManualNumber(e.target.value.replace(/[^A-Za-z0-9/-]/g, ''))}
+                placeholder="Enter document number" />
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <input className="bp-input" style={{ paddingRight: 30, color: 'var(--bp-muted)', background: '#f4f7fa' }} value={readOnlyNumber || docNumber || previewNumber} readOnly disabled />
+                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--bp-muted)' }}><LockIcon /></span>
+              </div>
+            )}
           </label>
           <label>
             <span>{documentDateLabel(docType)} <span className="bp-required">*</span></span>

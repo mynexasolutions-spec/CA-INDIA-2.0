@@ -46,6 +46,7 @@ return [
         'key' => env('GST_API_KEY'),
         'key_header' => env('GST_API_KEY_HEADER'), // default: Authorization (Bearer)
         'secret' => env('GST_API_SECRET'),
+        'verify_ssl' => env('GST_API_VERIFY_SSL', true), // only set false on a dev PC without a CA bundle
     ],
 
 ];

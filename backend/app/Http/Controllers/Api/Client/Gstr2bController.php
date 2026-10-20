@@ -106,6 +106,36 @@ class Gstr2bController extends Controller
         ];
     }
 
+    /**
+     * 'available' once the admin has loaded the official GSTR-2B; otherwise 'open' from the FIRST DAY of the tax
+     * period (the month, or the quarter for quarterly filers). The official statement only appears around the 14th
+     * of the following month, but from day one the client can already enter Projected ITC. 'upcoming' before that.
+     * Earlier periods stay accessible.
+     */
+    private static function periodStatus(bool $hasOfficialData, Carbon $periodStart): string
+    {
+        if ($hasOfficialData) {
+            return 'available';
+        }
+
+        return $periodStart->copy()->startOfDay()->lte(Carbon::now()->startOfDay()) ? 'open' : 'upcoming';
+    }
+
+    /** Financial year label ("2026-27") a tax-period key belongs to: "2026-08", "2027-02" or a quarter key "2026-Q3". */
+    private static function fyForPeriod(string $period): string
+    {
+        if (preg_match('/^(\d{4})-Q[1-4]$/', $period, $m) === 1) {
+            $start = (int) $m[1];
+        } else {
+            $parsed = Carbon::createFromFormat('Y-m', substr($period, 0, 7));
+            $year = $parsed ? (int) $parsed->format('Y') : (int) date('Y');
+            $month = $parsed ? (int) $parsed->format('m') : (int) date('m');
+            $start = $month >= 4 ? $year : $year - 1;
+        }
+
+        return $start.'-'.substr((string) ($start + 1), -2);
+    }
+
     public function periods(Request $request)
     {
         $profile   = $request->user()->clientProfile;
@@ -134,10 +164,10 @@ class Gstr2bController extends Controller
         $periods = [];
         if ($freq === 'quarterly') {
             $quarters = [
-                ['key' => "{$fyStart}-Q1", 'label' => "Q1 Apr–Jun {$fyStart}",  'available_by' => Carbon::create($fyStart, 7, 14)],
-                ['key' => "{$fyStart}-Q2", 'label' => "Q2 Jul–Sep {$fyStart}",  'available_by' => Carbon::create($fyStart, 10, 14)],
-                ['key' => "{$fyStart}-Q3", 'label' => "Q3 Oct–Dec {$fyStart}",  'available_by' => Carbon::create($fyEnd, 1, 14)],
-                ['key' => "{$fyStart}-Q4", 'label' => "Q4 Jan–Mar {$fyEnd}",    'available_by' => Carbon::create($fyEnd, 4, 14)],
+                ['key' => "{$fyStart}-Q1", 'label' => "Q1 Apr–Jun {$fyStart}",  'available_by' => Carbon::create($fyStart, 7, 14), 'starts' => Carbon::create($fyStart, 4, 1)],
+                ['key' => "{$fyStart}-Q2", 'label' => "Q2 Jul–Sep {$fyStart}",  'available_by' => Carbon::create($fyStart, 10, 14), 'starts' => Carbon::create($fyStart, 7, 1)],
+                ['key' => "{$fyStart}-Q3", 'label' => "Q3 Oct–Dec {$fyStart}",  'available_by' => Carbon::create($fyEnd, 1, 14), 'starts' => Carbon::create($fyStart, 10, 1)],
+                ['key' => "{$fyStart}-Q4", 'label' => "Q4 Jan–Mar {$fyEnd}",    'available_by' => Carbon::create($fyEnd, 4, 14), 'starts' => Carbon::create($fyEnd, 1, 1)],
             ];
             foreach ($quarters as $q) {
                 $rec       = $records->get($q['key']);
@@ -149,7 +179,7 @@ class Gstr2bController extends Controller
                     'label'        => $q['label'],
                     'available_on' => $rec?->created_at?->format('d M Y'),
                     'expected_on'  => $q['available_by']->format('d M Y'),
-                    'status'       => $rec ? 'available' : 'upcoming',
+                    'status'       => self::periodStatus($rec !== null, $q['starts']),
                     'total_itc'    => $totalItc,
                     'no_bills'     => $rec?->no_bills ?? false,
                 ];
@@ -168,7 +198,7 @@ class Gstr2bController extends Controller
                     'label'        => Carbon::create($year, $month, 1)->format('M Y'),
                     'available_on' => $rec?->created_at?->format('d M Y'),
                     'expected_on'  => Carbon::create($year, $month, 1)->addMonthNoOverflow()->day(14)->format('d M Y'),
-                    'status'       => $rec ? 'available' : 'upcoming',
+                    'status'       => self::periodStatus($rec !== null, Carbon::create($year, $month, 1)),
                     'total_itc'    => $totalItc,
                     'no_bills'     => $rec?->no_bills ?? false,
                 ];
@@ -325,14 +355,7 @@ class Gstr2bController extends Controller
         $idx = array_flip($head);
         $cell = fn (array $row, string $name) => isset($idx[$norm($name)]) ? ($row[$idx[$norm($name)]] ?? null) : null;
 
-        $fy = $request->input('financial_year');
-        if (! $fy) {
-            $parsed = Carbon::createFromFormat('Y-m', substr($period, 0, 7));
-            $year = $parsed ? (int) $parsed->format('Y') : (int) date('Y');
-            $month = $parsed ? (int) $parsed->format('m') : (int) date('m');
-            $fyStart = $month >= 4 ? $year : $year - 1;
-            $fy = $fyStart.'-'.substr($fyStart + 1, -2);
-        }
+        $fy = $request->input('financial_year') ?: self::fyForPeriod($period);
 
         $rows = [];
         $errors = [];
@@ -421,14 +444,7 @@ class Gstr2bController extends Controller
         $profileId = $this->profileId($request);
         $profile   = $request->user()->clientProfile;
 
-        $fy = $request->input('financial_year');
-        if (!$fy) {
-            $parsed = Carbon::createFromFormat('Y-m', substr($period, 0, 7));
-            $year   = $parsed ? (int) $parsed->format('Y') : (int) date('Y');
-            $month  = $parsed ? (int) $parsed->format('m') : (int) date('m');
-            $fyStart = $month >= 4 ? $year : $year - 1;
-            $fy      = $fyStart . '-' . substr($fyStart + 1, -2);
-        }
+        $fy = $request->input('financial_year') ?: self::fyForPeriod($period);
 
         $data = $request->validate(self::PROJECTED_RULES, self::PROJECTED_MESSAGES);
         $data = $this->normaliseProjected($data);

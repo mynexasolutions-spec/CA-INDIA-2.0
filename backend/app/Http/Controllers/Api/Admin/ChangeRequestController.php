@@ -54,8 +54,8 @@ class ChangeRequestController extends Controller
     private function approvedSnapshot(ClientProfile $profile): array
     {
         $text = [];
-        foreach (ClientChangeRequest::TEXT_FIELDS as $field) {
-            $text[$field] = $profile->{$field};
+        foreach (ClientChangeRequest::snapshotFields() as $field) {
+            $text[$field] = ClientChangeRequest::liveValue($profile, $field);
         }
 
         return [
@@ -72,8 +72,8 @@ class ChangeRequestController extends Controller
     {
         $text = [];
         $payload = $req->payload ?? [];
-        foreach (ClientChangeRequest::TEXT_FIELDS as $field) {
-            $text[$field] = array_key_exists($field, $payload) ? $payload[$field] : $profile->{$field};
+        foreach (ClientChangeRequest::snapshotFields() as $field) {
+            $text[$field] = array_key_exists($field, $payload) ? $payload[$field] : ClientChangeRequest::liveValue($profile, $field);
         }
 
         return [
@@ -161,25 +161,15 @@ class ChangeRequestController extends Controller
             }
         }
 
-        // An approved prefix must beat the per-type numbering settings (document_numbering_settings),
-        // which are what the next document number is actually built from.
-        $prefixTypes = [
-            'invoice_prefix' => 'tax_invoice', 'bill_of_supply_prefix' => 'bill_of_supply',
-            'credit_note_prefix' => 'credit_note', 'debit_note_prefix' => 'debit_note',
-            'quotation_prefix' => 'quotation', 'delivery_challan_prefix' => 'delivery_challan',
-        ];
-        $settings = is_array($profile->document_numbering_settings) ? $profile->document_numbering_settings : [];
-        $settingsChanged = false;
-        foreach ($prefixTypes as $column => $type) {
-            if (array_key_exists($column, $updates) && trim((string) $updates[$column]) !== '') {
-                $key = \App\Services\Billing\InvoiceService::typeToSettingsKey($type);
-                $settings[$key] = is_array($settings[$key] ?? null) ? $settings[$key] : [];
-                $settings[$key]['prefix'] = trim((string) $updates[$column]);
-                $settingsChanged = true;
-            }
-        }
-        if ($settingsChanged) {
-            $updates['document_numbering_settings'] = $settings;
+        // Approved numbering changes (prefix, separator, next number, position, status) must beat the
+        // per-type numbering settings (document_numbering_settings), which are what the next document
+        // number is actually built from. The numbering type (auto/manual) is never touched here.
+        // Re-validated now: documents may have been issued since the client submitted.
+        \App\Services\Billing\DocumentNumberingSettings::assertValid($profile, $payload);
+        [$numberingSettings, $numberingColumns] = \App\Services\Billing\DocumentNumberingSettings::apply($profile, $payload);
+        if ($numberingSettings) {
+            $updates = array_merge($updates, $numberingColumns);
+            $updates['document_numbering_settings'] = $numberingSettings;
         }
 
         if ($updates) {

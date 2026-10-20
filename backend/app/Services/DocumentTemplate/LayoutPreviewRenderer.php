@@ -56,7 +56,7 @@ class LayoutPreviewRenderer
         };
 
         $viewData = ['data' => $data, 'theme' => $theme];
-        if ($layoutId === 1) {
+        if (in_array($layoutId, [1, 3], true)) {
             $viewData['icons'] = DocumentCanvasHelper::resolveIcons($theme['key']);
         }
 
@@ -86,18 +86,14 @@ class LayoutPreviewRenderer
         $pdf->render();
         $dompdf = $pdf->getDomPDF();
 
-        // Same frame rules as InvoiceService::generatePdf()
-        $borderRadius = in_array($layoutId, [2, 3], true) ? 0 : 11;
-        $drawFrame = $layoutId !== 4;
-
-        DocumentCanvasHelper::attachFrameAndFooter(
+        // Same page furniture as InvoiceService::generatePdf()
+        DocumentCanvasHelper::decorate(
             $dompdf->getCanvas(),
             $dompdf->getFontMetrics(),
             $prepared['theme'],
+            $layoutId,
             $watermark,
-            $profile->watermark_text,
-            $borderRadius,
-            $drawFrame
+            $profile->watermark_text
         );
 
         return $pdf->output();

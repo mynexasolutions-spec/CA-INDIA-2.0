@@ -30,22 +30,15 @@ const LAYOUT_TEMPLATES = [
     title: 'Structured & Detailed',
     subtitle: '(Table Focused)',
   },
-  {
-    id: 4,
-    name: 'Layout 4',
-    title: 'Modern Boxed',
-    subtitle: '(Panel Style)',
-  },
 ];
 
 // Strict 6 colour schemes from spec (NO Forest Green, NO Burgundy)
 const COLOUR_SCHEMES = [
-  { id: 'slate_blue', name: 'Slate Blue', line1: 'Slate', line2: 'Blue', hex: '#2563eb' },
-  { id: 'charcoal_grey', name: 'Charcoal Grey', line1: 'Charcoal', line2: 'Grey', hex: '#334155' },
-  { id: 'dusty_plum', name: 'Dusty Plum', line1: 'Dusty', line2: 'Plum', hex: '#703058' },
-  { id: 'mocha_brown', name: 'Mocha Brown', line1: 'Mocha', line2: 'Brown', hex: '#6c4a38' },
-  { id: 'deep_teal', name: 'Deep Teal', line1: 'Deep', line2: 'Teal', hex: '#0f766e' },
-  { id: 'antique_gold', name: 'Antique Gold', line1: 'Antique', line2: 'Gold', hex: '#c59b27' },
+  { id: 'simple', name: 'Simple', line1: 'Simple', line2: '', hex: '#111111' },
+  { id: 'royal_blue', name: 'Royal Blue', line1: 'Royal', line2: 'Blue', hex: '#1d40af' },
+  { id: 'deep_teal', name: 'Deep Teal', line1: 'Deep', line2: 'Teal', hex: '#036070' },
+  { id: 'mocha_brown', name: 'Mocha Brown', line1: 'Mocha', line2: 'Brown', hex: '#793312' },
+  { id: 'dusty_plum', name: 'Dusty Plum', line1: 'Dusty', line2: 'Plum', hex: '#8c2f5f' },
 ];
 
 const LAYOUT_IMAGES = {
@@ -260,14 +253,14 @@ export default function ClientLayoutTab({
   // Saved server state
   const [savedData, setSavedData] = useState({
     layout_id: 1,
-    colour_scheme: 'slate_blue',
+    colour_scheme: 'royal_blue',
     applied_from: null,
     updated_at: null,
   });
 
   // Current working state (in edit mode or viewed)
   const [selectedLayoutId, setSelectedLayoutId] = useState(1);
-  const [selectedColourScheme, setSelectedColourScheme] = useState('slate_blue');
+  const [selectedColourScheme, setSelectedColourScheme] = useState('royal_blue');
 
   // Modes and loaders
   const [isEditing, setIsEditing] = useState(false);
@@ -320,7 +313,7 @@ export default function ClientLayoutTab({
         const res = await api(`/admin/clients/${clientId}/layout`);
         if (mounted && res) {
           const lId = Number(res.layout_id ?? res.default_layout_id) || 1;
-          const cScheme = res.colour_scheme || res.default_colour_scheme || 'slate_blue';
+          const cScheme = res.colour_scheme || res.default_colour_scheme || 'royal_blue';
           const appliedFrom = res.applied_from || res.layout_applied_from || null;
           const updatedAt = res.updated_at || res.layout_updated_at || null;
           setSavedData({
@@ -480,7 +473,7 @@ export default function ClientLayoutTab({
             lineHeight: 1.5,
           }}
         >
-          <strong>Notice:</strong> Client profile must be saved first before custom layout changes can be applied. Default Layout 1 (Modern Professional) and Slate Blue will be assigned automatically upon saving.
+          <strong>Notice:</strong> Client profile must be saved first before custom layout changes can be applied. Default Layout 1 (Modern Professional) and Royal Blue will be assigned automatically upon saving.
         </div>
       )}
 
@@ -618,7 +611,7 @@ export default function ClientLayoutTab({
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
+                gridTemplateColumns: 'repeat(3, 1fr)',
                 gap: 10,
               }}
             >
@@ -746,7 +739,7 @@ export default function ClientLayoutTab({
                 className="cp-swatches"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(6, 1fr)',
+                  gridTemplateColumns: 'repeat(5, 1fr)',
                   gap: 4,
                   width: '100%',
                 }}

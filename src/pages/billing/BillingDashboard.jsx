@@ -353,7 +353,6 @@ export default function BillingDashboard() {
                     <th>AMOUNT (₹)</th>
                     <th>STATUS</th>
                     <th>CREATED ON</th>
-                    <th style={{ textAlign: 'center' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -369,13 +368,10 @@ export default function BillingDashboard() {
                         <td>{money(d.grand_total || d.total_amount)}</td>
                         <td><span className={`bp-badge ${paymentStatusBadge(d.status)}`}>{paymentStatusLabel(d.status)}</span></td>
                         <td style={{ whiteSpace: 'nowrap' }}>{formatDMYTime(d.created_at)}</td>
-                        <td style={{ textAlign: 'center' }}>
-                          <Link className="bp-btn bp-btn-outline" style={{ padding: '4px 12px', fontSize: 12 }} to={billingDocPath(d.type, d.id)}>View</Link>
-                        </td>
                       </tr>
                     );
                   })}
-                  {!rows.length && <tr><td colSpan={9} className="bp-table-empty">No documents for FY {fy}</td></tr>}
+                  {!rows.length && <tr><td colSpan={8} className="bp-table-empty">No documents for FY {fy}</td></tr>}
                 </tbody>
               </table>
             </div>

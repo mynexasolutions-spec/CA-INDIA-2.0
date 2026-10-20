@@ -9,6 +9,28 @@ class DocumentThemeTokens
      * Tokens are plain hex strings, no CSS variables.
      */
     public const THEMES = [
+        // The five colours offered in Settings > Layouts, sampled from the approved Layout 1/2/3 designs.
+        'simple' => [
+            'key' => 'simple',
+            'name' => 'Simple',
+            'primary' => '#111111',
+            'dark' => '#000000',
+            'light_tint' => '#F3F4F6',
+            'text_on_primary' => '#FFFFFF',
+            'rgb' => [0.067, 0.067, 0.067],
+        ],
+        'royal_blue' => [
+            'key' => 'royal_blue',
+            'name' => 'Royal Blue',
+            'primary' => '#1D40AF',
+            'dark' => '#16318A',
+            'light_tint' => '#CFE8FC',
+            // the live Royal Blue invoice shows the grand total on a soft green band
+            'grand_bg' => '#E1F8EA',
+            'grand_line' => '#22A35A',
+            'text_on_primary' => '#FFFFFF',
+            'rgb' => [0.114, 0.251, 0.686],
+        ],
         'slate_blue' => [
             'key' => 'slate_blue',
             'name' => 'Slate Blue',
@@ -32,29 +54,29 @@ class DocumentThemeTokens
         'dusty_plum' => [
             'key' => 'dusty_plum',
             'name' => 'Dusty Plum',
-            'primary' => '#7A4A6A',
-            'dark' => '#5A3250',
-            'light_tint' => '#E8D5E3',
+            'primary' => '#8C2F5F',
+            'dark' => '#6B2249',
+            'light_tint' => '#ECCFDD',
             'text_on_primary' => '#FFFFFF',
-            'rgb' => [0.478, 0.290, 0.416],
+            'rgb' => [0.549, 0.184, 0.373],
         ],
         'mocha_brown' => [
             'key' => 'mocha_brown',
             'name' => 'Mocha Brown',
-            'primary' => '#6B4F3F',
-            'dark' => '#4A342A',
-            'light_tint' => '#F0E8E3',
+            'primary' => '#793312',
+            'dark' => '#5A2610',
+            'light_tint' => '#F6DDC8',
             'text_on_primary' => '#FFFFFF',
-            'rgb' => [0.420, 0.310, 0.247],
+            'rgb' => [0.475, 0.200, 0.071],
         ],
         'deep_teal' => [
             'key' => 'deep_teal',
             'name' => 'Deep Teal',
-            'primary' => '#1F6F6F',
-            'dark' => '#14504F',
-            'light_tint' => '#E0F0EF',
+            'primary' => '#036070',
+            'dark' => '#024A56',
+            'light_tint' => '#BDEFF6',
             'text_on_primary' => '#FFFFFF',
-            'rgb' => [0.122, 0.435, 0.435],
+            'rgb' => [0.012, 0.376, 0.439],
         ],
         'antique_gold' => [
             'key' => 'antique_gold',
