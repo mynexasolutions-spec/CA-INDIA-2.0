@@ -2,6 +2,22 @@ import React, { useEffect, useRef, useState } from 'react';
 import { getAuthToken } from '../api/client';
 const pdfWorkerUrl = '/pdf.worker.min.mjs';
 
+// Some servers send .mjs as application/octet-stream, which browsers refuse to run as a worker. Re-wrapping the file
+// in a Blob with an explicit JavaScript type works whatever the server says.
+let workerBlobUrl = null;
+async function getWorkerSrc() {
+  if (workerBlobUrl) return workerBlobUrl;
+  try {
+    const res = await fetch(pdfWorkerUrl);
+    if (!res.ok) throw new Error('worker fetch failed');
+    const code = await res.text();
+    workerBlobUrl = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
+    return workerBlobUrl;
+  } catch {
+    return pdfWorkerUrl;
+  }
+}
+
 const DEBOUNCE_MS = 400;
 
 // Rendering the PDF takes the server ~1.5 s, so each URL's request is shared and remembered for the session: a
@@ -76,7 +92,7 @@ function PdfCanvasPages({ data, onFail, onDrawn }) {
     (async () => {
       try {
         const pdfjs = await import('pdfjs-dist');
-        pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+        pdfjs.GlobalWorkerOptions.workerSrc = await getWorkerSrc();
         const doc = await pdfjs.getDocument({ data: data.slice(0) }).promise;
         if (cancelled) { doc.destroy(); return; }
         docRef.current = doc;
