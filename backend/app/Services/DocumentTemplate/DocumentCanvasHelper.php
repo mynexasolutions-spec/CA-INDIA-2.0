@@ -150,6 +150,95 @@ class DocumentCanvasHelper
     }
 
     /**
+     * Closed outline of a rounded rectangle as a flat [x1, y1, x2, y2, …] list, for $canvas->polygon().
+     *
+     * @param float[] $radii top-left, top-right, bottom-right, bottom-left
+     */
+    public static function roundedRectPoints(float $x, float $y, float $w, float $h, array $radii, int $steps = 10): array
+    {
+        $max = max(0.0, min($w, $h) / 2);
+        [$tl, $tr, $br, $bl] = array_map(fn ($r) => max(0.0, min((float) $r, $max)), $radii);
+
+        $pts = [];
+        $arc = function (float $cx, float $cy, float $r, float $from) use (&$pts, $steps) {
+            if ($r <= 0) {
+                $pts[] = $cx;
+                $pts[] = $cy;
+
+                return;
+            }
+            for ($i = 0; $i <= $steps; $i++) {
+                $a = deg2rad($from + 90 * $i / $steps);
+                $pts[] = $cx + $r * cos($a);
+                $pts[] = $cy + $r * sin($a);
+            }
+        };
+
+        // clockwise from the top-left corner; y grows downwards
+        $arc($x + $tl, $y + $tl, $tl, 180);
+        $arc($x + $w - $tr, $y + $tr, $tr, 270);
+        $arc($x + $w - $br, $y + $h - $br, $br, 0);
+        $arc($x + $bl, $y + $h - $bl, $bl, 90);
+
+        // dompdf's polygon() does not close the path itself, which would leave the final (left) edge undrawn.
+        $pts[] = $pts[0];
+        $pts[] = $pts[1];
+
+        return $pts;
+    }
+
+    /**
+     * dompdf paints a CSS border on a rounded box as separate arcs and lines, which pdf.js shows with square corners.
+     * Boxes the layout gives a *transparent* border plus a border-radius get their outline drawn here instead, as one
+     * closed rounded path, right after the box itself has been rendered. Pass to Dompdf::setCallbacks() BEFORE render().
+     */
+    public static function roundedBorders(array $theme): array
+    {
+        $hex = ltrim((string) ($theme['primary'] ?? '#1D40AF'), '#');
+        $rgb = [hexdec(substr($hex, 0, 2)) / 255, hexdec(substr($hex, 2, 2)) / 255, hexdec(substr($hex, 4, 2)) / 255];
+
+        // Outlines are collected per page while the document is laid out, then painted by 'paint' once rendering is
+        // done, on top of everything: painted inline, table cells inside a box end up covering its side borders.
+        $boxes = [];
+
+        $callbacks = [[
+            'event' => 'end_frame',
+            'f' => function ($frame, $canvas) use (&$boxes) {
+                $style = $frame->get_style();
+                if (! $style->has_border_radius()) {
+                    return;
+                }
+                $top = $style->get_border_properties()['top'];
+                $width = (float) $style->length_in_pt($top['width']);
+                if ($top['color'] !== 'transparent' || $width <= 0) {
+                    return;
+                }
+
+                $box = $frame->get_border_box();
+                $b = [$box['x'], $box['y'], $box['w'], $box['h']];
+                $radii = array_map(fn ($r) => max(0.0, $r - $width / 2), $style->resolve_border_radius($b));
+                $half = $width / 2;
+
+                $boxes[$canvas->get_page_number()][] = [
+                    self::roundedRectPoints($b[0] + $half, $b[1] + $half, $b[2] - $width, $b[3] - $width, $radii),
+                    $width,
+                ];
+            },
+        ]];
+
+        // Call with the canvas AFTER render(): page_script() runs at once over the pages that exist by then.
+        $paint = function ($canvas) use (&$boxes, $rgb) {
+            $canvas->page_script(function ($pageNumber, $pageCount, $canvas) use (&$boxes, $rgb) {
+                foreach ($boxes[$pageNumber] ?? [] as [$points, $width]) {
+                    $canvas->polygon($points, $rgb, $width);
+                }
+            });
+        };
+
+        return ['callbacks' => $callbacks, 'paint' => $paint];
+    }
+
+    /**
      * Diagonal corner ribbons (top-left and bottom-right) used by Layouts 1 and 2, drawn on every page in the
      * theme colour. The "Simple" colour has no ribbons.
      *
@@ -199,8 +288,6 @@ class DocumentCanvasHelper
         $normalizedKey = match ($themeKey) {
             'charcoal' => 'charcoal_grey',
             'plum' => 'dusty_plum',
-            // no dedicated icon sets for the two new colours: reuse the closest existing ones
-            'royal_blue' => 'slate_blue',
             'simple' => 'charcoal_grey',
             default => $themeKey,
         };
@@ -227,6 +314,7 @@ class DocumentCanvasHelper
             'chart' => $resolve('icon2-chart.png'),
             'reverse' => $resolve('icon2-reverse.png'),
             'rupee' => $resolve('icon-rupee.png'),
+            'info' => $resolve('icon-info.png'),
             'bank' => $resolve('icon-bank.png'),
             'terms' => $resolve('icon-terms.png'),
         ];

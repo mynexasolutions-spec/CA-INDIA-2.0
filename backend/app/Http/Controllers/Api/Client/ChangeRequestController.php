@@ -285,7 +285,7 @@ class ChangeRequestController extends Controller
     {
         $disk = \Illuminate\Support\Facades\Storage::disk('local');
         // 'v2': bump whenever the rendered output changes for the same inputs (e.g. the footer), so old files are not reused.
-        $key = md5(json_encode([$profile->getAttributes(), $layoutId, $colour, now()->toDateString(), 'v7']));
+        $key = md5(json_encode([$profile->getAttributes(), $layoutId, $colour, now()->toDateString(), 'v13']));
         $path = "layout-preview-cache/{$key}.pdf";
 
         if ($disk->exists($path) && $disk->lastModified($path) > now()->subDay()->getTimestamp()) {

@@ -17,7 +17,7 @@
   $barFg  = $simple ? '#111111' : ($theme['text_on_primary'] ?? '#FFFFFF');
   $tint   = $simple ? '#FFFFFF' : ($theme['grand_bg'] ?? $theme['light_tint'] ?? '#E6EEFD'); // grand-total band
   $grandLine = $simple ? $accent : ($theme['grand_line'] ?? $accent);
-  $grandLabel = isset($theme['grand_line']) ? $accent : '#0F172A';
+  $grandLabel = $theme['grand_label'] ?? (isset($theme['grand_line']) ? $accent : '#0F172A');
   $barDivider = $simple ? 'border-bottom: 1.3px solid ' . $accent . ';' : '';
 
   // Whole rupees print without decimals, anything else with two (so paise are never hidden).
@@ -25,6 +25,21 @@
       $n = (float) $n;
       return abs($n - round($n)) < 0.005 ? number_format($n, 0) : number_format($n, 2);
   };
+
+  // The address card and the document-info card sit side by side, so they are as tall as the taller of the two.
+  // Whichever has less content gets a little extra padding on its rows, so the gap under the last row is the same in
+  // both (as on the approved form). Measured at 9.6px: a normal row is ~23.8px, each extra wrapped address line
+  // ~17.1px, and the "— TAX INVOICE —" pill block ~39px.
+  $addrLines = max(1, (int) ceil(mb_strlen(trim((string) ($data['seller_address'] ?? ''))) / 45));
+  $leftRows = (!empty($data['seller_address']) ? 1 : 0) + ((!empty($data['seller_gstin']) || !empty($data['seller_pan'])) ? 1 : 0)
+      + (!empty($data['seller_email']) ? 1 : 0) + (!empty($data['seller_phone']) ? 1 : 0) + (!empty($data['seller_state']) ? 1 : 0);
+  $rightRows = 2 + (in_array($data['doc_type'] ?? '', ['credit_note', 'debit_note'], true) ? 0 : 1)
+      + (!empty($data['place_of_supply']) ? 1 : 0) + 1 + (!empty($data['against_number']) ? 1 : 0);
+  $leftH = max(1, $leftRows) * 23.8 + (empty($data['seller_address']) ? 0 : ($addrLines - 1) * 17.1);
+  $rightH = 39 + max(1, $rightRows) * 23.8;
+  $diffH = $leftH - $rightH;
+  $padLeftRow = $diffH < 0 ? round(min(-$diffH / max(1, $leftRows), 14) / 2, 2) : 0;     // extra px above and below each left row
+  $padRightRow = $diffH > 0 ? round(min($diffH / max(1, $rightRows), 14) / 2, 2) : 0;
 
   // Long business names step down so they stay on one line inside the header box.
   $nameLen = mb_strlen((string) $data['company_name']);
@@ -51,7 +66,7 @@
   .hdr-table { width: 100%; margin-bottom: 11px; border-collapse: separate; }
   .hdr-logo-box {
     width: 92px; height: 90px;
-    border: 1.3px solid {{ $accent }};
+    border: 1.3px solid transparent;
     border-radius: 9px;
     padding: 6px;
     text-align: center; vertical-align: middle;
@@ -61,7 +76,7 @@
   .hdr-gap { width: 8px; }
   .hdr-title-box {
     height: 90px;
-    border: 1.3px solid {{ $accent }};
+    border: 1.3px solid transparent;
     border-radius: 9px;
     padding: 0 14px;
     text-align: center; vertical-align: middle;
@@ -78,9 +93,9 @@
   }
 
   /* 2. Seller panel + document panel */
-  .panel-table { width: 100%; margin-bottom: 11px; }
+  .panel-table { width: 100%; margin-bottom: 11px; border-collapse: separate; border-spacing: 0; }
   .panel-left, .panel-right {
-    border: 1.3px solid {{ $accent }};
+    border: 1.3px solid transparent;
     border-radius: 9px;
     padding: 9px 12px;
     background: #ffffff;
@@ -91,6 +106,8 @@
   .panel-gap { width: 1.2%; }
   .meta-tbl, .meta-right-tbl { width: 100%; }
   .meta-tbl td, .meta-right-tbl td { padding: 3px 0; font-size: 9.6px; vertical-align: top; }
+  .meta-tbl td { padding-top: {{ 3 + $padLeftRow }}px; padding-bottom: {{ 3 + $padLeftRow }}px; }
+  .meta-right-tbl td { padding-top: {{ 3 + $padRightRow }}px; padding-bottom: {{ 3 + $padRightRow }}px; }
   .meta-right-tbl td { vertical-align: middle; }
   .meta-ico { width: 22px; padding-right: 5px; }
   .meta-ico img { width: 17px; height: 17px; display: block; margin-top: 1px; }
@@ -103,7 +120,7 @@
     display: inline-block;
     background-color: {{ $barBg }};
     color: {{ $barFg }};
-    @if($simple) border: 1.3px solid {{ $accent }}; @endif
+    @if($simple) border: 1.3px solid transparent; @endif
     font-size: 11px; font-weight: bold; letter-spacing: 1.2px; text-transform: uppercase;
     padding: 4.5px 24px;
     border-radius: 18px;
@@ -113,7 +130,7 @@
   .party-table { width: 100%; margin-bottom: 11px; border-collapse: separate; border-spacing: 0; }
   .party-box {
     width: 49.4%;
-    border: 1.3px solid {{ $accent }};
+    border: 1.3px solid transparent;
     border-radius: 9px;
     background: #ffffff;
     vertical-align: top;
@@ -138,7 +155,7 @@
 
   /* 4. Items */
   .items-wrap {
-    border: 1.3px solid {{ $accent }};
+    border: 1.3px solid transparent;
     border-radius: 9px;
     margin-bottom: 11px;
     overflow: hidden;
@@ -173,7 +190,7 @@
   .bottom-gap { width: 1.5%; }
   .bottom-right { width: 48%; vertical-align: top; }
   .card {
-    border: 1.3px solid {{ $accent }};
+    border: 1.3px solid transparent;
     border-radius: 9px;
     padding: 8px 12px;
     background: #ffffff;
@@ -193,7 +210,7 @@
   .terms-list li { margin-bottom: 1px; }
 
   .summary-box {
-    border: 1.3px solid {{ $accent }};
+    border: 1.3px solid transparent;
     border-radius: 9px;
     overflow: hidden;
     background: #ffffff;
@@ -224,11 +241,11 @@
   .seal-cell img { width: 60px; height: 60px; max-width: 60px; max-height: 60px; display: block; margin: 0 auto; }
   .sig-cell { vertical-align: middle; text-align: right; }
   .sig-img { max-height: 30px; display: block; margin-left: auto; margin-bottom: 2px; }
-  .sig-name { font-size: 10px; font-weight: bold; color: #0F172A; margin-top: 2px; }}; margin-top: 2px; }
+  .sig-name { font-size: 10.5px; font-weight: bold; color: {{ $simple ? '#111111' : $accent }}; margin-top: 2px; }
   .sig-role { font-size: 8.6px; color: #64748B; margin-top: 2px; font-weight: bold; }
   .rcm-box {
     margin-top: 9px;
-    border: 1.2px solid {{ $accent }};
+    border: 1.2px solid transparent;
     border-radius: 7px;
     color: {{ $accent }};
     font-weight: bold; font-size: 9.2px; padding: 5px 8px; text-align: center;
@@ -436,7 +453,7 @@
     <tr>
       <td class="bottom-left">
         <div class="card">
-          <div class="card-hdr"><img src="{{ $icons['rupee'] }}" alt=""> AMOUNT IN WORDS</div>
+          <div class="card-hdr"><img src="{{ ($icons['info'] ?: $icons['rupee']) }}" alt=""> AMOUNT IN WORDS</div>
           <div class="card-sep"></div>
           <div class="card-val">{{ $data['amount_in_words'] }}</div>
         </div>
@@ -530,7 +547,7 @@
         </div>
 
         <div class="sign-wrap">
-          <div class="sign-company">For {{ $data['company_name_title_case'] }}</div>
+          <div class="sign-company">For {{ $data['company_name'] }}</div>
           <table style="width: 100%; border-collapse: collapse;">
             <tr>
               <td style="width: 46%; text-align: right; vertical-align: middle; padding: 0 8px 0 0;">
@@ -553,7 +570,7 @@
   </table>
 
   @if(!empty($data['tagline']))
-    <div style="margin-top: 8px; background-color: {{ $barBg }}; color: {{ $barFg }}; @if($simple) border: 1.3px solid {{ $accent }}; @endif font-size: 9.5px; font-weight: bold; letter-spacing: 3px; text-align: center; text-transform: uppercase; padding: 5px 6px; border-radius: 6px;">
+    <div style="margin-top: 8px; background-color: {{ $barBg }}; color: {{ $barFg }}; @if($simple) border: 1.3px solid transparent; @endif font-size: 9.5px; font-weight: bold; letter-spacing: 3px; text-align: center; text-transform: uppercase; padding: 5px 6px; border-radius: 6px;">
       {{ $data['tagline'] }}
     </div>
   @endif

@@ -1080,8 +1080,16 @@ class InvoiceService
                         'defaultFont' => 'DejaVu Sans',
                     ]);
 
+                $rounded = (int) $layoutId === 3 ? \App\Services\DocumentTemplate\DocumentCanvasHelper::roundedBorders($theme) : null;
+                if ($rounded) {
+                    $pdf->getDomPDF()->setCallbacks($rounded['callbacks']);
+                }
+
                 $pdf->render();
                 $dompdf = $pdf->getDomPDF();
+                if ($rounded) {
+                    $rounded['paint']($dompdf->getCanvas());
+                }
 
                 // Frame / corner ribbons / footer for the chosen layout
                 \App\Services\DocumentTemplate\DocumentCanvasHelper::decorate(

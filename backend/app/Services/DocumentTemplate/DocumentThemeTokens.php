@@ -25,9 +25,10 @@ class DocumentThemeTokens
             'primary' => '#1D40AF',
             'dark' => '#16318A',
             'light_tint' => '#CFE8FC',
-            // the live Royal Blue invoice shows the grand total on a soft green band
-            'grand_bg' => '#E1F8EA',
-            'grand_line' => '#22A35A',
+            // the approved Royal Blue form shows the grand total on a light blue band with a black label
+            'grand_bg' => '#CAE9FD',
+            'grand_line' => '#2B6CE0',
+            'grand_label' => '#0F172A',
             'text_on_primary' => '#FFFFFF',
             'rgb' => [0.114, 0.251, 0.686],
             // Layout 1 only (the approved form): brighter title blue and a two-tone corner ribbon.
