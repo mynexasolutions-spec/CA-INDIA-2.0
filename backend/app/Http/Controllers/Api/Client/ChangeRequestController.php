@@ -285,7 +285,12 @@ class ChangeRequestController extends Controller
     {
         $disk = \Illuminate\Support\Facades\Storage::disk('local');
         // 'v2': bump whenever the rendered output changes for the same inputs (e.g. the footer), so old files are not reused.
-        $key = md5(json_encode([$profile->getAttributes(), $layoutId, $colour, now()->toDateString(), 'v13']));
+        // v18: Layout 1 — PO No./Against always listed with a hint when empty; header and totals divider lines run to the
+        // bottom border (aligned with the borders above them; totals divider lines up with the Taxable Value column);
+        // Rate and Taxable Value centred. v19: Layout 2 — logo centred in its box, smaller title and meta rows,
+        // PO No./Against always listed with a hint when empty. v20: Layout 2 rebuilt to the new template (ribbon bands; v21: side borders; v22: footer raised, corner triangle reshaped; v23: Layout 1 rebuilt to the new template (continuous form, page border, tax rows always listed),
+        // filled title bar, new proportions, tax rows always listed).
+        $key = md5(json_encode([$profile->getAttributes(), $profile->user?->email, $profile->user?->phone, $layoutId, $colour, now()->toDateString(), 'v28']));
         $path = "layout-preview-cache/{$key}.pdf";
 
         if ($disk->exists($path) && $disk->lastModified($path) > now()->subDay()->getTimestamp()) {

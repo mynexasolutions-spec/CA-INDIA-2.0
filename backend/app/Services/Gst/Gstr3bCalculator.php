@@ -141,13 +141,16 @@ class Gstr3bCalculator
             ->selectRaw('COALESCE(SUM(igst),0) as igst, COALESCE(SUM(cgst),0) as cgst, COALESCE(SUM(sgst),0) as sgst')
             ->first();
 
+        // Projected ITC (client's estimate) counts as normal ITC until the official GSTR-2B is loaded.
+        $projected = ProjectedItc::forPeriod($clientId, $period);
+
         $out = $itc = $interest = $late = $cashPaid = [];
         foreach (self::HEADS as $h) {
             // Output tax & RCM = GSTR-1 liability + RCM + other adjustments (adjustments may be negative).
             $out[$h] = round($g1[$h] + self::n($outward["rcm_$h"] ?? 0) + self::n($outward["adj_$h"] ?? 0), 2);
 
             $itc[$h] = round(
-                self::n($itcData["bf_$h"] ?? 0) + self::n($itcData["adj_$h"] ?? 0) + self::n($g2b->$h ?? 0)
+                self::n($itcData["bf_$h"] ?? 0) + self::n($itcData["adj_$h"] ?? 0) + self::n($g2b->$h ?? 0) + $projected[$h]
                 - self::n($itcData["rev_$h"] ?? 0) + self::n($itcData["other_$h"] ?? 0),
                 2
             );
@@ -183,6 +186,7 @@ class Gstr3bCalculator
             'gstr1' => $g1,
             'output' => $out,
             'itc' => $itc,
+            'itc_projected' => $projected, // already included in 'itc'; kept so screens can label it
             'interest' => $interest,
             'late_fee' => $late,
             'cash_paid' => $cashPaid,
@@ -192,6 +196,7 @@ class Gstr3bCalculator
             'totals' => [
                 'output' => $tot($out),
                 'itc_eligible' => $tot($itc),
+                'itc_projected' => $projected['total'],
                 'itc_used' => $tot($set['used']),
                 'itc_balance' => $tot($set['balance_itc']),
                 'interest' => $tot($interest),

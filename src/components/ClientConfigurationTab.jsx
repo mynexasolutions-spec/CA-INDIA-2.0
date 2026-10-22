@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/client';
 import LayoutPreview from './LayoutPreview';
+import LayoutPreviewModal from './LayoutPreviewModal';
 import { layoutPreviewUrl } from '../api/layoutPreview';
 import ClientSaveSuccessModal from './ClientSaveSuccessModal';
 import DiscardChangesModal from './DiscardChangesModal';
@@ -19,6 +20,21 @@ const DOCUMENT_TYPES = [
   { key: 'quotation', label: 'Quotation' },
   { key: 'delivery_challan', label: 'Delivery Challan' },
 ];
+
+// Number of decimal places used for amounts, selectable per document type
+const DECIMAL_PLACE_OPTIONS = [2, 3, 4, 5, 6];
+
+// Watermark is ON by default for every client (admins can switch it off)
+const DEFAULT_WATERMARK_ENABLED = true;
+const DEFAULT_WATERMARK_TEXT = 'www.abkhanassociates.com';
+
+const defaultDocRow = (dt) => ({
+  document_type: dt.key,
+  layout_id: 1,
+  colour_scheme: 'royal_blue',
+  watermark_applies: true,
+  decimal_places: 2,
+});
 
 // Layout template options for dropdown
 const LAYOUT_OPTIONS = [
@@ -44,100 +60,23 @@ const LAYOUT_IMAGES = {
 };
 
 /**
- * Full-size preview modal for a document layout.
+ * Full-size preview modal for a document layout — the same modal the client portal uses.
  */
 function ConfigFullPreviewModal({ clientId, layoutId, colourScheme, documentType, watermark, documentTitle, onClose }) {
-  const imgSrc = LAYOUT_IMAGES[layoutId] || LAYOUT_IMAGES[1];
   const layout = LAYOUT_OPTIONS.find((l) => l.id === layoutId);
+  const colour = COLOUR_SCHEMES.find((c) => c.id === colourScheme);
 
   return (
-    <div className="bp-modal-backdrop" role="presentation" onClick={onClose} style={{ zIndex: 99999 }}>
-      <div
-        className="bp-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Layout Full Size Preview"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 'min(920px, 95vw)',
-          maxHeight: '92vh',
-          display: 'flex',
-          flexDirection: 'column',
-          padding: 0,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '14px 20px',
-            borderBottom: '1px solid #e2e8f0',
-            background: '#f8fafc',
-          }}
-        >
-          <div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
-              {documentTitle ? `${documentTitle} - ` : ''}{layout ? layout.label : `Layout ${layoutId}`}
-            </h3>
-            <span style={{ fontSize: 12, color: '#64748b' }}>Full size document template sample</span>
-          </div>
-          <button
-            type="button"
-            className="bp-modal-close"
-            onClick={onClose}
-            aria-label="Close"
-            style={{ position: 'static' }}
-          >
-            ×
-          </button>
-        </div>
-
-        <div
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: 20,
-            background: '#e2e8f0',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'flex-start',
-          }}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-              borderRadius: 4,
-              overflow: 'hidden',
-              maxWidth: 820,
-              width: '100%',
-            }}
-          >
-            <LayoutPreview
-              previewUrl={layoutPreviewUrl(clientId, { layoutId, colourScheme, documentType, watermark })}
-              src={imgSrc}
-              alt="Full Size Layout Preview"
-            />
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            padding: '12px 20px',
-            borderTop: '1px solid #e2e8f0',
-            background: '#f8fafc',
-          }}
-        >
-          <button type="button" className="bp-btn bp-btn-outline" onClick={onClose}>
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+    <LayoutPreviewModal
+      title={`${documentTitle ? `${documentTitle} - ` : ''}${layout ? layout.label : `Layout ${layoutId}`}`}
+      chipColor={colour?.hex || '#64748b'}
+      chipLabel={colour?.name || colourScheme}
+      subtitle="Full size document template sample"
+      previewUrl={layoutPreviewUrl(clientId, { layoutId, colourScheme, documentType, watermark })}
+      fallbackSrc={LAYOUT_IMAGES[layoutId] || LAYOUT_IMAGES[1]}
+      alt="Full Size Layout Preview"
+      onClose={onClose}
+    />
   );
 }
 
@@ -198,30 +137,18 @@ export default function ClientConfigurationTab({
   // Saved server state
   const [savedConfig, setSavedConfig] = useState({
     invoice_tagline: '',
-    watermark_enabled: false,
-    watermark_text: '',
+    watermark_enabled: DEFAULT_WATERMARK_ENABLED,
+    watermark_text: DEFAULT_WATERMARK_TEXT,
     gst_reminder_enabled: false,
-    documents: DOCUMENT_TYPES.map((dt) => ({
-      document_type: dt.key,
-      layout_id: 1,
-      colour_scheme: 'royal_blue',
-      watermark_applies: false,
-    })),
+    documents: DOCUMENT_TYPES.map(defaultDocRow),
   });
 
   // Current working state in form
   const [invoiceTagline, setInvoiceTagline] = useState('');
-  const [watermarkEnabled, setWatermarkEnabled] = useState(false);
-  const [watermarkText, setWatermarkText] = useState('');
+  const [watermarkEnabled, setWatermarkEnabled] = useState(DEFAULT_WATERMARK_ENABLED);
+  const [watermarkText, setWatermarkText] = useState(DEFAULT_WATERMARK_TEXT);
   const [gstReminderEnabled, setGstReminderEnabled] = useState(false);
-  const [docRows, setDocRows] = useState(
-    DOCUMENT_TYPES.map((dt) => ({
-      document_type: dt.key,
-      layout_id: 1,
-      colour_scheme: 'royal_blue',
-      watermark_applies: false,
-    }))
-  );
+  const [docRows, setDocRows] = useState(DOCUMENT_TYPES.map(defaultDocRow));
 
   // Mode and loaders
   const [isEditing, setIsEditing] = useState(false);
@@ -257,20 +184,12 @@ export default function ClientConfigurationTab({
               layout_id: Number(d.layout_id) || 1,
               colour_scheme: d.colour_scheme || 'royal_blue',
               watermark_applies: Boolean(d.watermark_applies),
+              decimal_places: DECIMAL_PLACE_OPTIONS.includes(Number(d.decimal_places)) ? Number(d.decimal_places) : 2,
             };
           });
         }
 
-        const normalizedDocs = DOCUMENT_TYPES.map((dt) => {
-          return (
-            docsMap[dt.key] || {
-              document_type: dt.key,
-              layout_id: 1,
-              colour_scheme: 'royal_blue',
-              watermark_applies: false,
-            }
-          );
-        });
+        const normalizedDocs = DOCUMENT_TYPES.map((dt) => docsMap[dt.key] || defaultDocRow(dt));
 
         const stateObj = {
           invoice_tagline: tagline,
@@ -313,6 +232,7 @@ export default function ClientConfigurationTab({
       if (cur.layout_id !== saved.layout_id) return true;
       if (cur.colour_scheme !== saved.colour_scheme) return true;
       if (cur.watermark_applies !== saved.watermark_applies) return true;
+      if (cur.decimal_places !== saved.decimal_places) return true;
     }
     return false;
   }, [invoiceTagline, watermarkEnabled, watermarkText, gstReminderEnabled, docRows, savedConfig]);
@@ -402,6 +322,7 @@ export default function ClientConfigurationTab({
           layout_id: Number(r.layout_id),
           colour_scheme: r.colour_scheme,
           watermark_applies: Boolean(r.watermark_applies),
+          decimal_places: Number(r.decimal_places) || 2,
         })),
       };
 
@@ -422,6 +343,7 @@ export default function ClientConfigurationTab({
               layout_id: Number(d.layout_id),
               colour_scheme: d.colour_scheme,
               watermark_applies: Boolean(d.watermark_applies),
+              decimal_places: DECIMAL_PLACE_OPTIONS.includes(Number(d.decimal_places)) ? Number(d.decimal_places) : 2,
             }))
           : docRows,
       };
@@ -631,6 +553,7 @@ export default function ClientConfigurationTab({
                   <th style={{ padding: '8px 10px', fontWeight: 600 }}>Document Type</th>
                   <th style={{ padding: '8px 10px', fontWeight: 600 }}>Layout Template</th>
                   <th style={{ padding: '8px 10px', fontWeight: 600 }}>Colour Scheme</th>
+                  <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'center' }}>Number of<br />Decimal Places</th>
                   <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'center' }}>Preview</th>
                 </tr>
               </thead>
@@ -709,6 +632,28 @@ export default function ClientConfigurationTab({
                             ))}
                           </select>
                         </div>
+                      </td>
+
+                      {/* Number of Decimal Places (2 / 3 / 4 / 5 / 6) */}
+                      <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                        <select
+                          className="bp-select"
+                          aria-label={`${dt.label} number of decimal places`}
+                          value={row.decimal_places ?? 2}
+                          disabled={!isEditing || isNewClient}
+                          onChange={(e) => updateDocRow(dt.key, 'decimal_places', Number(e.target.value))}
+                          style={{
+                            height: 32,
+                            fontSize: 12,
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            width: 68,
+                          }}
+                        >
+                          {DECIMAL_PLACE_OPTIONS.map((n) => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
                       </td>
 
                       {/* Preview Thumbnail + Eye Icon */}

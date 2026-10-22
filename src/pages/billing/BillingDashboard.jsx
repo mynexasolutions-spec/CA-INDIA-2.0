@@ -389,6 +389,7 @@ export default function BillingDashboard() {
                     <th>DOCUMENT NO.</th>
                     <th>DATE</th>
                     <th>PARTY NAME</th>
+                    <th>CUSTOMER TYPE</th>
                     <th>DOCUMENT TYPE</th>
                     <th>AMOUNT (₹)</th>
                     <th>STATUS</th>
@@ -398,6 +399,8 @@ export default function BillingDashboard() {
                 <tbody>
                   {rows.map((d, i) => {
                     const card = CARDS.find((c) => c.key === d.type);
+                    // Same rule as the backend's B2B/B2C tabs and tiles: a registered party is B2B, everything else B2C.
+                    const custType = String(d.customer_type || (d.customer?.gst_status === 'registered' ? 'B2B' : 'B2C')).toUpperCase();
                     return (
                       <tr key={d.id} style={{ animationDelay: `${i * 0.05}s` }}>
                         <td>{(meta.current_page - 1) * meta.per_page + i + 1}</td>
@@ -406,6 +409,7 @@ export default function BillingDashboard() {
                         <td className="bd-party">
                           <span className="bd-party-name">{d.customer?.name || '—'}</span>
                         </td>
+                        <td><span className={`bd-ctype ${custType === 'B2B' ? 'bd-ctype-b2b' : 'bd-ctype-b2c'}`}>{custType}</span></td>
                         <td><span className="bd-type" style={{ '--tc': card?.color || '#334155' }}>{docTypeLabel(d.type)}</span></td>
                         <td className="bd-amt">{money(d.grand_total || d.total_amount)}</td>
                         <td><span className={`bp-badge bd-status ${paymentStatusBadge(d.status)}`}>{paymentStatusLabel(d.status)}</span></td>
@@ -416,7 +420,7 @@ export default function BillingDashboard() {
                       </tr>
                     );
                   })}
-                  {!rows.length && <tr><td colSpan={8} className="bp-table-empty">No documents for FY {fy}</td></tr>}
+                  {!rows.length && <tr><td colSpan={9} className="bp-table-empty">No documents for FY {fy}</td></tr>}
                 </tbody>
               </table>
             </div>

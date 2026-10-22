@@ -179,8 +179,13 @@ export default function ClientGstr2b() {
                       <td style={{ fontWeight: 800, color: live ? '#0f2a5f' : '#475569', whiteSpace: 'nowrap' }}>{periodText(p.period, p.label)}</td>
                       <td style={{ whiteSpace: 'nowrap', color: live ? '#334155' : '#94a3b8' }}>{live ? p.available_on : (p.expected_on || '—')}</td>
                       <td><StatusBadge status={p.status} /></td>
-                      <td style={{ fontWeight: 700, color: live && p.total_itc > 0 ? '#0f2a5f' : '#94a3b8' }}>
-                        {live ? Number(p.total_itc || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—'}
+                      <td style={{ fontWeight: 700, color: (live || Number(p.projected_itc) > 0) && p.total_itc > 0 ? '#0f2a5f' : '#94a3b8' }}>
+                        {live || Number(p.projected_itc) > 0 ? Number(p.total_itc || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—'}
+                        {Number(p.projected_itc) > 0 && (
+                          <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#b45309' }}>
+                            incl. {Number(p.projected_itc).toLocaleString('en-IN', { maximumFractionDigits: 2 })} projected
+                          </span>
+                        )}
                       </td>
                       <td>
                         <button

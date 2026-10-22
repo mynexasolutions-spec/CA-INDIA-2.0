@@ -47,6 +47,7 @@ class ClientConfigurationController extends Controller
                     'colour_scheme' => $doc->colour_scheme,
                     'colour_name' => ClientDocumentSetting::COLOUR_SCHEMES[$doc->colour_scheme] ?? null,
                     'watermark_applies' => (bool) $doc->watermark_applies,
+                    'decimal_places' => (int) ($doc->decimal_places ?: 2),
                 ];
             });
 
@@ -82,6 +83,7 @@ class ClientConfigurationController extends Controller
             'documents.*.layout_id' => 'required|integer|in:1,2,3,4',
             'documents.*.colour_scheme' => ['required', 'string', Rule::in(array_keys(ClientDocumentSetting::COLOUR_SCHEMES))],
             'documents.*.watermark_applies' => 'nullable|boolean',
+            'documents.*.decimal_places' => 'nullable|integer|in:2,3,4,5,6',
         ]);
 
         $providedTypes = array_column($data['documents'], 'document_type');
@@ -135,6 +137,7 @@ class ClientConfigurationController extends Controller
                         'layout_id' => (int) $doc['layout_id'],
                         'colour_scheme' => $doc['colour_scheme'],
                         'watermark_applies' => (bool) ($doc['watermark_applies'] ?? false),
+                        'decimal_places' => (int) ($doc['decimal_places'] ?? 2),
                     ]
                 );
             }
@@ -155,6 +158,7 @@ class ClientConfigurationController extends Controller
                     'colour_scheme' => $doc->colour_scheme,
                     'colour_name' => ClientDocumentSetting::COLOUR_SCHEMES[$doc->colour_scheme] ?? null,
                     'watermark_applies' => (bool) $doc->watermark_applies,
+                    'decimal_places' => (int) ($doc->decimal_places ?: 2),
                 ];
             });
 

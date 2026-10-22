@@ -359,7 +359,8 @@ class AuthController extends Controller
 
     private function userPayload(User $user): array
     {
-        $user->load('clientProfile');
+        // documentSettings carries the per-document-type decimal places the client app formats amounts with.
+        $user->load('clientProfile.documentSettings');
         return [
             'id' => $user->id,
             'name' => $user->name,

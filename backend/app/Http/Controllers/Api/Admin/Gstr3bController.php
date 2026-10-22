@@ -177,6 +177,7 @@ class Gstr3bController extends Controller
                 'total_outward_taxable' => $calc['gstr1']['taxable'],
                 'total_output_tax'      => $t['output'],
                 'total_eligible_itc'    => $t['itc_eligible'],
+                'projected_itc'         => $t['itc_projected'], // already included in total_eligible_itc
                 'total_tax_liability'   => $t['liability'],
                 'net_tax_payable'       => $t['net_payable'],
                 'excess_itc'            => $t['itc_balance'],
@@ -236,9 +237,12 @@ class Gstr3bController extends Controller
             ->selectRaw('COALESCE(SUM(igst),0) + COALESCE(SUM(cgst),0) + COALESCE(SUM(sgst),0) as total')
             ->value('total');
 
-        $itcIgst = round($itcRow->igst ?? 0, 2);
-        $itcCgst = round($itcRow->cgst ?? 0, 2);
-        $itcSgst = round($itcRow->sgst ?? 0, 2);
+        // Projected ITC (client's estimate, until the official GSTR-2B is loaded) is added to the
+        // GSTR-2B ITC heads, and also returned separately so the screen can label it.
+        $projectedItc = \App\Services\Gst\ProjectedItc::forPeriod($clientId, $period);
+        $itcIgst = round(($itcRow->igst ?? 0) + $projectedItc['igst'], 2);
+        $itcCgst = round(($itcRow->cgst ?? 0) + $projectedItc['cgst'], 2);
+        $itcSgst = round(($itcRow->sgst ?? 0) + $projectedItc['sgst'], 2);
 
         $outward = $row?->outward_rcm ?? [
             'rcm_igst' => 0, 'rcm_cgst' => 0, 'rcm_sgst' => 0,
@@ -279,7 +283,8 @@ class Gstr3bController extends Controller
             'itc_gstr2b' => ['igst' => $itcIgst, 'cgst' => $itcCgst, 'sgst' => $itcSgst,
                              'total_invoices' => $totalInv, 'matched' => $itcRow->matched ?? 0, 'unmatched' => $unmatchedInv,
                              'unmatched_itc' => round((float) $unmatchedItc, 2),
-                             'matched_itc' => round((float) $matchedItcAll, 2)],
+                             'matched_itc' => round((float) $matchedItcAll, 2),
+                             'projected' => $projectedItc],
             'itc_data'   => $itcData,
             'interest'   => $interestData,
             'late_fee'   => $lateFeeData,

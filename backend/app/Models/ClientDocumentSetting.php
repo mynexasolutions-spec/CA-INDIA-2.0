@@ -39,6 +39,7 @@ class ClientDocumentSetting extends Model
         'layout_id',
         'colour_scheme',
         'watermark_applies',
+        'decimal_places',
     ];
 
     protected function casts(): array
@@ -46,7 +47,22 @@ class ClientDocumentSetting extends Model
         return [
             'layout_id' => 'integer',
             'watermark_applies' => 'boolean',
+            'decimal_places' => 'integer',
         ];
+    }
+
+    /** Decimal places (2–6) this client uses in the given document type; 2 when not configured. */
+    public static function decimalsFor(?ClientProfile $profile, ?string $type): int
+    {
+        if (! $profile || ! $type) {
+            return 2;
+        }
+        $setting = $profile->relationLoaded('documentSettings')
+            ? $profile->documentSettings->firstWhere('document_type', $type)
+            : $profile->documentSettings()->where('document_type', $type)->first();
+        $dp = (int) ($setting?->decimal_places ?: 2);
+
+        return ($dp >= 2 && $dp <= 6) ? $dp : 2;
     }
 
     public function clientProfile()

@@ -461,7 +461,11 @@ export default function GstLiabilityReport() {
                   Total Eligible ITC <span style={{ color: '#94a3b8', display: 'inline-flex', cursor: 'pointer' }}><InfoIcon /></span>
                 </div>
                 <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a', letterSpacing: '-0.5px' }}>{fmt(eligibleItc)}</div>
-                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 5 }}>Eligible ITC from matched GSTR-2B invoices</div>
+                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 5 }}>
+                  {Number(data.projected_itc) > 0
+                    ? `Matched GSTR-2B ITC + ${fmt(Number(data.projected_itc))} Projected ITC`
+                    : 'Eligible ITC from matched GSTR-2B invoices'}
+                </div>
               </div>
             </div>
 

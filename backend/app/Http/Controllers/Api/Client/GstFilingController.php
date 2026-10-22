@@ -449,9 +449,11 @@ class GstFilingController extends Controller
                 COALESCE(SUM(sgst),0) as sgst
             ')->first();
 
-        $itcIgst = round($itcRow->igst ?? 0, 2);
-        $itcCgst = round($itcRow->cgst ?? 0, 2);
-        $itcSgst = round($itcRow->sgst ?? 0, 2);
+        // Projected ITC counts as normal ITC until the official GSTR-2B for the period is loaded.
+        $projectedItc = \App\Services\Gst\ProjectedItc::forPeriod($profile->id, $period);
+        $itcIgst = round(($itcRow->igst ?? 0) + $projectedItc['igst'], 2);
+        $itcCgst = round(($itcRow->cgst ?? 0) + $projectedItc['cgst'], 2);
+        $itcSgst = round(($itcRow->sgst ?? 0) + $projectedItc['sgst'], 2);
 
         $liabIgst = max(0, $outIgst - $itcIgst);
         $liabCgst = max(0, $outCgst - $itcCgst);
@@ -468,6 +470,7 @@ class GstFilingController extends Controller
                 'total_outward_taxable' => $outTaxable,
                 'total_output_tax'      => $totalOutput,
                 'total_eligible_itc'    => $totalItc,
+                'projected_itc'         => $projectedItc['total'], // already included in total_eligible_itc
                 'total_tax_liability'   => $totalLiab,
                 'net_tax_payable'       => round($totalLiab - $totalItc, 2),
             ],

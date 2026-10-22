@@ -1,4 +1,5 @@
 @php
+    $dp = (int) ($data['decimals'] ?? 2);
     $totalQty = 0;
     $totalAmount = 0;
     foreach ($data['items'] as $item) {
@@ -40,11 +41,11 @@
       <td style="padding: 10px 3px; text-align: center; vertical-align: top; border-right: 1px solid #E5E7EB; color: #374151; font-size: 10px;">{{ $item['hsn_sac'] ?: '—' }}</td>
       <td style="padding: 10px 3px; text-align: center; vertical-align: top; border-right: 1px solid #E5E7EB; font-weight: bold; color: #111827; font-size: 10.5px;">{{ $item['qty'] !== null ? $item['qty'] : '—' }}</td>
       <td style="padding: 10px 3px; text-align: center; vertical-align: top; border-right: 1px solid #E5E7EB; color: #374151; font-size: 10px;">{{ $item['uqc'] }}</td>
-      <td style="padding: 10px 4px; text-align: right; vertical-align: top; border-right: 1px solid #E5E7EB; color: #111827; font-size: 10px;">{{ number_format($item['rate'], 2) }}</td>
+      <td style="padding: 10px 4px; text-align: right; vertical-align: top; border-right: 1px solid #E5E7EB; color: #111827; font-size: 10px;">{{ number_format($item['rate'], $dp) }}</td>
       @if($data['has_tax'])
       <td style="padding: 10px 3px; text-align: center; vertical-align: top; border-right: 1px solid #E5E7EB; color: #374151; font-size: 10px;">{{ $item['gst_pct'] }}</td>
       @endif
-      <td style="padding: 10px 7px; text-align: right; vertical-align: top; font-weight: bold; color: #111827; font-size: 11px;">{{ number_format($item['taxable_value'], 2) }}</td>
+      <td style="padding: 10px 7px; text-align: right; vertical-align: top; font-weight: bold; color: #111827; font-size: 11px;">{{ number_format($item['taxable_value'], $dp) }}</td>
     </tr>
     @empty
     <tr>
@@ -62,7 +63,7 @@
       </td>
       <td colspan="{{ $data['has_tax'] ? 3 : 2 }}" style="padding: 7px;"></td>
       <td style="padding: 7px 7px; text-align: right; font-size: 12.5px; font-weight: bold; color: #111827;">
-        {{ number_format($totalAmount, 2) }}
+        {{ number_format($totalAmount, $dp) }}
       </td>
     </tr>
   </tfoot>

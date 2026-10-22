@@ -413,7 +413,7 @@ export function ClientDashboard() {
       ) : (
         <div className="bp-stat-grid-2" style={{ gap: 12 }}>
           <StatTile label="Output GST" value={money(summaryData?.output_gst)} color="#2563eb" bg="rgba(37,99,235,0.08)" />
-          <StatTile label="Input GST (ITC)" value={money(summaryData?.eligible_itc)} color="#0f766e" bg="rgba(15,118,110,0.08)" />
+          <StatTile label={Number(summaryData?.projected_itc) > 0 ? `Input GST (ITC) · incl. ${money(summaryData.projected_itc)} Projected` : 'Input GST (ITC)'} value={money(summaryData?.eligible_itc)} color="#0f766e" bg="rgba(15,118,110,0.08)" />
           <StatTile label="GST Payable" value={money(summaryData?.gst_payable)} color="#be123c" bg="rgba(190,18,60,0.08)" />
           <StatTile label="Excess ITC Available" value={money(summaryData?.excess_itc)} color="#15803d" bg="rgba(21,128,61,0.08)" />
         </div>

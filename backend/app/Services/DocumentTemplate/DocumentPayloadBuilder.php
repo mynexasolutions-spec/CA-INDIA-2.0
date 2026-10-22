@@ -64,7 +64,7 @@ class DocumentPayloadBuilder
             $p->address_line_1 ?: $p->address,
             $p->address_line_2,
             $p->city,
-            trim(($p->state ?: '') . ($p->pincode ? ' - ' . $p->pincode : '')),
+            implode(' - ', array_filter([$p->state, $p->pincode], fn ($v) => filled($v))),
         ], fn ($part) => filled($part));
         $sellerAddress = implode(', ', $addressParts);
 
@@ -201,6 +201,7 @@ class DocumentPayloadBuilder
 
         return [
             'doc_type' => $doc->type,
+            'decimals' => \App\Models\ClientDocumentSetting::decimalsFor($p, $doc->type),
             'document_title' => $docTitle,
             'doc_number_label' => $docNumberLabel,
             'doc_date_label' => $docDateLabel,
@@ -219,6 +220,7 @@ class DocumentPayloadBuilder
             'financial_year' => $financialYear,
             'place_of_supply' => $posLine,
             'reverse_charge' => (bool) $doc->is_reverse_charge,
+            'po_number' => filled($doc->po_number) ? $doc->po_number : null,
             'against_number' => $doc->referenceDocument?->number,
             'bill_to' => [
                 'name' => $c?->name ?: '—',
@@ -295,7 +297,7 @@ class DocumentPayloadBuilder
             $p->address_line_1 ?: $p->address,
             $p->address_line_2,
             $p->city,
-            trim(($p->state ?: '') . ($p->pincode ? ' - ' . $p->pincode : '')),
+            implode(' - ', array_filter([$p->state, $p->pincode], fn ($v) => filled($v))),
         ], fn ($part) => filled($part));
         $sellerAddress = implode(', ', $addressParts);
 

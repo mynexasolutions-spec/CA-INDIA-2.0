@@ -20,10 +20,11 @@
   $grandLabel = $theme['grand_label'] ?? (isset($theme['grand_line']) ? $accent : '#0F172A');
   $barDivider = $simple ? 'border-bottom: 1.3px solid ' . $accent . ';' : '';
 
-  // Whole rupees print without decimals, anything else with two (so paise are never hidden).
-  $money = function ($n) {
+  // Whole rupees print without decimals, anything else with the client's configured decimals.
+  $dp = (int) ($data['decimals'] ?? 2);
+  $money = function ($n) use ($dp) {
       $n = (float) $n;
-      return abs($n - round($n)) < 0.005 ? number_format($n, 0) : number_format($n, 2);
+      return abs($n - round($n)) < 0.005 ? number_format($n, 0) : number_format($n, $dp);
   };
 
   // The address card and the document-info card sit side by side, so they are as tall as the taller of the two.
@@ -34,7 +35,8 @@
   $leftRows = (!empty($data['seller_address']) ? 1 : 0) + ((!empty($data['seller_gstin']) || !empty($data['seller_pan'])) ? 1 : 0)
       + (!empty($data['seller_email']) ? 1 : 0) + (!empty($data['seller_phone']) ? 1 : 0) + (!empty($data['seller_state']) ? 1 : 0);
   $rightRows = 2 + (in_array($data['doc_type'] ?? '', ['credit_note', 'debit_note'], true) ? 0 : 1)
-      + (!empty($data['place_of_supply']) ? 1 : 0) + 1 + (!empty($data['against_number']) ? 1 : 0);
+      + (!empty($data['place_of_supply']) ? 1 : 0) + 1 + (!empty($data['against_number']) ? 1 : 0)
+      + (!empty($data['po_number']) ? 1 : 0);
   $leftH = max(1, $leftRows) * 23.8 + (empty($data['seller_address']) ? 0 : ($addrLines - 1) * 17.1);
   $rightH = 39 + max(1, $rightRows) * 23.8;
   $diffH = $leftH - $rightH;
@@ -48,6 +50,9 @@
 <style>
   @page {
     size: A4 portrait;
+    /* The bottom margin stays at 8mm so a row that nearly fits still goes on the page. Where a table is cut at the page
+       bottom its canvas outline is ended at the last row (DocumentCanvasHelper::roundedBorders), so it never reaches the
+       frame's bottom edge, which is drawn 28pt above the page bottom. */
     margin: 8mm 10.2mm 8mm 10.2mm;
   }
   * { box-sizing: border-box; }
@@ -367,6 +372,14 @@
             <td class="meta-val">{{ $data['against_number'] }}</td>
           </tr>
           @endif
+          @if(!empty($data['po_number']))
+          <tr>
+            <td class="meta-ico"><img src="{{ $icons['doc'] }}" alt=""></td>
+            <td class="meta-right-label">PO No.</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['po_number'] }}</td>
+          </tr>
+          @endif
         </table>
       </td>
     </tr>
@@ -437,11 +450,11 @@
             @endif
             <td style="font-weight: bold;">{{ $item['qty'] }}</td>
             <td>{{ $item['uqc'] }}</td>
-            <td>{{ number_format($item['rate'], 2) }}</td>
+            <td>{{ number_format($item['rate'], $dp) }}</td>
             @if($data['has_tax'])
               <td>{{ $item['gst_pct'] }}</td>
             @endif
-            <td style="font-weight: bold; color: #0F172A;">{{ number_format($item['taxable_value'], 2) }}</td>
+            <td style="font-weight: bold; color: #0F172A;">{{ number_format($item['taxable_value'], $dp) }}</td>
           </tr>
         @endforeach
       </tbody>
@@ -537,7 +550,7 @@
             @endif
             <tr>
               <td class="lab">Round Off</td>
-              <td class="val">{{ ($data['summary']['round_off'] ?? 0) < 0 ? '- ' : '' }}₹ {{ number_format(abs((float) ($data['summary']['round_off'] ?? 0)), 2) }}</td>
+              <td class="val">{{ ($data['summary']['round_off'] ?? 0) < 0 ? '- ' : '' }}₹ {{ number_format(abs((float) ($data['summary']['round_off'] ?? 0)), $dp) }}</td>
             </tr>
             <tr class="grand-row">
               <td class="lab">GRAND TOTAL</td>

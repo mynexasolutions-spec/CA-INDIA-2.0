@@ -6,98 +6,111 @@
 @php
   /*
    * Layout 2 — classic form with a centred letterhead (Simple / Royal Blue / Deep Teal / Mocha Brown / Dusty Plum).
-   * Black grid throughout; the theme colour appears only in the corner ribbons drawn on the page canvas
-   * (large ones, "Simple" has none) and as a soft tint behind the document title.
+   * Black grid throughout. The theme colour shows in the filled title bar and in the ribbon bands drawn across the top
+   * and bottom of every page on the canvas ("Simple" has neither: a plain boxed title and no ribbons).
    */
   $simple = ($theme['key'] ?? '') === 'simple';
   $ink = '#111111';
-  // very light wash of the theme colour behind the title bar
-  $mix = function (string $hex, float $amount) {
-      $hex = ltrim($hex, '#');
-      [$r, $g, $b] = [hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2))];
-      return sprintf('#%02X%02X%02X', $r + (255 - $r) * $amount, $g + (255 - $g) * $amount, $b + (255 - $b) * $amount);
-  };
-  $titleBg = '#FFFFFF';
-  $fmt = fn ($n) => number_format((float) $n, 2);
+  $titleColor = $simple ? $ink : ($theme['l1_title'] ?? $theme['primary']);
+  $dp = (int) ($data['decimals'] ?? 2);
+  $fmt = fn ($n) => number_format((float) $n, $dp);
 
-  // Blank rows shrink to make room for taller-than-standard content (wrapped addresses/terms/descriptions, a seal and
-  // signature), so a short document never pushes its terms/signature block onto a second page.
-  $wrap = fn ($text, $perLine) => max(1, (int) ceil(mb_strlen(trim((string) $text)) / $perLine));
-  $extraLines = max(0, max($wrap($data['bill_to']['address'] ?? '', 58), $wrap($data['ship_to']['address'] ?? '', 58)) - 1)
-      + max(0, $wrap($data['seller_address'] ?? '', 85) - 1)
-      + max(0, array_sum(array_map(fn ($t) => $wrap($t, 80), $data['terms'] ?? [])) - 3)
-      + ((!empty($data['seal_path']) || !empty($data['signature_path'])) ? 3 : 0)
-      + array_sum(array_map(fn ($i) => max(0, $wrap($i['particulars'] ?? '', 36) - 1) + (!empty($i['description']) ? 1 : 0), $data['items']));
-  $minRows = 9;
-  $fillRows = max(0, $minRows - count($data['items']) - (int) ceil($extraLines * 0.7));
-  $cols = 6 + ($data['show_hsn'] ? 1 : 0) + ($data['has_tax'] ? 1 : 0);
   $tds = $data['summary']['tds_tcs_type'] ?? null;
 
-  $nameLen = mb_strlen((string) $data['company_name']);
-  $nameSize = $nameLen <= 24 ? '27pt' : ($nameLen <= 32 ? '23pt' : ($nameLen <= 40 ? '19pt' : ($nameLen <= 50 ? '15pt' : '12pt')));
+  // The company name is set as large as fits on one line beside the logo box (about 420pt wide).
+  $nameLen = max(1, mb_strlen((string) $data['company_name']));
+  $nameSize = max(11, min(27, (int) floor(420 / $nameLen / 0.7))) . 'pt';
+
+  // Tax rows: every tax line is always listed; one that does not apply to this document reads "(If Applicable)".
+  $sm = $data['summary'];
+  $interState = $data['has_tax'] && empty($sm['show_split_tax']);
+  $rate = fn ($r) => ($r !== null && $r !== '' && (float) $r > 0) ? ' (' . rtrim(rtrim(number_format((float) $r, 2), '0'), '.') . '%)' : '';
+  $igstRate = !empty($sm['igst_rate']) ? $sm['igst_rate'] : (!empty($sm['cgst_rate']) ? (float) $sm['cgst_rate'] * 2 : null);
+  $halfRate = !empty($sm['cgst_rate']) ? $sm['cgst_rate'] : (!empty($sm['igst_rate']) ? (float) $sm['igst_rate'] / 2 : null);
+  $na = '(If Applicable)';
+  $roundOff = (float) ($sm['round_off'] ?? 0);
 @endphp
 <style>
-  @page { size: A4 portrait; margin: 7mm 7mm 13mm 7mm; }
+  /* Top 15mm / bottom 14.2mm leave room for the ribbon bands on every page; sides are 5mm. */
+  @page { size: A4 portrait; margin: 15mm 5mm 14.2mm 5mm; }
   * { box-sizing: border-box; }
-  body { font-family: "Times", "DejaVu Serif", serif; font-size: 12.2px; color: {{ $ink }}; margin: 0; padding: 0; line-height: 1.35; }
+  /* The 2px side padding keeps the outer table borders inside the printable area; with a bare 100% width dompdf clips the
+     left border (it is drawn half outside the box) and the boxes lose their left edge. */
+  body { font-family: "Times", "DejaVu Serif", serif; font-size: 12.4px; color: {{ $ink }}; margin: 0; padding: 0 2px; line-height: 1.3; }
   table { width: 100%; border-collapse: collapse; }
   td, th { vertical-align: top; }
   .box { border: 1.3px solid {{ $ink }}; }
-  .gap { height: 6px; }
+  .gap { height: 4px; }
+  .gap-s { height: 6px; }
+  .gap-m { height: 8px; }
+  .gap-l { height: 13px; }
+  .gap-t { height: 7px; }
 
+  /* letterhead */
   .hdr td { vertical-align: middle; }
-  .logo { width: 24%; padding: 8px 0 0 44px; }
-  .logo-box { border: 1.3px solid {{ $ink }}; height: 92px; text-align: center; padding: 6px; }
-  .logo-box img { max-width: 100px; max-height: 78px; }
-  .logo-box .ph { font-size: 11.4px; padding-top: 28px; }
-  .co { text-align: center; padding-left: 10px; }
+  .logo { width: 185px; padding: 0 20px 0 0; }
+  /* the logo sits in the middle and centre of its box and is scaled down to fit entirely inside it */
+  .logo-box { width: 100%; border: 1.3px solid {{ $ink }}; }
+  .logo-box td { height: 104px; padding: 3px; text-align: center; vertical-align: middle; }
+  .logo-box img { max-width: 156px; max-height: 96px; }
+  .logo-box .ph { font-size: 11.6px; line-height: 1.45; }
+  .co { text-align: center; }
   .co-name { font-size: {{ $nameSize }}; font-weight: bold; text-transform: uppercase; white-space: nowrap; line-height: 1.15; }
-  .co-line { font-size: 11.6px; line-height: 1.5; }
-  .co-gstin { font-size: 11.2px; font-weight: bold; }
+  .co-line { font-size: 11.8px; line-height: 1.5; }
+  .co-gstin { font-size: 11.8px; font-weight: bold; }
 
-  .doc-title { text-align: center; font-size: 27px; font-weight: bold; padding: 4px 4px 6px; background: #FFFFFF; text-transform: uppercase; letter-spacing: 0.3px; }
-  .m1 td { border: 1.2px solid {{ $ink }}; padding: 6px 8px; font-size: 13px; }
-  .m1 td.k { font-weight: bold; text-transform: uppercase; width: 24%; }
+  /* title: a filled bar in the theme colour, or a plain box for "Simple" */
+  .title-bar { text-align: center; font-size: 20px; font-weight: bold; letter-spacing: 0.4px; text-transform: uppercase; height: 26px; padding-top: 3px; background: {{ $titleColor }}; color: #FFFFFF; }
+  .title-box { border: 1.3px solid {{ $ink }}; text-align: center; font-size: 23px; font-weight: bold; text-transform: uppercase; height: 32px; padding-top: 4px; }
+
+  .m1 td { border: 1.3px solid {{ $ink }}; padding: 4px 8px 3px; font-size: 11.8px; height: 22px; vertical-align: middle; }
+  .m1 td.k { font-weight: bold; text-transform: uppercase; }
   .m1 td.v { font-weight: bold; text-align: center; }
-  .m2 td { border: 1.2px solid {{ $ink }}; padding: 4px 6px; font-size: 11.4px; }
-  .m2 td.k { font-weight: bold; white-space: nowrap; }
-  .m2 td.v { font-weight: bold; }
+  .m2 td { border: 1.3px solid {{ $ink }}; padding: 3px 5px; font-size: 10.3px; font-weight: bold; height: 20px; vertical-align: middle; }
+  .m2 td.k { white-space: nowrap; }
+  .m2 td.v { text-align: center; }
 
+  /* receiver / consignee */
   .party td { padding: 0; }
-  .party .l { border-right: 1.2px solid {{ $ink }}; width: 50%; }
-  .party .h { border-bottom: 1.2px solid {{ $ink }}; font-weight: bold; font-size: 12.2px; padding: 6px 8px; text-transform: uppercase; }
-  .party .b { padding: 6px 8px 8px; }
-  .party-name { font-weight: bold; font-size: 13.6px; text-transform: uppercase; margin-bottom: 3px; }
-  .kv td { padding: 1.5px 0; font-size: 11.6px; }
-  .kv td.k { width: 54px; }
-  .kv td.c { width: 10px; }
+  .party .l { border-right: 1.3px solid {{ $ink }}; width: 50%; }
+  .party .h { border-bottom: 1.3px solid {{ $ink }}; font-weight: bold; font-size: 12.6px; padding: 7px 9px 6px; text-transform: uppercase; }
+  .party .b { padding: 8px 12px 8px 11px; }
+  .party-name { font-weight: bold; font-size: 13.6px; text-transform: uppercase; margin-bottom: 2px; }
+  .kv td { padding: 1.5px 0; font-size: 12.4px; }
+  .kv td.k { width: 56px; }
+  .kv td.c { width: 12px; }
 
-  .items th { border: 1.2px solid {{ $ink }}; font-weight: bold; font-size: 11.6px; padding: 6px 3px; text-align: center; }
-  .items td { border: 1.2px solid {{ $ink }}; font-size: 12px; padding: 4px 4px; text-align: center; height: 20px; }
+  /* items */
+  .items th { border: 1.3px solid {{ $ink }}; font-weight: bold; font-size: 11.6px; padding: 5px 3px 4px; text-align: center; height: 18px; vertical-align: middle; }
+  .items td { border: 1.3px solid {{ $ink }}; font-size: 12px; padding: 4px 4px; text-align: center; height: 21px; vertical-align: middle; }
   .items td.p { text-align: left; font-weight: bold; }
-  .items td.r { text-align: right; }
+  .items td.r { text-align: center; }
   .items tr { page-break-inside: avoid; }
 
-  .bank-h { font-weight: bold; font-size: 12.2px; padding: 6px 8px; border-bottom: 1.2px solid {{ $ink }}; text-transform: uppercase; }
-  .bank { padding: 6px 8px; }
-  .bank td { padding: 2px 0; font-size: 11.6px; }
-  .bank td.k { width: 82px; }
-  .sum td { border-bottom: 1.2px solid {{ $ink }}; padding: 3px 7px; font-size: 11.6px; }
-  .sum tr:last-child td { border-bottom: 0; }
-  .sum td.l { border-right: 1.2px solid {{ $ink }}; width: 56%; }
+  /* bank details and totals sit in one row of the outer table, so the two boxes are always the same height */
+  .bot > tbody > tr > td { vertical-align: top; }
+  .bot td.left { width: 57.2%; border: 1.3px solid {{ $ink }}; padding: 0; }
+  .bot td.gapc { width: 1%; padding: 0; }
+  .bot td.right { border: 1.3px solid {{ $ink }}; padding: 0; }
+  .bank-h { font-weight: bold; font-size: 12.4px; padding: 7px 9px 6px; border-bottom: 1.3px solid {{ $ink }}; text-transform: uppercase; }
+  .bank { padding: 5px 11px 6px; }
+  .bank td { padding: 2px 0; font-size: 12.4px; }
+  .bank td.k { width: 116px; }
+  .sum td { padding: 3px 9px; font-size: 12.2px; line-height: 1.25; }
+  .sum td.l { border-right: 1.3px solid {{ $ink }}; width: 59.2%; }
   .sum td.v { text-align: center; }
-  .sum .b { font-weight: bold; text-transform: uppercase; }
-  .sum .gt td { font-size: 15px; font-weight: bold; padding: 6px 7px; }
+  .sum .b { font-weight: bold; text-transform: uppercase; font-size: 11.2px; }
+  .sum tr.gt td { border-top: 1.3px solid {{ $ink }}; font-size: 15px; font-weight: bold; padding: 4px 9px 5px; }
 
-  .words td { padding: 6px 8px; font-size: 12.2px; }
-  .words td.k { font-weight: bold; text-transform: uppercase; width: 26%; border-right: 1.2px solid {{ $ink }}; }
+  .words td { padding: 4px 9px 3px; font-size: 12.4px; }
+  .words td.k { font-weight: bold; text-transform: uppercase; width: 25.9%; border-right: 1.3px solid {{ $ink }}; }
   .words td.v { font-weight: bold; }
-  .foot td { padding: 6px 8px; }
-  .foot .t { font-weight: bold; text-transform: uppercase; font-size: 12.2px; }
-  .terms-list { margin: 3px 0 0; padding-left: 15px; font-size: 11.6px; }
+  .foot td { padding: 5px 9px 5px; }
+  .foot .t { font-weight: bold; text-transform: uppercase; font-size: 12.4px; }
+  .terms-list { margin: 4px 0 0; padding-left: 18px; font-size: 11.4px; line-height: 1.5; }
   .terms-list li { margin-bottom: 3px; }
   .sign { text-align: right; }
-  .sign-for { font-weight: bold; font-size: 12.2px; line-height: 1.3; }
+  .sign-for { font-weight: bold; font-size: 12.4px; line-height: 1.3; }
   .sign-img { max-height: 44px; max-width: 120px; display: block; }
   .seal-img { max-height: 58px; max-width: 58px; display: block; }
 </style>
@@ -107,13 +120,17 @@
   <table class="hdr">
     <tr>
       <td class="logo">
-        <div class="logo-box">
-          @if(!empty($data['logo_path']))
-            <img src="{{ $data['logo_path'] }}" alt="Logo">
-          @else
-            <div class="ph"><b>COMPANY LOGO</b></div>
-          @endif
-        </div>
+        <table class="logo-box">
+          <tr>
+            <td>
+              @if(!empty($data['logo_path']))
+                <img src="{{ $data['logo_path'] }}" alt="Logo">
+              @else
+                <div class="ph"><b>COMPANY LOGO</b><br>(Should Fit in Entire Box)<br>(Middle and Centre Alignment)</div>
+              @endif
+            </td>
+          </tr>
+        </table>
       </td>
       <td class="co">
         <div class="co-name">{{ $data['company_name'] }}</div>
@@ -128,29 +145,34 @@
     </tr>
   </table>
 
-  <div class="gap"></div>
-  <table class="box"><tr><td class="doc-title">{{ $data['document_title'] }}</td></tr></table>
+  <div class="gap-l"></div>
+  @if($simple)
+    <div class="title-box">{{ $data['document_title'] }}</div>
+  @else
+    <div class="title-bar">{{ $data['document_title'] }}</div>
+  @endif
 
-  <div class="gap"></div>
+  <div class="gap-t"></div>
   <table class="m1">
     <tr>
-      <td class="k">{{ $data['doc_number_label'] }}</td>
-      <td class="v">{{ $data['invoice_no'] }}</td>
-      <td class="k">{{ $data['doc_date_label'] }}</td>
-      <td class="v" style="width: 22%;">{{ $data['invoice_date'] }}</td>
+      <td class="k" style="width: 19%;">{{ $data['doc_number_label'] }}</td>
+      <td class="v" style="width: 38.6%;">{{ $data['invoice_no'] }}</td>
+      <td class="k" style="width: 22.8%;">{{ $data['doc_date_label'] }}</td>
+      <td class="v" style="width: 19.6%;">{{ $data['invoice_date'] }}</td>
     </tr>
   </table>
-  <div style="height: 4px;"></div>
+  <div class="gap"></div>
   <table class="m2">
     <tr>
-      <td class="k">Place of Supply</td>
-      <td class="v">{{ $data['place_of_supply'] }}</td>
-      <td class="k">PO No.</td>
-      <td class="v">{{ $data['po_number'] ?? '—' }}</td>
-      <td class="k">Against</td>
-      <td class="v">{{ !empty($data['against_number']) ? $data['against_number'] : '—' }}</td>
-      <td class="k">Reverse Charge</td>
-      <td class="v" style="text-align: center;">{{ $data['reverse_charge'] ? 'Yes' : 'No' }}</td>
+      <td class="k" style="width: 11.2%;">Place of Supply</td>
+      <td class="v" style="width: 15.2%;">{{ $data['place_of_supply'] }}</td>
+      {{-- PO No. / Against are always listed; when empty a hint stands in for the value (never "—"). --}}
+      <td class="k" style="width: 8.1%;">PO No.</td>
+      <td class="v" style="width: 17.2%;">{{ !empty($data['po_number']) ? $data['po_number'] : '(If Filed then only)' }}</td>
+      <td class="k" style="width: 7.8%;">Against</td>
+      <td class="v" style="width: 20.8%;">{{ !empty($data['against_number']) ? $data['against_number'] : '(In Case of Credit/Debit Note)' }}</td>
+      <td class="k" style="width: 12.5%;">Reverse Charge</td>
+      <td class="v" style="width: 7.2%;">{{ $data['reverse_charge'] ? 'Yes' : 'No' }}</td>
     </tr>
   </table>
 
@@ -176,18 +198,18 @@
     </tr>
   </table>
 
-  <div class="gap"></div>
+  <div class="gap-s"></div>
   <table class="items">
     <thead>
       <tr>
-        <th style="width: 8%;">Sr. No.</th>
-        <th>PARTICULARS</th>
-        @if($data['show_hsn'])<th style="width: 11%;">HSN/SAC</th>@endif
-        <th style="width: 7%;">QTY</th>
-        <th style="width: 7%;">UQC</th>
-        <th style="width: 11%;">RATE</th>
-        @if($data['has_tax'])<th style="width: 8%;">GST (%)</th>@endif
-        <th style="width: 15%;">{{ $data['has_tax'] ? 'TAXABLE VALUE' : 'AMOUNT' }}</th>
+        <th style="width: 7.8%;">Sr. No.</th>
+        <th style="width: 24.7%;">PARTICULARS</th>
+        @if($data['show_hsn'])<th style="width: 10.7%;">HSN/SAC</th>@endif
+        <th style="width: 10%;">QTY</th>
+        <th style="width: 8.9%;">UQC</th>
+        <th style="width: 11.7%;">RATE</th>
+        @if($data['has_tax'])<th style="width: 9%;">GST (%)</th>@endif
+        <th style="width: 17%;">{{ $data['has_tax'] ? 'TAXABLE VALUE' : 'AMOUNT' }}</th>
       </tr>
     </thead>
     <tbody>
@@ -206,53 +228,47 @@
           <td class="r" style="font-weight: bold;">{{ $fmt($item['taxable_value']) }}</td>
         </tr>
       @endforeach
-      @for($f = 0; $f < $fillRows; $f++)
-        <tr>@for($c = 0; $c < $cols; $c++)<td>&nbsp;</td>@endfor</tr>
-      @endfor
     </tbody>
   </table>
 
-  <div class="gap"></div>
-  <table>
+  <div class="gap-m"></div>
+  <table class="bot">
     <tr>
-      <td style="width: 60%; padding-right: 6px;">
-        <div class="box">
-          <div class="bank-h">BANK DETAILS (FOR RTGS/NEFT TRANSFERS)</div>
-          <div class="bank">
-            <table>
-              <tr><td class="k">Bank Name</td><td>: {{ $data['bank']['name'] ?? '' }}</td></tr>
-              <tr><td class="k">Account Name</td><td>: {{ $data['bank']['account_name'] ?? '' }}</td></tr>
-              <tr><td class="k">Account Number</td><td>: {{ $data['bank']['account_no'] ?? '' }}</td></tr>
-              <tr><td class="k">Branch</td><td>: {{ $data['bank']['branch'] ?? '' }}</td></tr>
-              <tr><td class="k">IFSC CODE</td><td>: {{ $data['bank']['ifsc'] ?? '' }}</td></tr>
-            </table>
-          </div>
+      <td class="left">
+        <div class="bank-h">BANK DETAILS (FOR RTGS/NEFT TRANSFERS)</div>
+        <div class="bank">
+          <table>
+            <tr><td class="k">Bank Name</td><td>: {{ $data['bank']['name'] ?? '' }}</td></tr>
+            <tr><td class="k">Account Name</td><td>: {{ $data['bank']['account_name'] ?? '' }}</td></tr>
+            <tr><td class="k">Account Number</td><td>: {{ $data['bank']['account_no'] ?? '' }}</td></tr>
+            <tr><td class="k">Branch</td><td>: {{ $data['bank']['branch'] ?? '' }}</td></tr>
+            <tr><td class="k">IFSC CODE</td><td>: {{ $data['bank']['ifsc'] ?? '' }}</td></tr>
+          </table>
         </div>
       </td>
-      <td>
-        <table class="box sum">
-          <tr><td class="l b">{{ $data['has_tax'] ? 'TOTAL TAXABLE VALUE' : 'TOTAL AMOUNT' }}</td><td class="v">{{ $fmt($data['summary']['taxable_value']) }}</td></tr>
+      <td class="gapc"></td>
+      <td class="right">
+        <table class="sum">
+          <tr><td class="l b">{{ $data['has_tax'] ? 'TOTAL TAXABLE VALUE' : 'TOTAL AMOUNT' }}</td><td class="v">{{ $fmt($sm['taxable_value']) }}</td></tr>
           @if($data['has_tax'])
-            @if(!empty($data['summary']['show_split_tax']))
-              <tr><td class="l">CGST{{ !empty($data['summary']['cgst_rate']) ? ' ('.$data['summary']['cgst_rate'].'%)' : '' }}</td><td class="v">{{ $fmt($data['summary']['cgst_amount']) }}</td></tr>
-              <tr><td class="l">SGST/UTGST{{ !empty($data['summary']['sgst_rate']) ? ' ('.$data['summary']['sgst_rate'].'%)' : '' }}</td><td class="v">{{ $fmt($data['summary']['sgst_amount']) }}</td></tr>
-            @else
-              <tr><td class="l">IGST{{ !empty($data['summary']['igst_rate']) ? ' ('.$data['summary']['igst_rate'].'%)' : '' }}</td><td class="v">{{ $fmt($data['summary']['igst_amount']) }}</td></tr>
-            @endif
+            <tr><td class="l">IGST{{ $rate($igstRate) }}</td><td class="v">{{ $interState ? $fmt($sm['igst_amount']) : $na }}</td></tr>
+            <tr><td class="l">CGST{{ $rate($halfRate) }}</td><td class="v">{{ !$interState ? $fmt($sm['cgst_amount']) : $na }}</td></tr>
+            <tr><td class="l">SGST{{ $rate($halfRate) }}</td><td class="v">{{ !$interState ? $fmt($sm['sgst_amount']) : $na }}</td></tr>
           @endif
           @if($tds)
-            <tr><td class="l">{{ $tds === 'tds' ? 'LESS: TDS' : 'ADD: TCS' }}{{ !empty($data['summary']['tds_tcs_section']) ? ' ('.$data['summary']['tds_tcs_section'].')' : '' }}</td><td class="v">{{ $fmt($data['summary']['tds_tcs_amount']) }}</td></tr>
+            <tr><td class="l">{{ $tds === 'tds' ? 'LESS: TDS' : 'ADD: TCS' }}{{ !empty($sm['tds_tcs_section']) ? ' ('.$sm['tds_tcs_section'].')' : '' }}</td><td class="v">{{ $fmt($sm['tds_tcs_amount']) }}</td></tr>
+          @elseif($data['has_tax'])
+            <tr><td class="l">CESS/TDS/TCS</td><td class="v">{{ $na }}</td></tr>
           @endif
-          <tr><td class="l">Rounded off</td><td class="v">{{ ($data['summary']['round_off'] ?? 0) < 0 ? '-' : '' }}{{ $fmt(abs((float) ($data['summary']['round_off'] ?? 0))) }}</td></tr>
-          <tr class="gt"><td class="l">Grand Total</td><td class="v">{{ $fmt($data['summary']['grand_total']) }}</td></tr>
+          <tr><td class="l">Rounded off</td><td class="v">{{ $roundOff == 0 ? $na : (($roundOff < 0 ? '-' : '') . $fmt(abs($roundOff))) }}</td></tr>
+          <tr class="gt"><td class="l">Grand Total</td><td class="v">{{ $fmt($sm['grand_total']) }}</td></tr>
         </table>
       </td>
     </tr>
   </table>
 
   @if($data['is_delivery_challan'])
-    <div class="gap"></div>
-    <table class="box words">
+    <table class="box words" style="margin-top: -1.3px;">
       <tr>
         <td class="k">TRANSPORTATION DETAILS</td>
         <td>
@@ -264,8 +280,8 @@
     </table>
   @endif
 
-  <div class="gap"></div>
-  <table class="box words">
+  {{-- directly under the bank / totals boxes: they share this row's top border --}}
+  <table class="box words" style="margin-top: -1.3px;">
     <tr>
       <td class="k">AMOUNT IN WORDS</td>
       <td class="v">{{ $data['amount_in_words'] }}</td>
@@ -284,13 +300,13 @@
       <td class="sign">
         <div class="sign-for">For {{ $data['company_name_title_case'] }}</div>
         {{-- seal and signature sit in their own fixed-height row, clear of the company line above --}}
-        <table style="width: auto; margin: 8px 0 4px auto; height: 64px;">
+        <table style="width: auto; margin: 3px 0 1px auto; height: 34px;">
           <tr>
             @if(!empty($data['seal_path']))<td style="vertical-align: middle; padding-right: 10px;"><img class="seal-img" src="{{ $data['seal_path'] }}" alt="Seal"></td>@endif
             @if(!empty($data['signature_path']))<td style="vertical-align: middle;"><img class="sign-img" src="{{ $data['signature_path'] }}" alt="Signature"></td>@endif
           </tr>
         </table>
-        <div style="font-size: 8.8px;">Authorised Signatory</div>
+        <div style="font-size: 12.4px;">Authorised Signatory</div>
       </td>
     </tr>
   </table>

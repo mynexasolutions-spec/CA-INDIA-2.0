@@ -505,6 +505,12 @@ class Gstr2bController extends Controller
             }
         }
 
+        // Projected ITC of earlier periods that have no official GSTR-2B yet carries forward like normal ITC.
+        $projected = \App\Services\Gst\ProjectedItc::before($clientId, $period);
+        foreach (['igst', 'cgst', 'sgst'] as $h) {
+            $sum[$h] += $projected[$h];
+        }
+
         return array_map(fn ($v) => round($v, 2), $sum);
     }
 

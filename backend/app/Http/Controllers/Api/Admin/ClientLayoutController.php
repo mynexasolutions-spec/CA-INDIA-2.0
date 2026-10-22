@@ -41,7 +41,8 @@ class ClientLayoutController extends Controller
                 [
                     'layout_id' => $profile->default_layout_id ?: 1,
                     'colour_scheme' => $profile->default_colour_scheme ?: 'slate_blue',
-                    'watermark_applies' => false,
+                    'watermark_applies' => true,
+                    'decimal_places' => 2,
                 ]
             );
         }

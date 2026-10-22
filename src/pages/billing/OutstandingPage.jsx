@@ -22,7 +22,9 @@ const EyeIcon  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="non
 const CheckIcon = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
 const AlertIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
 
-const AlertDocIcon  = () => <svg width="26" height="26" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 3h10l6 6v18a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="white" strokeWidth="1.8" fill="none"/><path d="M19 3v6h6" stroke="white" strokeWidth="1.6" fill="none"/><line x1="16" y1="14" x2="16" y2="20" stroke="white" strokeWidth="2" strokeLinecap="round"/><circle cx="16" cy="24" r="1.3" fill="white"/></svg>;
+const PAGE_SIZES = [10, 25, 50];
+
+const AlertDocIcon  =() => <svg width="26" height="26" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 3h10l6 6v18a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="white" strokeWidth="1.8" fill="none"/><path d="M19 3v6h6" stroke="white" strokeWidth="1.6" fill="none"/><line x1="16" y1="14" x2="16" y2="20" stroke="white" strokeWidth="2" strokeLinecap="round"/><circle cx="16" cy="24" r="1.3" fill="white"/></svg>;
 const CheckCircleIcon = () => <svg width="26" height="26" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="16" cy="16" r="12" stroke="white" strokeWidth="1.8" fill="none"/><path d="M10.5 16.5l3.5 3.5 7.5-7.5" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>;
 
 /* ══════════════════════════════════════════════════════════════

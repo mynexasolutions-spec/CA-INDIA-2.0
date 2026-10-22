@@ -284,11 +284,15 @@ class BillingPolicy
         return in_array($period, self::submittedFilingPeriods($clientProfileId), true);
     }
 
-    /** All filing_period (Y-m) values with an active GST Filing Confirmation for this
-     *  client — for bulk-tagging a list of documents without an N+1 query per row. */
+    /** All filing_period (Y-m) values with an active GSTR-1 Filing Confirmation for this
+     *  client — for bulk-tagging a list of documents without an N+1 query per row.
+     *  Only GSTR-1 governs document editing (its period is always a month): a Rejected
+     *  ("Correction Required") request is not active, so it unlocks the period again, and a
+     *  GSTR-3B / CMP-08 / GSTR-4 request for the same month must not keep it locked. */
     public static function submittedFilingPeriods(int $clientProfileId): array
     {
         return GstFilingRequest::where('client_profile_id', $clientProfileId)
+            ->where('return_type', 'GSTR-1')
             ->whereIn('status', ['Pending CA Review', 'Approved for Filing', 'GST Filed'])
             ->pluck('filing_period')
             ->all();

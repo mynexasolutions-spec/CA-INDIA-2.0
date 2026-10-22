@@ -53,13 +53,34 @@ export function localISODate(d = new Date()) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** Always two decimals (HSN/SAC and GST figures must show the exact paise, e.g. 35,520.20). */
+// "Number of Decimal Places" is configured per document type (Admin → Clients → Configuration, 2–6).
+// A screen showing one document (Create / View) sets it for that document type via
+// setMoneyDecimals(); lists and reports that mix document types stay at 2.
+let moneyDecimals = 2;
+
+/** Decimal places the client's profile configures for a document type (2 when unset). */
+export function decimalsForDoc(profile, docType) {
+  const row = (profile?.document_settings || []).find((s) => s.document_type === docType);
+  const v = Number(row?.decimal_places);
+  return Number.isInteger(v) && v >= 2 && v <= 6 ? v : 2;
+}
+
+export function setMoneyDecimals(n) {
+  const v = Number(n);
+  moneyDecimals = Number.isInteger(v) && v >= 2 && v <= 6 ? v : 2;
+}
+
+export function getMoneyDecimals() {
+  return moneyDecimals;
+}
+
+/** Always the configured decimals (HSN/SAC and GST figures must show the exact paise, e.g. 35,520.20). */
 export function moneyFixed(n) {
-  return `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: moneyDecimals, maximumFractionDigits: moneyDecimals })}`;
 }
 
 export function money(n) {
-  return `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+  return `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: moneyDecimals })}`;
 }
 
 export const CURRENCIES = [

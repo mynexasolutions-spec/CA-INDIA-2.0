@@ -86,7 +86,9 @@ class LayoutPreviewRenderer
                 'defaultFont' => 'DejaVu Sans',
             ]);
 
-        $rounded = $layoutId === 3 ? DocumentCanvasHelper::roundedBorders($prepared['theme']) : null;
+        // Layout 3: rounded boxes drawn on the canvas. Layout 1: the header and totals divider lines, extended to the bottom of their cells.
+        $rounded = $layoutId === 3 ? DocumentCanvasHelper::roundedBorders($prepared['theme'])
+            : (in_array($layoutId, [1, 2], true) ? DocumentCanvasHelper::layout1Dividers() : null);
         if ($rounded) {
             $pdf->getDomPDF()->setCallbacks($rounded['callbacks']);
         }
@@ -144,14 +146,12 @@ class LayoutPreviewRenderer
         ];
 
         if ($clientDetails) {
-            // The client's own preview shows their real company details, as on their invoices. Groups of fields that
-            // only make sense together (address, bank, tax IDs) are taken whole, or fall back to the demo set whole.
+            // The client's own preview shows their real details, as on their invoices. Bank fields only make sense
+            // together, so they are taken whole, or fall back to the demo set whole.
             $filled = fn (array $keys) => collect($keys)->contains(fn ($k) => trim((string) $real->{$k}) !== '');
 
             // [fields that decide whether the real group is used, all fields in the group]
             $groups = [
-                [['gstin'], ['gstin', 'pan']],
-                [['address', 'address_line_1'], ['address', 'address_line_1', 'address_line_2', 'city', 'state', 'state_code', 'pincode']],
                 [['bank_name', 'bank_account'], ['bank_name', 'account_holder_name', 'bank_account', 'bank_ifsc', 'bank_branch']],
             ];
             foreach ($groups as [$triggers, $fields]) {
@@ -161,11 +161,19 @@ class LayoutPreviewRenderer
                     }
                 }
             }
-            foreach (['email', 'mobile', 'terms_conditions', 'signatory_name'] as $k) {
+            foreach (['terms_conditions', 'signatory_name'] as $k) {
                 if ($filled([$k])) {
                     $demo[$k] = $real->{$k};
                 }
             }
+
+            // Company details (name, GSTIN, address, email, mobile) always come from the registered profile, never
+            // from demo values: an empty field stays empty. Email/mobile fall back to the login account like invoices.
+            foreach (['has_gst', 'dealer_type', 'gstin', 'pan', 'address', 'address_line_1', 'address_line_2', 'city', 'state', 'state_code', 'pincode'] as $k) {
+                $demo[$k] = $real->{$k};
+            }
+            $demo['email'] = $real->email ?: $real->user?->email;
+            $demo['mobile'] = $real->mobile ?: $real->user?->phone;
         }
 
         $profile->forceFill($demo);

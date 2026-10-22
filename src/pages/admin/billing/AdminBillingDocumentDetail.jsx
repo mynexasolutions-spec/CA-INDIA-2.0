@@ -6,6 +6,7 @@ import { getDocTypeConfig, getDocumentActionDisabledReason } from './billingCons
 import AdminEditCreationDateModal from './components/AdminEditCreationDateModal';
 import AdminCancelDocumentModal from './components/AdminCancelDocumentModal';
 import AdminDeleteDocumentModal from './components/AdminDeleteDocumentModal';
+import { getMoneyDecimals, setMoneyDecimals } from '../../billing/billingUtils';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -49,12 +50,13 @@ function formatDateTime(isoStr) {
 }
 
 /**
- * Format Indian currency with 2 decimals.
+ * Format Indian currency with the client's configured decimal places (default 2).
  */
 function formatCurrency(val) {
+  const dp = getMoneyDecimals();
   const num = Number(val);
-  if (isNaN(num)) return '₹0.00';
-  return '₹' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (isNaN(num)) return `₹${(0).toFixed(dp)}`;
+  return '₹' + num.toLocaleString('en-IN', { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
 
 /**
@@ -182,6 +184,8 @@ export default function AdminBillingDocumentDetail() {
   const docConfig = useMemo(() => getDocTypeConfig(docTypeParam), [docTypeParam]);
 
   const [docData, setDocData] = useState(null);
+  // The decimal places set from this document's type must not leak into other admin screens.
+  useEffect(() => () => setMoneyDecimals(2), []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [is404, setIs404] = useState(false);
@@ -210,6 +214,7 @@ export default function AdminBillingDocumentDetail() {
     return api(endpoint)
       .then((json) => {
         if (reqId === reqIdRef.current && json) {
+          setMoneyDecimals(json.billing_profile?.decimal_places);
           setDocData(json);
           setLoading(false);
         }
@@ -804,6 +809,9 @@ ${seller.business_name || ''}`;
                 <div>
                   <strong>Place of Supply:</strong> {doc.place_of_supply || customer.place_of_supply || '—'} | {doc.supply_type || '—'}
                 </div>
+                {doc.po_number && (
+                  <div><strong>PO No.:</strong> {doc.po_number}</div>
+                )}
                 {doc.notes && docConfig.key !== 'delivery_challan' && (
                   <div style={{ marginTop: 4, color: '#0f172a', fontWeight: 500 }}>
                     <strong>Notes:</strong> {doc.notes}
@@ -1009,13 +1017,13 @@ ${seller.business_name || ''}`;
                       {item.unit || 'NOS'}
                     </td>
                     <td style={{ padding: '9px 12px', textAlign: 'center', color: '#334155' }}>
-                      {Number(item.rate).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                      {Number(item.rate).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: getMoneyDecimals() })}
                     </td>
                     <td style={{ padding: '9px 10px', textAlign: 'center', color: '#334155' }}>
                       {item.gst_rate}%
                     </td>
                     <td style={{ padding: '9px 12px', textAlign: 'center', color: '#0f172a' }}>
-                      {Number(item.taxable_amount).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                      {Number(item.taxable_amount).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: getMoneyDecimals() })}
                     </td>
                   </tr>
                 ))

@@ -106,7 +106,9 @@
   <!-- 2. Meta Strip: Light Tint Background Strip with Bold Values -->
   @php
     $isNote = in_array($data['doc_type'], ['credit_note', 'debit_note'], true);
-    $cellWidth = $isNote ? '20%' : '25%';
+    $dp = (int) ($data['decimals'] ?? 2);
+    $hasPo = !empty($data['po_number']);
+    $cellWidth = round(100 / (4 + ($isNote ? 1 : 0) + ($hasPo ? 1 : 0)), 2) . '%';
   @endphp
   <table style="width: 100%; border-collapse: collapse; background-color: {{ $theme['light_tint'] }}; margin-top: 5px; margin-bottom: 8px;">
     <tr>
@@ -126,15 +128,22 @@
         <div style="font-size: 11.5px; font-weight: 800; color: #111827;">{{ $data['place_of_supply'] }}</div>
       </td>
       <!-- Reverse Charge -->
-      <td style="width: {{ $cellWidth }}; padding: 5px 8px; vertical-align: middle; {{ $isNote ? 'border-right: 1px solid rgba(0,0,0,0.12);' : '' }}">
+      <td style="width: {{ $cellWidth }}; padding: 5px 8px; vertical-align: middle; {{ ($isNote || $hasPo) ? 'border-right: 1px solid rgba(0,0,0,0.12);' : '' }}">
         <div style="font-size: 8.5px; color: #4B5563; margin-bottom: 2px;">Reverse Charge</div>
         <div style="font-size: 11.5px; font-weight: 800; color: #111827;">{{ $data['reverse_charge'] ? 'Yes' : 'No' }}</div>
       </td>
       @if($isNote)
       <!-- Against (Credit / Debit Note only) -->
-      <td style="width: {{ $cellWidth }}; padding: 5px 8px; vertical-align: middle;">
+      <td style="width: {{ $cellWidth }}; padding: 5px 8px; vertical-align: middle; {{ $hasPo ? 'border-right: 1px solid rgba(0,0,0,0.12);' : '' }}">
         <div style="font-size: 8.5px; color: #4B5563; margin-bottom: 2px;">Against</div>
         <div style="font-size: 11.5px; font-weight: 800; color: #111827;">{{ $data['against_number'] ?: '—' }}</div>
+      </td>
+      @endif
+      @if($hasPo)
+      <!-- PO No. (only when entered) -->
+      <td style="width: {{ $cellWidth }}; padding: 5px 8px; vertical-align: middle;">
+        <div style="font-size: 8.5px; color: #4B5563; margin-bottom: 2px;">PO No.</div>
+        <div style="font-size: 11.5px; font-weight: 800; color: #111827;">{{ $data['po_number'] }}</div>
       </td>
       @endif
     </tr>
@@ -262,11 +271,11 @@
         <td style="padding: 5px 3px; text-align: center; vertical-align: top; border-right: 1px solid #E5E7EB; color: #374151; font-size: 9.5px;">{{ $item['hsn_sac'] ?: '—' }}</td>
         <td style="padding: 5px 3px; text-align: center; vertical-align: top; border-right: 1px solid #E5E7EB; font-weight: bold; color: #111827; font-size: 10px;">{{ $item['qty'] !== null ? $item['qty'] : '—' }}</td>
         <td style="padding: 5px 3px; text-align: center; vertical-align: top; border-right: 1px solid #E5E7EB; color: #374151; font-size: 9.5px;">{{ $item['uqc'] }}</td>
-        <td style="padding: 5px 4px; text-align: right; vertical-align: top; border-right: 1px solid #E5E7EB; color: #111827; font-size: 9.5px;">{{ number_format($item['rate'], 2) }}</td>
+        <td style="padding: 5px 4px; text-align: right; vertical-align: top; border-right: 1px solid #E5E7EB; color: #111827; font-size: 9.5px;">{{ number_format($item['rate'], $dp) }}</td>
         @if($data['has_tax'])
         <td style="padding: 5px 3px; text-align: center; vertical-align: top; border-right: 1px solid #E5E7EB; color: #374151; font-size: 9.5px;">{{ $item['gst_pct'] }}</td>
         @endif
-        <td style="padding: 5px 8px; text-align: right; vertical-align: top; font-weight: bold; color: #111827; font-size: 10.5px;">{{ number_format($item['taxable_value'], 2) }}</td>
+        <td style="padding: 5px 8px; text-align: right; vertical-align: top; font-weight: bold; color: #111827; font-size: 10.5px;">{{ number_format($item['taxable_value'], $dp) }}</td>
       </tr>
       @empty
       <tr>
@@ -285,7 +294,7 @@
         </td>
         <td colspan="{{ $data['has_tax'] ? 3 : 2 }}" style="padding: 6px;"></td>
         <td style="padding: 6px 8px; text-align: right; font-size: 13.5px; font-weight: 800; color: #111827;">
-          {{ number_format($totalAmount, 2) }}
+          {{ number_format($totalAmount, $dp) }}
         </td>
       </tr>
     </tfoot>
@@ -398,28 +407,28 @@
             <table style="width: 100%; border-collapse: collapse; font-size: 9px;">
               <tr>
                 <td style="padding: 1.5px 0; color: #374151;">Taxable Amount</td>
-                <td style="padding: 1.5px 0; text-align: right; color: #111827;">{{ number_format($data['summary']['taxable_value'], 2) }}</td>
+                <td style="padding: 1.5px 0; text-align: right; color: #111827;">{{ number_format($data['summary']['taxable_value'], $dp) }}</td>
               </tr>
               @if($data['has_tax'])
                 @if(!empty($data['summary']['igst_amount']) || ($data['doc_type'] !== 'bill_of_supply' && !empty($data['summary']['igst_rate'])))
                 <tr>
                   <td style="padding: 1.5px 0; color: #374151;">IGST @ {{ $data['summary']['igst_rate'] ?? 18 }}%</td>
-                  <td style="padding: 1.5px 0; text-align: right; color: #111827;">{{ number_format($data['summary']['igst_amount'], 2) }}</td>
+                  <td style="padding: 1.5px 0; text-align: right; color: #111827;">{{ number_format($data['summary']['igst_amount'], $dp) }}</td>
                 </tr>
                 @else
                 <tr>
                   <td style="padding: 1.5px 0; color: #374151;">CGST @ {{ $data['summary']['cgst_rate'] ?? 9 }}%</td>
-                  <td style="padding: 1.5px 0; text-align: right; color: #111827;">{{ number_format($data['summary']['cgst_amount'], 2) }}</td>
+                  <td style="padding: 1.5px 0; text-align: right; color: #111827;">{{ number_format($data['summary']['cgst_amount'], $dp) }}</td>
                 </tr>
                 <tr>
                   <td style="padding: 1.5px 0; color: #374151;">SGST @ {{ $data['summary']['sgst_rate'] ?? 9 }}%</td>
-                  <td style="padding: 1.5px 0; text-align: right; color: #111827;">{{ number_format($data['summary']['sgst_amount'], 2) }}</td>
+                  <td style="padding: 1.5px 0; text-align: right; color: #111827;">{{ number_format($data['summary']['sgst_amount'], $dp) }}</td>
                 </tr>
                 @endif
               @endif
               <tr>
                 <td style="padding: 1.5px 0; color: #374151;">Round Off</td>
-                <td style="padding: 1.5px 0; text-align: right; color: #111827;">{{ number_format($data['summary']['round_off'], 2) }}</td>
+                <td style="padding: 1.5px 0; text-align: right; color: #111827;">{{ number_format($data['summary']['round_off'], $dp) }}</td>
               </tr>
             </table>
           </div>
@@ -428,7 +437,7 @@
             <table style="width: 100%; border-collapse: collapse;">
               <tr>
                 <td style="font-weight: 800; font-size: 13.5px; color: #111827;">Total Amount (₹)</td>
-                <td style="font-weight: 800; font-size: 14.5px; color: #111827; text-align: right;">{{ number_format($data['summary']['grand_total'], 2) }}</td>
+                <td style="font-weight: 800; font-size: 14.5px; color: #111827; text-align: right;">{{ number_format($data['summary']['grand_total'], $dp) }}</td>
               </tr>
             </table>
           </div>

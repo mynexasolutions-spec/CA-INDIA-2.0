@@ -39,6 +39,12 @@ class ClientProfile extends Model
         'watermark_enabled', 'watermark_text', 'gst_reminder_enabled',
     ];
 
+    /** New clients start with the watermark ON (admins can switch it off in Configuration). */
+    protected $attributes = [
+        'watermark_enabled' => true,
+        'watermark_text' => 'www.abkhanassociates.com',
+    ];
+
     protected function casts(): array
     {
         return [

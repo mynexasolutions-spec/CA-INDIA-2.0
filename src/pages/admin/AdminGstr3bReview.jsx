@@ -526,7 +526,9 @@ function SummaryTab({ summary, breakup, itcBalance, tabData, saveTabData, reqSta
       icon: <CoinsIcon c="#9333ea" />,
     },
     {
-      label: 'Total Eligible ITC',
+      label: Number(summary?.projected_itc) > 0
+        ? `Total Eligible ITC\n(incl. ₹${Number(summary.projected_itc).toLocaleString('en-IN', { maximumFractionDigits: 2 })} Projected)`
+        : 'Total Eligible ITC',
       val: summary?.total_eligible_itc ?? 0,
       bg: '#f0fdf4',
       br: '#dcfce7',

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/client';
 import LayoutPreview from './LayoutPreview';
+import LayoutPreviewModal from './LayoutPreviewModal';
 import { layoutPreviewUrl } from '../api/layoutPreview';
 import ClientSaveSuccessModal from './ClientSaveSuccessModal';
 import DiscardChangesModal from './DiscardChangesModal';
@@ -144,100 +145,23 @@ function ConfirmResetModal({ onCancel, onConfirm, isSaving }) {
 }
 
 /**
- * Full-size preview modal.
+ * Full-size preview modal — the same modal the client portal uses.
  */
 function FullSizePreviewModal({ clientId, layoutId, colourScheme, onClose }) {
-  const imgSrc = LAYOUT_IMAGES[layoutId] || LAYOUT_IMAGES[1];
   const layout = LAYOUT_TEMPLATES.find((l) => l.id === layoutId);
+  const colour = COLOUR_SCHEMES.find((c) => c.id === colourScheme);
 
   return (
-    <div className="bp-modal-backdrop" role="presentation" onClick={onClose} style={{ zIndex: 99999 }}>
-      <div
-        className="bp-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Full Size Preview"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 'min(920px, 95vw)',
-          maxHeight: '92vh',
-          display: 'flex',
-          flexDirection: 'column',
-          padding: 0,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '14px 20px',
-            borderBottom: '1px solid #e2e8f0',
-            background: '#f8fafc',
-          }}
-        >
-          <div>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
-              {layout ? `${layout.name} - ${layout.title} ${layout.subtitle}` : 'Layout Preview'}
-            </h3>
-            <span style={{ fontSize: 12, color: '#64748b' }}>Full size document template sample</span>
-          </div>
-          <button
-            type="button"
-            className="bp-modal-close"
-            onClick={onClose}
-            aria-label="Close"
-            style={{ position: 'static' }}
-          >
-            ×
-          </button>
-        </div>
-
-        <div
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: 20,
-            background: '#e2e8f0',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'flex-start',
-          }}
-        >
-          <div
-            style={{
-              background: '#ffffff',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-              borderRadius: 4,
-              overflow: 'hidden',
-              maxWidth: 820,
-              width: '100%',
-            }}
-          >
-            <LayoutPreview
-              previewUrl={layoutPreviewUrl(clientId, { layoutId, colourScheme })}
-              src={imgSrc}
-              alt="Full Size Layout Preview"
-            />
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            padding: '12px 20px',
-            borderTop: '1px solid #e2e8f0',
-            background: '#f8fafc',
-          }}
-        >
-          <button type="button" className="bp-btn bp-btn-outline" onClick={onClose}>
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+    <LayoutPreviewModal
+      title={layout ? `${layout.name} - ${layout.title} ${layout.subtitle}` : 'Layout Preview'}
+      chipColor={colour?.hex || '#64748b'}
+      chipLabel={colour?.name || colourScheme}
+      subtitle="Full size document template sample"
+      previewUrl={layoutPreviewUrl(clientId, { layoutId, colourScheme })}
+      fallbackSrc={LAYOUT_IMAGES[layoutId] || LAYOUT_IMAGES[1]}
+      alt="Full Size Layout Preview"
+      onClose={onClose}
+    />
   );
 }
 

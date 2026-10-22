@@ -161,6 +161,10 @@ class Gstr2bController extends Controller
             ->where('financial_year', $fy)
             ->get()->keyBy('tax_period');
 
+        // Projected ITC (the client's own estimate) counts towards a period's total ITC until
+        // the official GSTR-2B for it is loaded; it is also returned separately to label it.
+        $projectedByPeriod = \App\Services\Gst\ProjectedItc::byPeriod($profileId);
+
         $periods = [];
         if ($freq === 'quarterly') {
             $quarters = [
@@ -180,7 +184,8 @@ class Gstr2bController extends Controller
                     'available_on' => $rec?->created_at?->format('d M Y'),
                     'expected_on'  => $q['available_by']->format('d M Y'),
                     'status'       => self::periodStatus($rec !== null, $q['starts']),
-                    'total_itc'    => $totalItc,
+                    'total_itc'    => round($totalItc + ($projectedByPeriod[$q['key']]['total'] ?? 0), 2),
+                    'projected_itc' => $projectedByPeriod[$q['key']]['total'] ?? 0,
                     'no_bills'     => $rec?->no_bills ?? false,
                 ];
             }
@@ -199,7 +204,8 @@ class Gstr2bController extends Controller
                     'available_on' => $rec?->created_at?->format('d M Y'),
                     'expected_on'  => Carbon::create($year, $month, 1)->addMonthNoOverflow()->day(14)->format('d M Y'),
                     'status'       => self::periodStatus($rec !== null, Carbon::create($year, $month, 1)),
-                    'total_itc'    => $totalItc,
+                    'total_itc'    => round($totalItc + ($projectedByPeriod[$key]['total'] ?? 0), 2),
+                    'projected_itc' => $projectedByPeriod[$key]['total'] ?? 0,
                     'no_bills'     => $rec?->no_bills ?? false,
                 ];
             }
@@ -261,13 +267,16 @@ class Gstr2bController extends Controller
              COALESCE(SUM(total_gst),0) AS total_itc'
         )->first();
 
+        $projectedItc = \App\Services\Gst\ProjectedItc::forPeriod($profileId, $period)['total'];
+
         $data['summary'] = [
             'total_invoices'     => (int) ($summaryRow->total ?? 0),
             'matched_invoices'   => (int) ($summaryRow->matched ?? 0),
             'unmatched_invoices' => (int) ($summaryRow->unmatched ?? 0),
             'matched_itc'        => (float) ($summaryRow->matched_itc ?? 0),
             'unmatched_itc'      => (float) ($summaryRow->unmatched_itc ?? 0),
-            'total_itc'          => (float) ($summaryRow->total_itc ?? 0),
+            'total_itc'          => round((float) ($summaryRow->total_itc ?? 0) + $projectedItc, 2),
+            'projected_itc'      => $projectedItc,
         ];
 
         return response()->json($data);

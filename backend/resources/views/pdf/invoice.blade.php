@@ -256,6 +256,7 @@ td, th { vertical-align: top; }
   }
   $showTax = $p->has_gst && $p->dealer_type !== 'composition';
   $isRcm = (bool) $doc->is_reverse_charge;
+  $dp = \App\Models\ClientDocumentSetting::decimalsFor($p, $doc->type);
   $grand = $doc->grand_total ?: $doc->total_amount;
   $cgstRate = null;
   $sgstRate = null;
@@ -418,7 +419,7 @@ td, th { vertical-align: top; }
   $totalCols = 6 + ($colHsn ? 1 : 0) + ($showTax ? 1 : 0);
 
   $roundOffVal = (float) $doc->round_off;
-  $roundOffDisplay = ($roundOffVal < 0 ? '- ' : '').'&#8377; '.number_format(abs($roundOffVal), 2);
+  $roundOffDisplay = ($roundOffVal < 0 ? '- ' : '').'&#8377; '.number_format(abs($roundOffVal), $dp);
 @endphp
 
 <div class="frame">
@@ -538,6 +539,14 @@ td, th { vertical-align: top; }
           <td class="val">{{ $doc->referenceDocument->number }}</td>
         </tr>
         @endif
+        @if(filled($doc->po_number))
+        <tr>
+          <td class="icon-cell">@if($docNumIcon)<img src="{{ $docNumIcon }}" alt="">@endif</td>
+          <td class="lab">PO No.</td>
+          <td class="colon">:</td>
+          <td class="val-plain">{{ $doc->po_number }}</td>
+        </tr>
+        @endif
       </table>
     </td>
   </tr>
@@ -619,11 +628,11 @@ td, th { vertical-align: top; }
         @endif
         <td class="center qty-num">{{ $item->qty !== null ? (fmod((float) $item->qty, 1) == 0.0 ? (int) $item->qty : (float) $item->qty) : '—' }}</td>
         <td class="center qty-num">{{ strtoupper($item->unit ?: 'NOS') }}</td>
-        <td class="amt">{{ number_format((float) $item->rate, 2) }}</td>
+        <td class="amt">{{ number_format((float) $item->rate, $dp) }}</td>
         @if($showTax)
         <td class="amt">{{ $fmtRate($item->gst_rate) }}%</td>
         @endif
-        <td class="amt">{{ number_format((float) $item->taxable_amount, 2) }}</td>
+        <td class="amt">{{ number_format((float) $item->taxable_amount, $dp) }}</td>
       </tr>
     @empty
       <tr><td colspan="{{ $totalCols }}" class="center" style="color:#94a3b8;">No line items</td></tr>
@@ -693,22 +702,22 @@ td, th { vertical-align: top; }
         <table class="totals">
           <tr>
             <td class="lab">Total Taxable Value</td>
-            <td class="val">&#8377; {{ number_format((float) $doc->taxable_amount, 2) }}</td>
+            <td class="val">&#8377; {{ number_format((float) $doc->taxable_amount, $dp) }}</td>
           </tr>
           @if($showTax)
             @if($showSplitTax)
             <tr>
               <td class="lab">CGST{{ $cgstRate !== null ? ' ('.$fmtRate($cgstRate).'%)' : '' }}</td>
-              <td class="val">&#8377; {{ number_format((float) $doc->cgst_amount, 2) }}</td>
+              <td class="val">&#8377; {{ number_format((float) $doc->cgst_amount, $dp) }}</td>
             </tr>
             <tr>
               <td class="lab">SGST/UTGST{{ $sgstRate !== null ? ' ('.$fmtRate($sgstRate).'%)' : '' }}</td>
-              <td class="val">&#8377; {{ number_format((float) $doc->sgst_amount, 2) }}</td>
+              <td class="val">&#8377; {{ number_format((float) $doc->sgst_amount, $dp) }}</td>
             </tr>
             @else
             <tr>
               <td class="lab">IGST{{ $igstRate ? ' ('.$fmtRate($igstRate).'%)' : '' }}</td>
-              <td class="val">&#8377; {{ number_format((float) $doc->igst_amount, 2) }}</td>
+              <td class="val">&#8377; {{ number_format((float) $doc->igst_amount, $dp) }}</td>
             </tr>
             @endif
           @endif
@@ -716,17 +725,17 @@ td, th { vertical-align: top; }
             @if($doc->tax_deduction_type === 'tds')
             <tr class="tds-row">
               <td class="lab">Less: TDS{{ $doc->tds_tcs_rate ? ' ('.$fmtRate($doc->tds_tcs_rate).'% u/s '.$doc->tdsTcsSection?->code.')' : '' }}</td>
-              <td class="val">&#8377; {{ number_format((float) $doc->tds_tcs_amount, 2) }}</td>
+              <td class="val">&#8377; {{ number_format((float) $doc->tds_tcs_amount, $dp) }}</td>
             </tr>
             @else
             <tr class="tcs-row">
               <td class="lab">Add: TCS{{ $doc->tds_tcs_rate ? ' ('.$fmtRate($doc->tds_tcs_rate).'% u/s '.$doc->tdsTcsSection?->code.')' : '' }}</td>
-              <td class="val">&#8377; {{ number_format((float) $doc->tds_tcs_amount, 2) }}</td>
+              <td class="val">&#8377; {{ number_format((float) $doc->tds_tcs_amount, $dp) }}</td>
             </tr>
             @endif
             <tr class="grand-row">
               <td>GRAND TOTAL</td>
-              <td class="amt">&#8377; {{ number_format((float) $grand, 2) }}</td>
+              <td class="amt">&#8377; {{ number_format((float) $grand, $dp) }}</td>
             </tr>
           @else
             <tr>

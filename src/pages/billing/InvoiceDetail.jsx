@@ -5,7 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { LoadingBlock } from '../../components/Spinner';
 import CancelDocumentModal from './CancelDocumentModal';
 import { MarkAsPaidModal, UnmarkAsPaidModal } from './PaymentModals';
-import { billingDocEditPath, billingDocPath, docTypeLabel, formatDMY, formatDMYTime, moneyFixed, reasonForTransportLabel } from './billingUtils';
+import { billingDocEditPath, billingDocPath, decimalsForDoc, docTypeLabel, formatDMY, formatDMYTime, moneyFixed, reasonForTransportLabel, setMoneyDecimals } from './billingUtils';
 
 function money(n) {
   return `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
@@ -70,6 +70,13 @@ export default function InvoiceDetail() {
       .catch((e) => setErr(e.message || 'Failed to load'));
   };
   useEffect(() => { setDoc(null); load(); }, [id]);
+
+  // Amounts on this page follow the decimal places configured for this document's type.
+  const docType = doc?.type;
+  useEffect(() => {
+    setMoneyDecimals(decimalsForDoc(profile, docType));
+    return () => setMoneyDecimals(2);
+  }, [profile, docType]);
 
   if (err) {
     return (
@@ -464,6 +471,7 @@ export default function InvoiceDetail() {
         <p className="dv-line">
           <strong>Place of Supply:</strong> {doc.place_of_supply || '—'} | {doc.is_inter_state ? 'Inter-state (IGST)' : 'Intra-state (CGST/SGST)'}
         </p>
+        {doc.po_number && <p className="dv-line"><strong>PO No.:</strong> {doc.po_number}</p>}
       </section>
 
       {doc.reference_document && (

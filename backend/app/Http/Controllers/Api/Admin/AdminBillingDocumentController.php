@@ -188,6 +188,7 @@ class AdminBillingDocumentController extends Controller
             'dealer_type' => $cp->dealer_type ?: 'regular',
             'state_code' => $cp->state_code,
             'mode' => BillingPolicy::mode($cp),
+            'decimal_places' => \App\Models\ClientDocumentSetting::decimalsFor($cp, $doc->type),
         ] : null;
 
         $lineItems = $doc->lineItems->values()->map(function ($line, $idx) {
@@ -234,6 +235,7 @@ class AdminBillingDocumentController extends Controller
                 'document_date' => $doc->document_date?->format('Y-m-d'),
                 'due_date' => $doc->due_date?->format('Y-m-d'),
                 'payment_terms' => $doc->payment_terms,
+                'po_number' => $doc->po_number,
                 'currency' => $doc->currency ?: 'INR',
                 'created_at' => $doc->created_at?->timezone('Asia/Kolkata')->toIso8601String(),
                 'place_of_supply' => $doc->place_of_supply,
@@ -299,6 +301,7 @@ class AdminBillingDocumentController extends Controller
             'due_date' => 'nullable|date',
             'place_of_supply' => 'nullable|string|max:120',
             'payment_terms' => 'nullable|string|max:200',
+            'po_number' => 'nullable|string|max:50',
             'currency' => 'nullable|string|max:3',
             'notes' => 'nullable|string',
             'terms' => 'nullable|string',
@@ -314,7 +317,7 @@ class AdminBillingDocumentController extends Controller
             'tax_deduction_type' => 'nullable|in:tds,tcs',
             'tds_tcs_section_id' => 'nullable|integer|exists:tds_tcs_sections,id',
             'lines' => 'required|array|min:1',
-            'lines.*.description' => 'required|string|max:255',
+            'lines.*.description' => 'required|string|max:5000',
             'lines.*.qty' => 'required|numeric|gt:0',
             'lines.*.rate' => 'required|numeric|gte:0',
             'lines.*.gst_rate' => ['nullable', 'numeric', Rule::in(BillingPolicy::GST_RATES)],

@@ -14,8 +14,11 @@ class GstCalculator
         ?float $roundOff = null,
         bool $taxesEnabled = true,
         ?string $taxDeductionType = null,
-        ?float $tdsTcsRate = null
+        ?float $tdsTcsRate = null,
+        int $decimals = 2
     ): array {
+        // Per-client "Number of Decimal Places in Documents" (2–6); anything else falls back to 2.
+        $dp = ($decimals >= 2 && $decimals <= 6) ? $decimals : 2;
         $taxable = 0;
         $cgst = 0;
         $sgst = 0;
@@ -28,26 +31,26 @@ class GstCalculator
             $rate = (float) ($line['rate'] ?? 0);
             $gstRate = $taxesEnabled ? (float) ($line['gst_rate'] ?? 0) : 0.0;
             $discountPercent = (float) ($line['discount_percent'] ?? 0);
-            $gross = round($qty * $rate, 2);
-            $discountAmount = round($gross * $discountPercent / 100, 2);
+            $gross = round($qty * $rate, $dp);
+            $discountAmount = round($gross * $discountPercent / 100, $dp);
             if (isset($line['discount_amount']) && (float) $line['discount_amount'] > 0 && $discountPercent <= 0) {
-                $discountAmount = round((float) $line['discount_amount'], 2);
+                $discountAmount = round((float) $line['discount_amount'], $dp);
             }
-            $lineTaxable = round(max(0, $gross - $discountAmount), 2);
-            $gstAmt = round($lineTaxable * $gstRate / 100, 2);
+            $lineTaxable = round(max(0, $gross - $discountAmount), $dp);
+            $gstAmt = round($lineTaxable * $gstRate / 100, $dp);
 
             if ($isInterState) {
                 $lineCgst = 0;
                 $lineSgst = 0;
                 $lineIgst = $gstAmt;
             } else {
-                $half = round($gstAmt / 2, 2);
+                $half = round($gstAmt / 2, $dp);
                 $lineCgst = $half;
                 $lineSgst = $half;
                 $lineIgst = 0;
             }
 
-            $lineTotal = round($lineTaxable + $lineCgst + $lineSgst + $lineIgst, 2);
+            $lineTotal = round($lineTaxable + $lineCgst + $lineSgst + $lineIgst, $dp);
             $items[] = array_merge($line, [
                 'discount_percent' => $discountPercent,
                 'discount_amount' => $discountAmount,
@@ -65,42 +68,42 @@ class GstCalculator
             $discountTotal += $discountAmount;
         }
 
-        $subtotal = round($taxable + $cgst + $sgst + $igst, 2);
-        $taxableRounded = round($taxable, 2);
+        $subtotal = round($taxable + $cgst + $sgst + $igst, $dp);
+        $taxableRounded = round($taxable, $dp);
 
         $tdsTcsAmount = 0.0;
         if ($taxDeductionType === 'tds' && $tdsTcsRate !== null) {
             // TDS (Income Tax) is deducted on the taxable value, excluding GST.
-            $tdsTcsAmount = round($taxableRounded * $tdsTcsRate / 100, 2);
+            $tdsTcsAmount = round($taxableRounded * $tdsTcsRate / 100, $dp);
             $roundOff = 0.0;
-            $grand = round($subtotal - $tdsTcsAmount, 2);
+            $grand = round($subtotal - $tdsTcsAmount, $dp);
         } elseif ($taxDeductionType === 'tcs' && $tdsTcsRate !== null) {
             // TCS is collected on the GST-inclusive invoice value.
-            $tdsTcsAmount = round($subtotal * $tdsTcsRate / 100, 2);
+            $tdsTcsAmount = round($subtotal * $tdsTcsRate / 100, $dp);
             $roundOff = 0.0;
-            $grand = round($subtotal + $tdsTcsAmount, 2);
+            $grand = round($subtotal + $tdsTcsAmount, $dp);
         } else {
             if ($roundOff === null) {
                 $rounded = round($subtotal);
-                $roundOff = round($rounded - $subtotal, 2);
+                $roundOff = round($rounded - $subtotal, $dp);
             } else {
-                $roundOff = round($roundOff, 2);
+                $roundOff = round($roundOff, $dp);
             }
-            $grand = round($subtotal + $roundOff, 2);
+            $grand = round($subtotal + $roundOff, $dp);
         }
 
         return [
             'lines' => $items,
-            'discount_total' => round($discountTotal, 2),
+            'discount_total' => round($discountTotal, $dp),
             'taxable_amount' => $taxableRounded,
-            'cgst_amount' => round($cgst, 2),
-            'sgst_amount' => round($sgst, 2),
-            'igst_amount' => round($igst, 2),
+            'cgst_amount' => round($cgst, $dp),
+            'sgst_amount' => round($sgst, $dp),
+            'igst_amount' => round($igst, $dp),
             'total_amount' => $subtotal,
             'round_off' => $roundOff,
             'tds_tcs_amount' => $tdsTcsAmount,
             'grand_total' => $grand,
-            'amount_in_words' => self::amountInWords($grand),
+            'amount_in_words' => self::amountInWords(round($grand, 2)),
         ];
     }
 

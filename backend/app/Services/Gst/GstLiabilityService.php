@@ -38,11 +38,14 @@ class GstLiabilityService
             ->where('match_status', ClientGstr2bInvoice::MATCH_STATUS_MATCHED)
             ->sum('total_gst');
 
+        // Projected ITC (client's estimate) counts as normal ITC until the official GSTR-2B is loaded.
+        $projectedItc = ProjectedItc::forRange($clientProfileId, $from, $to)['total'];
+
         $cgst = round((float) ($output?->cgst ?? 0), 2);
         $sgst = round((float) ($output?->sgst ?? 0), 2);
         $igst = round((float) ($output?->igst ?? 0), 2);
         $totalOutputGst = round($cgst + $sgst + $igst, 2);
-        $totalEligibleItc = round((float) $eligibleItc, 2);
+        $totalEligibleItc = round((float) $eligibleItc + $projectedItc, 2);
         $netLiability = round($totalOutputGst - $totalEligibleItc, 2);
         $result = $netLiability > 0
             ? 'gst_payable'
@@ -57,6 +60,7 @@ class GstLiabilityService
             'igst' => $igst,
             'total_output_gst' => $totalOutputGst,
             'total_eligible_itc' => $totalEligibleItc,
+            'projected_itc' => $projectedItc, // already included in total_eligible_itc
             'net_gst_liability' => $netLiability,
             'gst_payable' => $noSignZero(max($netLiability, 0)),
             'itc_carry_forward' => $noSignZero(max(-$netLiability, 0)),
@@ -79,6 +83,7 @@ class GstLiabilityService
         return [
             'output_gst' => (float) $liability['total_output_gst'],
             'eligible_itc' => (float) $liability['total_eligible_itc'],
+            'projected_itc' => (float) $liability['projected_itc'],
             'gst_payable' => (float) $liability['gst_payable'],
             'excess_itc' => (float) $liability['itc_carry_forward'],
             'total_gstr2b_invoices' => (clone $gstr2b)->count(),

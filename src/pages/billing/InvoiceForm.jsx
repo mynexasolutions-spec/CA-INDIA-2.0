@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { billingDocPath, CURRENCIES, docTypeLabel, documentDateLabel, formatDMY, localISODate, money, normalizeGstRate, REASON_FOR_TRANSPORT_OPTIONS } from './billingUtils';
+import { billingDocPath, CURRENCIES, decimalsForDoc, docTypeLabel, documentDateLabel, formatDMY, localISODate, money, normalizeGstRate, REASON_FOR_TRANSPORT_OPTIONS, setMoneyDecimals } from './billingUtils';
 import { useAuth } from '../../auth/AuthContext';
 import { docTypeLock, isDocTypeDisabled, showGstFields, showHsnFields, showRcmCheckbox } from './billingProfile';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -54,24 +54,27 @@ function mapDocLines(items) {
   }));
 }
 
-function calcLocal(lines, inter, taxesEnabled = true, tdsTcs = null) {
+// Mirrors the backend's GstCalculator: every step is rounded to the client's configured
+// decimal places (Admin → Clients → Configuration), so the preview matches what is saved.
+function calcLocal(lines, inter, taxesEnabled = true, tdsTcs = null, decimals = 2) {
+  const r = (x) => Number(x.toFixed(decimals));
   let taxable = 0, cgst = 0, sgst = 0, igst = 0, discount = 0;
   lines.forEach((l) => {
-    const gross = Number(l.qty || 0) * Number(l.rate || 0);
+    const gross = r(Number(l.qty || 0) * Number(l.rate || 0));
     const discPercent = Number(l.discount_percent || 0);
-    let disc = (gross * discPercent) / 100;
+    let disc = r((gross * discPercent) / 100);
     if (discPercent <= 0 && Number(l.discount_amount || 0) > 0) {
-      disc = Number(l.discount_amount);
+      disc = r(Number(l.discount_amount));
     }
-    const t = Math.max(0, gross - disc);
-    const g = taxesEnabled ? (t * Number(l.gst_rate || 0)) / 100 : 0;
+    const t = r(Math.max(0, gross - disc));
+    const g = taxesEnabled ? r((t * Number(l.gst_rate || 0)) / 100) : 0;
     discount += disc;
     taxable += t;
     if (inter) igst += g;
-    else { cgst += g / 2; sgst += g / 2; }
+    else { const half = r(g / 2); cgst += half; sgst += half; }
   });
-  const sub = taxable + cgst + sgst + igst; // Total Value (Post GST)
-  let round = Math.round(sub) - sub;
+  const sub = r(taxable + cgst + sgst + igst); // Total Value (Post GST)
+  let round = r(Math.round(sub) - sub);
   let tdsTcsAmount = 0;
   let grand = sub + round;
   if (tdsTcs?.type && tdsTcs.rate) {
@@ -179,6 +182,7 @@ export default function InvoiceForm({
   const [receiverSignedAt, setReceiverSignedAt] = useState('');
   const [notes, setNotes] = useState('');
   const [terms, setTerms] = useState('');
+  const [poNumber, setPoNumber] = useState('');
 
   const tdsTcsApplicable = ['tax_invoice', 'bill_of_supply'].includes(docType);
   const activeSections = taxDeductionType === 'tds' ? tdsSections : taxDeductionType === 'tcs' ? tcsSections : [];
@@ -186,11 +190,19 @@ export default function InvoiceForm({
   const tdsTcsRate = selectedSection ? Number(selectedSection.rate) : 0;
   const requireHsn = hsnEnabled;
   const showRcmBox = showRcmCheckbox(profile) && ['tax_invoice', 'debit_note', 'credit_note'].includes(docType);
-  const showTaxSettingsSection = showRcmBox || tdsTcsApplicable;
+  const decimals = decimalsForDoc(profile, docType);
+  const showPoField = docType !== 'amendment';
+  const showTaxSettingsSection = showRcmBox || tdsTcsApplicable || showPoField;
+
+  // money() (line amounts etc.) follows this document type's decimal places while the form is open.
+  useEffect(() => {
+    setMoneyDecimals(decimals);
+    return () => setMoneyDecimals(2);
+  }, [decimals]);
 
   const totals = useMemo(
-    () => calcLocal(lines, inter, taxesEnabled && !rcm, tdsTcsApplicable && taxDeductionType ? { type: taxDeductionType, rate: tdsTcsRate } : null),
-    [lines, inter, taxesEnabled, rcm, tdsTcsApplicable, taxDeductionType, tdsTcsRate]
+    () => calcLocal(lines, inter, taxesEnabled && !rcm, tdsTcsApplicable && taxDeductionType ? { type: taxDeductionType, rate: tdsTcsRate } : null, decimals),
+    [lines, inter, taxesEnabled, rcm, tdsTcsApplicable, taxDeductionType, tdsTcsRate, decimals]
   );
   const selectedRef = invoices.find((inv) => String(inv.id) === String(refId));
   const unlockedEdit = editAllowed && ['issued', 'partial', 'paid'].includes(docStatus);
@@ -241,6 +253,7 @@ export default function InvoiceForm({
     setReceiverSignedAt(doc.receiver_signature_datetime ? doc.receiver_signature_datetime.slice(0, 16) : '');
     setNotes(doc.notes || '');
     setTerms(doc.terms || '');
+    setPoNumber(doc.po_number || '');
     const mapped = mapDocLines(d.line_items || d.lineItems || doc.line_items || doc.lineItems);
     setLines(mapped.length ? mapped : [emptyLine()]);
   };
@@ -312,6 +325,7 @@ export default function InvoiceForm({
       is_reverse_charge: rcm,
       tax_deduction_type: tdsTcsApplicable && taxDeductionType ? taxDeductionType : null,
       tds_tcs_section_id: tdsTcsApplicable && taxDeductionType && tdsTcsSectionId ? +tdsTcsSectionId : null,
+      po_number: showPoField && poNumber.trim() ? poNumber.trim() : null,
       ...(docType === 'delivery_challan' ? {
         reason_for_transportation: reasonForTransport || null,
         reason_for_transportation_other: reasonForTransport === 'other' ? reasonForTransportOther : null,
@@ -837,6 +851,14 @@ export default function InvoiceForm({
               </label>
             </div>
           )}
+          {showPoField && (
+            <div className="bp-form two" style={{ marginTop: 12 }}>
+              <label>
+                PO No. (Optional)
+                <input className="bp-input" value={poNumber} maxLength={50} onChange={(e) => setPoNumber(e.target.value)} placeholder="Enter Purchase Order Number" />
+              </label>
+            </div>
+          )}
         </div>
       )}
 
@@ -904,6 +926,7 @@ export default function InvoiceForm({
                         className="bp-textarea"
                         style={{ height: 38, resize: 'none', padding: '6px 8px', fontSize: 13, border: '1px solid var(--bp-border)', borderRadius: 8, textAlign: 'center' }}
                         value={l.description}
+                        maxLength={5000}
                         onChange={(e) => setLine(idx, 'description', e.target.value)}
                         placeholder="Description of product / service"
                         required
@@ -946,7 +969,7 @@ export default function InvoiceForm({
                         style={{ textAlign: 'center', border: '1px solid var(--bp-border)', borderRadius: 8 }}
                         required
                         value={l.rate}
-                        onChange={(e) => setLine(idx, 'rate', sanitizeDecimal(e.target.value, { maxIntDigits: 8, decimals: 2, min: 0, max: 99999999 }))}
+                        onChange={(e) => setLine(idx, 'rate', sanitizeDecimal(e.target.value, { maxIntDigits: 8, decimals, min: 0, max: 99999999 }))}
                       />
                     </td>
                     {taxesEnabled && (
@@ -1039,7 +1062,7 @@ export default function InvoiceForm({
               : [['Round Off', totals.round]]),
             ['Grand Total', totals.grand],
           ].map(([k, v]) => (
-            <div key={k} className="bp-gst-row"><span>{k}</span><strong>₹{v.toFixed(2)}</strong></div>
+            <div key={k} className="bp-gst-row"><span>{k}</span><strong>₹{v.toFixed(decimals)}</strong></div>
           ))}
         </div>
       </div>

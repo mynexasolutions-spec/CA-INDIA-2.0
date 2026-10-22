@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Models\ClientDocumentSetting;
 use App\Models\ClientProfile;
 use App\Models\CommercialDocument;
 use App\Models\DocumentLineItem;
@@ -30,7 +31,8 @@ class InvoiceService
                 array_key_exists('round_off', $data) ? (float) $data['round_off'] : null,
                 BillingPolicy::taxesEnabled($profile, $isRcm),
                 $taxDeductionType,
-                $tdsRate
+                $tdsRate,
+                ClientDocumentSetting::decimalsFor($profile, $type)
             );
 
             $allocateNumber = $status === 'issued';
@@ -85,7 +87,8 @@ class InvoiceService
                 array_key_exists('round_off', $data) ? (float) $data['round_off'] : null,
                 BillingPolicy::taxesEnabled($profile, $isRcm),
                 $taxDeductionType,
-                $tdsRate
+                $tdsRate,
+                ClientDocumentSetting::decimalsFor($profile, $type)
             );
             $status = $keepIssued ? $doc->status : 'draft';
             // Manual numbering: a draft may have its typed number changed (never an issued one).
@@ -153,6 +156,7 @@ class InvoiceService
                 'payment_terms' => $quotation->payment_terms,
                 'is_inter_state' => $quotation->is_inter_state,
                 'is_reverse_charge' => $quotation->is_reverse_charge,
+                'po_number' => $quotation->po_number,
                 'notes' => trim(($quotation->notes ? $quotation->notes."\n" : '').'Converted from quotation '.$quotation->number),
                 'terms' => $quotation->terms,
                 'status' => 'issued',
@@ -198,6 +202,7 @@ class InvoiceService
             'payment_terms' => $source->payment_terms,
             'is_inter_state' => $source->is_inter_state,
             'is_reverse_charge' => $source->is_reverse_charge,
+            'po_number' => $source->po_number,
             'notes' => $source->notes,
             'terms' => $source->terms,
             'status' => 'draft',
@@ -369,6 +374,7 @@ class InvoiceService
                 'currency' => $locked->currency,
                 'tax_deduction_type' => $locked->tax_deduction_type,
                 'tds_tcs_section_id' => $locked->tds_tcs_section_id,
+                'po_number' => $locked->po_number,
                 'reference_document_id' => $locked->reference_document_id,
                 'reason_for_transportation' => $locked->reason_for_transportation,
                 'reason_for_transportation_other' => $locked->reason_for_transportation_other,
@@ -402,7 +408,8 @@ class InvoiceService
                 $roundOff,
                 BillingPolicy::taxesEnabled($profile, $isRcm),
                 $taxDeductionType,
-                $tdsRate
+                $tdsRate,
+                ClientDocumentSetting::decimalsFor($profile, $type)
             );
 
             $status = $locked->status;
@@ -578,7 +585,8 @@ class InvoiceService
             array_key_exists('round_off', $data) ? (float) $data['round_off'] : null,
             BillingPolicy::taxesEnabled($profile, $isRcm),
             $taxDeductionType,
-            $tdsRate
+            $tdsRate,
+            ClientDocumentSetting::decimalsFor($profile, $type)
         );
 
         return [
@@ -943,6 +951,7 @@ class InvoiceService
             'payment_terms' => $data['payment_terms'] ?? null,
             'currency' => $data['currency'] ?? 'INR',
             'share_token' => $data['share_token'] ?? Str::random(40),
+            'po_number' => filled($data['po_number'] ?? null) ? trim($data['po_number']) : null,
             'reason_for_transportation' => $data['reason_for_transportation'] ?? null,
             'reason_for_transportation_other' => $data['reason_for_transportation_other'] ?? null,
             'vehicle_no' => $data['vehicle_no'] ?? null,
@@ -1080,7 +1089,9 @@ class InvoiceService
                         'defaultFont' => 'DejaVu Sans',
                     ]);
 
-                $rounded = (int) $layoutId === 3 ? \App\Services\DocumentTemplate\DocumentCanvasHelper::roundedBorders($theme) : null;
+                // Layout 3: rounded boxes drawn on the canvas. Layout 1: the header and totals divider lines, extended to the bottom of their cells.
+                $rounded = (int) $layoutId === 3 ? \App\Services\DocumentTemplate\DocumentCanvasHelper::roundedBorders($theme)
+                    : (in_array((int) $layoutId, [1, 2], true) ? \App\Services\DocumentTemplate\DocumentCanvasHelper::layout1Dividers() : null);
                 if ($rounded) {
                     $pdf->getDomPDF()->setCallbacks($rounded['callbacks']);
                 }
