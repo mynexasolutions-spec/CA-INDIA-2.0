@@ -360,9 +360,11 @@ class DocumentCanvasHelper
                         $state[$page][$i]['x'] ??= $box['x'] + $box['w'];
                     } elseif (in_array($tableClass, $classes, true)) {
                         $state[$page][$i]['tableBottom'] = $box['y'] + $box['h'];
+                        // 'no-div': the table's last row spans the full width, so there is no divider to continue
+                        $state[$page][$i]['skip'] = in_array('no-div', $classes, true);
                     } elseif ($node->nodeName === 'td' && in_array($cellClass, $classes, true)) {
                         $s = $state[$page][$i] ?? [];
-                        if (isset($s['x'], $s['tableBottom']) && $box['y'] + $box['h'] - $s['tableBottom'] > 1.0) {
+                        if (empty($s['skip']) && isset($s['x'], $s['tableBottom']) && $box['y'] + $box['h'] - $s['tableBottom'] > 1.0) {
                             // dompdf centres a collapsed border on the cell edge (half its width each side), so the
                             // line is drawn on the edge itself: it continues the border above it without a jog.
                             $lines[$page][] = [$s['x'], $s['tableBottom'], $box['y'] + $box['h']];

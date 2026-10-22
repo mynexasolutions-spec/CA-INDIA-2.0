@@ -26,12 +26,15 @@ const pdfRequests = new Map();
 const MAX_CACHED = 8;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-// Only the client's own layout picker is shared/remembered. The admin previews are driven by live form values and
-// must always be fetched fresh.
-const isShareable = (url) => String(url).includes('/client/layout-preview');
+// Layout previews (the client's own picker and the admin's Layout tab) are shared/remembered per URL, so the cards and
+// the big preview that ask for the same layout + colour make one request. The server's own cache key covers the whole
+// profile, so a fresh request always reflects an edit; the admin copy is only kept for a minute, so a profile edited
+// in another tab shows up quickly.
+const isShareable = (url) => String(url).includes('/layout-preview');
+const ttlFor = (url) => (String(url).includes('/admin/') ? 60 * 1000 : CACHE_TTL_MS);
 const isCached = (url) => {
   const hit = pdfRequests.get(url);
-  if (hit && Date.now() - hit.at > CACHE_TTL_MS) pdfRequests.delete(url);
+  if (hit && Date.now() - hit.at > ttlFor(url)) pdfRequests.delete(url);
   return pdfRequests.has(url);
 };
 
@@ -117,7 +120,8 @@ function PdfCanvasPages({ data, onFail, onDrawn }) {
     let cancelled = false;
     const cssW = Math.max(1, Math.floor(host.clientWidth || width));
     // sharp on retina screens, but never beyond ~4000 device pixels wide (phone canvas memory limits)
-    const dpr = Math.min(window.devicePixelRatio || 1, 3, 4000 / cssW);
+    // (a small card does not need more than 2x, and drawing fewer pixels is faster)
+    const dpr = Math.min(window.devicePixelRatio || 1, cssW < 600 ? 2 : 3, 4000 / cssW);
 
     (async () => {
       try {
@@ -146,7 +150,7 @@ function PdfCanvasPages({ data, onFail, onDrawn }) {
     return () => { cancelled = true; };
   }, [width, data, docReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div ref={hostRef} style={{ width: '100%', background: '#fff' }} />;
+  return <div ref={hostRef} style={{ width: '100%', position: 'relative', zIndex: 1 }} />;
 }
 
 /**
@@ -174,6 +178,7 @@ export default function LayoutPreview({
   onClick,
   debounceMs = DEBOUNCE_MS,
   onBusyChange,
+  compact = false,
 }) {
   const [pdfData, setPdfData] = useState(null);
   const [status, setStatus] = useState(previewUrl ? 'loading' : 'idle');
@@ -259,32 +264,39 @@ export default function LayoutPreview({
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            // Near the top of the page, not its centre: the page is taller than the visible area, so a centred
-            // spinner sat below the fold and the preview looked like it was doing nothing.
-            justifyContent: 'flex-start',
-            paddingTop: 'min(150px, 22vh)',
-            gap: 14,
-            background: 'rgba(255,255,255,0.85)',
+            // The small cards are fully visible, so their loader sits dead centre. The big modal page is taller than
+            // the visible area, so there it stays near the top (a centred spinner would sit below the fold).
+            justifyContent: compact ? 'center' : 'flex-start',
+            paddingTop: compact ? 0 : 'min(150px, 22vh)',
+            gap: compact ? 14 : 14,
+            background: compact ? 'linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)' : 'rgba(255,255,255,0.85)',
           }}
         >
           <div
             style={{
-              width: 44,
-              height: 44,
-              border: '4px solid #dbe6f7',
-              borderTopColor: '#2563eb',
+              position: 'relative',
+              width: compact ? 46 : 44,
+              height: compact ? 46 : 44,
               borderRadius: '50%',
-              animation: 'layout-preview-spin 0.8s linear infinite',
+              // a soft track with a bright comet running round it
+              background: 'conic-gradient(from 0deg, rgba(37,99,235,0) 0%, #60a5fa 55%, #1d4ed8 100%)',
+              WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px))',
+              mask: 'radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px))',
+              animation: 'layout-preview-spin 0.9s linear infinite',
+              filter: 'drop-shadow(0 4px 8px rgba(37,99,235,0.35))',
             }}
           />
-          <div style={{ textAlign: 'center', lineHeight: 1.4 }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#0f2a5f' }}>Preparing your preview…</div>
-            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>This can take a few seconds the first time.</div>
+          <div style={{ textAlign: 'center', lineHeight: 1.4, animation: 'layout-preview-pulse 1.6s ease-in-out infinite' }}>
+            <div style={{ fontSize: compact ? 12.5 : 14, fontWeight: 800, color: '#0f2a5f', letterSpacing: '0.01em' }}>Preparing your preview…</div>
+            {!compact && <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>This can take a few seconds the first time.</div>}
           </div>
-          <style>{'@keyframes layout-preview-spin { to { transform: rotate(360deg); } }'}</style>
+          <style>{'@keyframes layout-preview-spin { to { transform: rotate(360deg); } } @keyframes layout-preview-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }'}</style>
         </div>
       )}
-      {status === 'error' && (
+      {status === 'error' && src && !compact && (
+        <img src={src} alt={alt} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+      )}
+      {status === 'error' && !src && (
         <div
           style={{
             position: 'absolute',

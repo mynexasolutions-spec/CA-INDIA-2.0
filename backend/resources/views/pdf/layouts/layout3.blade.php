@@ -34,9 +34,13 @@
   $addrLines = max(1, (int) ceil(mb_strlen(trim((string) ($data['seller_address'] ?? ''))) / 45));
   $leftRows = (!empty($data['seller_address']) ? 1 : 0) + ((!empty($data['seller_gstin']) || !empty($data['seller_pan'])) ? 1 : 0)
       + (!empty($data['seller_email']) ? 1 : 0) + (!empty($data['seller_phone']) ? 1 : 0) + (!empty($data['seller_state']) ? 1 : 0);
-  $rightRows = 2 + (in_array($data['doc_type'] ?? '', ['credit_note', 'debit_note'], true) ? 0 : 1)
+  $isNote = in_array($data['doc_type'] ?? '', ['credit_note', 'debit_note'], true);
+  $sampleAll = !empty($data['sample_all']);   // layout preview: list every component, not only the ones that apply
+  $na = '(If Applicable)';
+  // A PO No. takes the place of the Financial Year row; credit / debit notes have no such row, so it is added there.
+  $rightRows = 2 + ($isNote ? 0 : 1)
       + (!empty($data['place_of_supply']) ? 1 : 0) + 1 + (!empty($data['against_number']) ? 1 : 0)
-      + (!empty($data['po_number']) ? 1 : 0);
+      + (($isNote && !empty($data['po_number'])) ? 1 : 0);
   $leftH = max(1, $leftRows) * 23.8 + (empty($data['seller_address']) ? 0 : ($addrLines - 1) * 17.1);
   $rightH = 39 + max(1, $rightRows) * 23.8;
   $diffH = $leftH - $rightH;
@@ -342,13 +346,23 @@
             <td class="meta-colon">:</td>
             <td class="meta-val">{{ $data['invoice_date'] }}</td>
           </tr>
-          @unless(in_array($data['doc_type'] ?? '', ['credit_note', 'debit_note'], true))
+          @unless($isNote)
+          @if(!empty($data['po_number']))
+          <tr>
+            <td class="meta-ico"><img src="{{ $icons['doc'] }}" alt=""></td>
+            <td class="meta-right-label">PO No.</td>
+            <td class="meta-colon">:</td>
+            <td class="meta-val">{{ $data['po_number'] }}</td>
+          </tr>
+          @endif
+          @if(empty($data['po_number']))
           <tr>
             <td class="meta-ico"><img src="{{ $icons['chart'] }}" alt=""></td>
             <td class="meta-right-label">Financial Year</td>
             <td class="meta-colon">:</td>
             <td class="meta-val">{{ $data['financial_year'] }}</td>
           </tr>
+          @endif
           @endunless
           @if(!empty($data['place_of_supply']))
           <tr>
@@ -372,7 +386,7 @@
             <td class="meta-val">{{ $data['against_number'] }}</td>
           </tr>
           @endif
-          @if(!empty($data['po_number']))
+          @if($isNote && !empty($data['po_number']))
           <tr>
             <td class="meta-ico"><img src="{{ $icons['doc'] }}" alt=""></td>
             <td class="meta-right-label">PO No.</td>
@@ -532,26 +546,40 @@
               <td class="val">₹ {{ $money($data['summary']['taxable_value']) }}</td>
             </tr>
             @if($data['has_tax'])
-              @if(!empty($data['summary']['show_split_tax']))
+              @php
+                $splitTax = !empty($data['summary']['show_split_tax']);
+                $sumRows = [
+                    ['IGST'.(!empty($data['summary']['igst_rate']) ? ' ('.$data['summary']['igst_rate'].'%)' : ''), !$splitTax ? (float) $data['summary']['igst_amount'] : null],
+                    ['CGST'.(!empty($data['summary']['cgst_rate']) ? ' ('.$data['summary']['cgst_rate'].'%)' : ''), $splitTax ? (float) $data['summary']['cgst_amount'] : null],
+                    ['SGST/UTGST'.(!empty($data['summary']['sgst_rate']) ? ' ('.$data['summary']['sgst_rate'].'%)' : ''), $splitTax ? (float) $data['summary']['sgst_amount'] : null],
+                ];
+              @endphp
+              @foreach($sumRows as [$sumLabel, $sumAmount])
+                @if($sampleAll || ($sumAmount !== null && $sumAmount != 0))
+                  <tr>
+                    <td class="lab">{{ $sumLabel }}</td>
+                    <td class="val">{{ ($sumAmount !== null && $sumAmount != 0) ? '₹ '.$money($sumAmount) : $na }}</td>
+                  </tr>
+                @endif
+              @endforeach
+              @if($sampleAll)
                 <tr>
-                  <td class="lab">CGST{{ !empty($data['summary']['cgst_rate']) ? ' ('.$data['summary']['cgst_rate'].'%)' : '' }}</td>
-                  <td class="val">₹ {{ $money($data['summary']['cgst_amount']) }}</td>
-                </tr>
-                <tr>
-                  <td class="lab">SGST/UTGST{{ !empty($data['summary']['sgst_rate']) ? ' ('.$data['summary']['sgst_rate'].'%)' : '' }}</td>
-                  <td class="val">₹ {{ $money($data['summary']['sgst_amount']) }}</td>
-                </tr>
-              @else
-                <tr>
-                  <td class="lab">IGST{{ !empty($data['summary']['igst_rate']) ? ' ('.$data['summary']['igst_rate'].'%)' : '' }}</td>
-                  <td class="val">₹ {{ $money($data['summary']['igst_amount']) }}</td>
+                  <td class="lab">TDS / TCS</td>
+                  <td class="val">{{ $na }}</td>
                 </tr>
               @endif
             @endif
-            <tr>
-              <td class="lab">Round Off</td>
-              <td class="val">{{ ($data['summary']['round_off'] ?? 0) < 0 ? '- ' : '' }}₹ {{ number_format(abs((float) ($data['summary']['round_off'] ?? 0)), $dp) }}</td>
-            </tr>
+            @if((float) ($data['summary']['round_off'] ?? 0) != 0)
+              <tr>
+                <td class="lab">Round Off</td>
+                <td class="val">{{ ($data['summary']['round_off'] ?? 0) < 0 ? '- ' : '' }}₹ {{ number_format(abs((float) ($data['summary']['round_off'] ?? 0)), $dp) }}</td>
+              </tr>
+            @elseif($sampleAll)
+              <tr>
+                <td class="lab">Round Off</td>
+                <td class="val">{{ $na }}</td>
+              </tr>
+            @endif
             <tr class="grand-row">
               <td class="lab">GRAND TOTAL</td>
               <td class="val">₹ {{ $money($data['summary']['grand_total']) }}</td>

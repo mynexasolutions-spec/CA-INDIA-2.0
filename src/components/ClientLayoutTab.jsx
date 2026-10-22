@@ -564,25 +564,22 @@ export default function ClientLayoutTab({
                       boxShadow: isSelected ? '0 0 0 2px rgba(37,99,235,0.1)' : 'none',
                     }}
                   >
-                    {/* Thumbnail */}
+                    {/* Thumbnail: the real layout, rendered with this client's own details in the chosen colour */}
                     <div
                       style={{
                         width: '100%',
-                        height: 115,
-                        background: '#f8fafc',
-                        border: '1px solid #f1f5f9',
+                        background: '#ffffff',
+                        border: '1px solid #e2e8f0',
                         borderRadius: 4,
                         overflow: 'hidden',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
                         marginBottom: 10,
                       }}
                     >
                       <LayoutPreview
+                        previewUrl={isNewClient ? null : layoutPreviewUrl(clientId, { layoutId: tpl.id, colourScheme: selectedColourScheme })}
                         src={LAYOUT_IMAGES[tpl.id]}
                         alt={tpl.name}
-                        style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }}
+                        compact
                       />
                     </div>
 

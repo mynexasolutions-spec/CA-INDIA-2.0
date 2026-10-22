@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { LoadingBlock } from '../../components/Spinner';
 import { currentFyLabel, formatDMYTime } from './billingUtils';
-import { prefetchLayoutPreview } from '../../components/LayoutPreview';
+import LayoutPreview, { prefetchLayoutPreview } from '../../components/LayoutPreview';
 import SharedLayoutPreviewModal from '../../components/LayoutPreviewModal';
 import layout1Img from '../../assets/layout-previews/layout-1.png';
 import layout2Img from '../../assets/layout-previews/layout-2.png';
@@ -190,10 +190,6 @@ const normaliseLayout = (id) => (LAYOUTS.some((l) => l.id === Number(id)) ? Numb
 /* ── Layouts tab ─────────────────────────────────────────────────── */
 const LAYOUT_IMAGES = { 1: layout1Img, 2: layout2Img, 3: layout3Img };
 
-// One real-renderer thumbnail per layout x colour, so picking a colour recolours every card instantly.
-const COLOUR_THUMBS = import.meta.glob('../../assets/layout-previews/colours/*.jpg', { eager: true, query: '?url', import: 'default' });
-const layoutThumb = (layoutId, colourId) => COLOUR_THUMBS[`../../assets/layout-previews/colours/layout-${layoutId}-${colourId}.jpg`] || LAYOUT_IMAGES[layoutId];
-
 /** Real-renderer preview (the same renderer the admin sees) for the client's own profile. */
 function clientLayoutPreviewUrl(layoutId, colourScheme) {
   return `/api/client/layout-preview?layout_id=${layoutId}&colour_scheme=${colourScheme}`;
@@ -240,13 +236,9 @@ function LayoutsTab({ approved, sections, onSubmitted }) {
   // Re-sync when the server data arrives / changes (after a submit).
   useEffect(() => { setSelectedLayout(baseLayout); setSelectedColor(baseColour); }, [baseLayout, baseColour]);
 
-  // Warm the previews in the background (the server needs ~1.5 s per PDF): the selected layout first, then the
-  // others a moment apart, so "Preview Layout" opens instantly instead of after a wait.
-  useEffect(() => {
-    const order = [selectedLayout, ...LAYOUTS.map((l) => l.id).filter((id) => id !== selectedLayout)];
-    const timers = order.map((id, i) => window.setTimeout(() => prefetchLayoutPreview(clientLayoutPreviewUrl(id, selectedColor)), 200 + i * 700));
-    return () => timers.forEach(window.clearTimeout);
-  }, [selectedLayout, selectedColor]);
+  // The cards draw the real previews themselves (and share the cached PDFs with the "Preview Layout" modal);
+  // just warm up pdf.js early so they appear as soon as the PDFs arrive.
+  useEffect(() => { prefetchLayoutPreview(clientLayoutPreviewUrl(selectedLayout, selectedColor)); }, [selectedLayout, selectedColor]);
 
   const colorObj = COLORS.find((c) => c.id === selectedColor) || COLORS[0];
   const dirty = selectedLayout !== baseLayout || selectedColor !== baseColour;
@@ -294,10 +286,9 @@ function LayoutsTab({ approved, sections, onSubmitted }) {
 
               <p style={{ fontSize: 11.5, color: '#64748b', margin: '0 14px 10px', lineHeight: 1.5, minHeight: 52 }}>{layout.desc}</p>
 
-              {/* the same invoice design thumbnails the admin sees */}
+              {/* the real layout, rendered for this client's own company details (never a sample image) */}
               <div className="ly-thumb" style={{ margin: '0 12px 12px', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
-                <img src={layoutThumb(layout.id, selectedColor)} alt={`${layout.name} design`} loading="lazy"
-                  style={{ width: '100%', height: 'auto', display: 'block' }} />
+                <LayoutPreview previewUrl={clientLayoutPreviewUrl(layout.id, selectedColor)} alt={`${layout.name} design`} compact />
               </div>
 
               {/* colours */}
@@ -472,6 +463,18 @@ export default function BusinessSettings() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Start rendering the three layout previews as soon as the settings arrive (whichever tab is open), so the
+  // Layouts tab finds them ready. The server needs ~1.5 s per PDF; the current layout goes first.
+  useEffect(() => {
+    if (!approved) return undefined;
+    const pending = sections?.layout?.pending?.payload;
+    const colour = normaliseColour(pending?.colour_scheme || approved.colour_scheme || 'simple');
+    const current = normaliseLayout(pending?.layout_id || approved.layout_id || 1);
+    const order = [current, ...LAYOUTS.map((l) => l.id).filter((id) => id !== current)];
+    const timers = order.map((id, i) => window.setTimeout(() => prefetchLayoutPreview(clientLayoutPreviewUrl(id, colour)), i * 400));
+    return () => timers.forEach(window.clearTimeout);
+  }, [approved, sections]);
 
   if (!form) return <LoadingBlock minHeight="70vh" />;
 

@@ -160,14 +160,15 @@ class DocumentPayloadBuilder
         $wordsDisplay = self::formatAmountInWords($doc->amount_in_words);
 
         // Asset paths
+        // (large uploads are swapped for a downscaled cached copy: smaller PDFs, faster rendering)
         $logoPath = ($p->logo_path && file_exists(public_path('storage/' . $p->logo_path)))
-            ? public_path('storage/' . $p->logo_path)
+            ? PdfImage::shrink(public_path('storage/' . $p->logo_path), 600)
             : (file_exists(public_path('pdf-assets/website-logo.png')) ? public_path('pdf-assets/website-logo.png') : null);
         $sigPath = ($p->signature_path && file_exists(public_path('storage/' . $p->signature_path)))
-            ? public_path('storage/' . $p->signature_path)
+            ? PdfImage::shrink(public_path('storage/' . $p->signature_path), 500)
             : null;
         $sealPath = ($p->seal_path && file_exists(public_path('storage/' . $p->seal_path)))
-            ? public_path('storage/' . $p->seal_path)
+            ? PdfImage::shrink(public_path('storage/' . $p->seal_path), 500)
             : null;
 
         // Terms

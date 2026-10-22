@@ -18,14 +18,18 @@
 
   $tds = $data['summary']['tds_tcs_type'] ?? null;
 
-  // Tax rows: every tax line is always listed; one that does not apply to this document reads "(If Applicable)".
+  // Tax / TDS / round-off rows and the PO No. / Against boxes appear only when they have a value to show.
   $sm = $data['summary'];
   $interState = $data['has_tax'] && empty($sm['show_split_tax']);
   $rate = fn ($r) => ($r !== null && $r !== '' && (float) $r > 0) ? ' (' . rtrim(rtrim(number_format((float) $r, 2), '0'), '.') . '%)' : '';
   $igstRate = !empty($sm['igst_rate']) ? $sm['igst_rate'] : (!empty($sm['cgst_rate']) ? (float) $sm['cgst_rate'] * 2 : null);
   $halfRate = !empty($sm['cgst_rate']) ? $sm['cgst_rate'] : (!empty($sm['igst_rate']) ? (float) $sm['igst_rate'] / 2 : null);
-  $na = '(If Applicable)';
   $roundOff = (float) ($sm['round_off'] ?? 0);
+  // layout preview: list every component, not only the ones that apply
+  $sampleAll = !empty($data['sample_all']);
+  $na = '(If Applicable)';
+  $hasPo = !empty($data['po_number']);
+  $hasAgainst = !empty($data['against_number']);
 @endphp
 <style>
   /* First page: 6mm top. Later pages start lower, clear of the corner ribbon drawn at the top-left. Sides 5mm. */
@@ -53,7 +57,8 @@
   .meta-tbl td.l { border-right: 1px solid {{ $ink }}; width: 48.4%; }
   .meta-k { color: {{ $ink }}; }
   .meta-v { margin-top: 1px; }
-  .meta-hint { font-weight: normal; }
+  /* with no PO No. / Against row the two remaining rows share the header's height */
+  .meta-tall td { height: 61px; }
 
   /* receiver / consignee */
   .party-hdr td { font-weight: bold; font-size: 12.4px; padding: 4px 8px 3px; text-transform: uppercase; }
@@ -74,7 +79,8 @@
 
   /* amount in words + bank details (left) and the totals (right) share one row, so their boxes are one height */
   .bot td.left { width: 60%; padding: 0; border-right: 1px solid {{ $ink }}; }
-  .bot td.right { padding: 0; }
+  /* the totals sit at the bottom of their box (Grand Total level with the bank details), however many rows there are */
+  .bot td.right { padding: 0; vertical-align: bottom; }
   .sec { padding: 5px 9px 6px; }
   .sec-h { font-weight: bold; font-size: 12.2px; text-transform: uppercase; }
   .sec + .sec { border-top: 1px solid {{ $ink }}; }
@@ -83,6 +89,8 @@
   .sec-bank { height: 97px; }
   .bank td { padding: 1px 0; font-size: 12px; }
   .bank td.k { width: 92px; }
+  /* the top line closes the totals and carries the words/bank divider across to the right edge */
+  .sum tr:first-child td { border-top: 1px solid {{ $ink }}; }
   .sum td { border-bottom: 1px solid {{ $ink }}; padding: 3.5px 8px; font-size: 12.4px; line-height: 1.3; }
   .sum tr:last-child td { border-bottom: 0; }
   /* 56.2% of the totals box makes the value column as wide as the items table's last column (17.5% of the page), so the
@@ -90,7 +98,8 @@
   .sum td.l { border-right: 1px solid {{ $ink }}; width: 56.2%; }
   .sum td.v { text-align: center; }
   .sum .b { font-weight: bold; text-transform: uppercase; font-size: 11.4px; white-space: nowrap; }
-  .sum .gt td { font-size: 14.4px; font-weight: bold; padding: 5px 9px; }
+  /* fixed height: rows above it are 24px each, so the words/bank divider (3 rows down) meets a row line whatever the row count */
+  .sum .gt td { font-size: 14.4px; font-weight: bold; padding: 5px 9px; height: 26px; vertical-align: middle; }
 
   /* terms | signature */
   /* only the two cells of the box itself: a bare ".foot td" also hit the cells of the seal / signature table inside it */
@@ -131,7 +140,7 @@
         @if(!empty($data['seller_phone']))<div>Mobile: {{ $data['seller_phone'] }}</div>@endif
       </td>
       <td class="meta-cell">
-        <table class="meta-tbl">
+        <table class="meta-tbl{{ ($hasPo || $hasAgainst) ? '' : ' meta-tall' }}{{ ($hasPo xor $hasAgainst) ? ' no-div' : '' }}">
           <tr>
             <td class="l"><div class="meta-k">{{ $data['doc_number_label'] }}</div><div class="meta-v">{{ $data['invoice_no'] }}</div></td>
             <td><div class="meta-k">{{ $data['doc_date_label'] }}</div><div class="meta-v">{{ $data['invoice_date'] }}</div></td>
@@ -140,26 +149,17 @@
             <td class="l"><div class="meta-k">Place of Supply</div><div class="meta-v">{{ $data['place_of_supply'] }}</div></td>
             <td><div class="meta-k">Reverse Charge:</div><div class="meta-v">{{ $data['reverse_charge'] ? 'Yes' : 'No' }}</div></td>
           </tr>
-          {{-- PO No. / Against are always listed. When empty, a hint stands in for the value (never "—"):
-               PO No. is optional, Against only applies to credit / debit notes. --}}
-          <tr>
-            <td class="l">
-              <div class="meta-k">PO No.</div>
-              @if(!empty($data['po_number']))
-                <div class="meta-v">{{ $data['po_number'] }}</div>
-              @else
-                <div class="meta-v meta-hint">(If Filed then only)</div>
+          {{-- PO No. / Against: only the ones that are filled; with neither, the row is left out. --}}
+          @if($hasPo || $hasAgainst)
+            <tr>
+              @if($hasPo)
+                <td class="{{ $hasAgainst ? 'l' : '' }}" colspan="{{ $hasAgainst ? 1 : 2 }}"><div class="meta-k">PO No.</div><div class="meta-v">{{ $data['po_number'] }}</div></td>
               @endif
-            </td>
-            <td>
-              <div class="meta-k">Against</div>
-              @if(!empty($data['against_number']))
-                <div class="meta-v">{{ $data['against_number'] }}</div>
-              @else
-                <div class="meta-v meta-hint">(In Case of Credit/Debit Note)</div>
+              @if($hasAgainst)
+                <td colspan="{{ $hasPo ? 1 : 2 }}"><div class="meta-k">Against</div><div class="meta-v">{{ $data['against_number'] }}</div></td>
               @endif
-            </td>
-          </tr>
+            </tr>
+          @endif
         </table>
       </td>
     </tr>
@@ -253,16 +253,16 @@
         <table class="sum">
           <tr><td class="l b">{{ $data['has_tax'] ? 'TOTAL TAXABLE VALUE' : 'TOTAL AMOUNT' }}</td><td class="v">{{ $fmt($sm['taxable_value']) }}</td></tr>
           @if($data['has_tax'])
-            <tr><td class="l">IGST{{ $rate($igstRate) }}</td><td class="v">{{ $interState ? $fmt($sm['igst_amount']) : $na }}</td></tr>
-            <tr><td class="l">CGST{{ $rate($halfRate) }}</td><td class="v">{{ !$interState ? $fmt($sm['cgst_amount']) : $na }}</td></tr>
-            <tr><td class="l">SGST{{ $rate($halfRate) }}</td><td class="v">{{ !$interState ? $fmt($sm['sgst_amount']) : $na }}</td></tr>
+            @if($sampleAll || ($interState && (float) $sm['igst_amount'] != 0))<tr><td class="l">IGST{{ $rate($igstRate) }}</td><td class="v">{{ ($interState && (float) $sm['igst_amount'] != 0) ? $fmt($sm['igst_amount']) : $na }}</td></tr>@endif
+            @if($sampleAll || (!$interState && (float) $sm['cgst_amount'] != 0))<tr><td class="l">CGST{{ $rate($halfRate) }}</td><td class="v">{{ (!$interState && (float) $sm['cgst_amount'] != 0) ? $fmt($sm['cgst_amount']) : $na }}</td></tr>@endif
+            @if($sampleAll || (!$interState && (float) $sm['sgst_amount'] != 0))<tr><td class="l">SGST{{ $rate($halfRate) }}</td><td class="v">{{ (!$interState && (float) $sm['sgst_amount'] != 0) ? $fmt($sm['sgst_amount']) : $na }}</td></tr>@endif
           @endif
           @if($tds)
             <tr><td class="l">{{ $tds === 'tds' ? 'LESS: TDS' : 'ADD: TCS' }}{{ !empty($sm['tds_tcs_section']) ? ' ('.$sm['tds_tcs_section'].')' : '' }}</td><td class="v">{{ $fmt($sm['tds_tcs_amount']) }}</td></tr>
-          @elseif($data['has_tax'])
+          @elseif($sampleAll && $data['has_tax'])
             <tr><td class="l">LESS/ADD: TDS/TCS</td><td class="v">{{ $na }}</td></tr>
           @endif
-          <tr><td class="l">Rounded off</td><td class="v">{{ $roundOff == 0 ? $na : (($roundOff < 0 ? '-' : '') . $fmt(abs($roundOff))) }}</td></tr>
+          @if($roundOff != 0)<tr><td class="l">Rounded off</td><td class="v">{{ ($roundOff < 0 ? '-' : '') . $fmt(abs($roundOff)) }}</td></tr>@elseif($sampleAll)<tr><td class="l">Rounded off</td><td class="v">{{ $na }}</td></tr>@endif
           <tr class="gt"><td class="l">Grand Total</td><td class="v">{{ $fmt($sm['grand_total']) }}</td></tr>
         </table>
       </td>

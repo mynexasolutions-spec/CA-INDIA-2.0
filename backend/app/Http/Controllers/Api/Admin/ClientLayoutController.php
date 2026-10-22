@@ -105,12 +105,13 @@ class ClientLayoutController extends Controller
         $watermark = filter_var($data['watermark'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
         try {
-            $pdf = $renderer->render(
+            $pdf = $renderer->renderCached(
                 $profile,
                 (int) $data['layout_id'],
                 (string) $data['colour_scheme'],
                 $documentType,
-                $watermark
+                $watermark,
+                true   // the selected client's own details (company, address, bank, branding), as the client sees in their preview
             );
         } catch (\Throwable $e) {
             Log::warning("Layout preview failed for client {$clientId}: " . $e->getMessage());

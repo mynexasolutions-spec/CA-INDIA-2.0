@@ -21,14 +21,24 @@
   $nameLen = max(1, mb_strlen((string) $data['company_name']));
   $nameSize = max(11, min(27, (int) floor(420 / $nameLen / 0.7))) . 'pt';
 
-  // Tax rows: every tax line is always listed; one that does not apply to this document reads "(If Applicable)".
+  // Tax / TDS / round-off rows and the PO No. / Against boxes appear only when they have a value to show.
   $sm = $data['summary'];
   $interState = $data['has_tax'] && empty($sm['show_split_tax']);
   $rate = fn ($r) => ($r !== null && $r !== '' && (float) $r > 0) ? ' (' . rtrim(rtrim(number_format((float) $r, 2), '0'), '.') . '%)' : '';
   $igstRate = !empty($sm['igst_rate']) ? $sm['igst_rate'] : (!empty($sm['cgst_rate']) ? (float) $sm['cgst_rate'] * 2 : null);
   $halfRate = !empty($sm['cgst_rate']) ? $sm['cgst_rate'] : (!empty($sm['igst_rate']) ? (float) $sm['igst_rate'] / 2 : null);
-  $na = '(If Applicable)';
   $roundOff = (float) ($sm['round_off'] ?? 0);
+  // layout preview: list every component, not only the ones that apply
+  $sampleAll = !empty($data['sample_all']);
+  $na = '(If Applicable)';
+
+  // The supply / PO / against / reverse-charge strip: [label, value, label width %, value width %]. PO No. and Against
+  // are left out when empty and the widths of the rest are scaled back up to fill the line.
+  $m2 = [['Place of Supply', $data['place_of_supply'], 11.2, 15.2]];
+  if (!empty($data['po_number'])) { $m2[] = ['PO No.', $data['po_number'], 8.1, 17.2]; }
+  if (!empty($data['against_number'])) { $m2[] = ['Against', $data['against_number'], 7.8, 20.8]; }
+  $m2[] = ['Reverse Charge', $data['reverse_charge'] ? 'Yes' : 'No', 12.5, 7.2];
+  $m2Scale = 100 / array_sum(array_map(fn ($c) => $c[2] + $c[3], $m2));
 @endphp
 <style>
   /* Top 15mm / bottom 14.2mm leave room for the ribbon bands on every page; sides are 5mm. */
@@ -91,11 +101,13 @@
   .bot > tbody > tr > td { vertical-align: top; }
   .bot td.left { width: 57.2%; border: 1.3px solid {{ $ink }}; padding: 0; }
   .bot td.gapc { width: 1%; padding: 0; }
-  .bot td.right { border: 1.3px solid {{ $ink }}; padding: 0; }
+  /* the totals sit at the bottom of their box, however many rows there are */
+  .bot td.right { border: 1.3px solid {{ $ink }}; padding: 0; vertical-align: bottom; }
   .bank-h { font-weight: bold; font-size: 12.4px; padding: 7px 9px 6px; border-bottom: 1.3px solid {{ $ink }}; text-transform: uppercase; }
   .bank { padding: 5px 11px 6px; }
   .bank td { padding: 2px 0; font-size: 12.4px; }
   .bank td.k { width: 116px; }
+  .sum tr:first-child td { border-top: 1.3px solid {{ $ink }}; }
   .sum td { padding: 3px 9px; font-size: 12.2px; line-height: 1.25; }
   .sum td.l { border-right: 1.3px solid {{ $ink }}; width: 59.2%; }
   .sum td.v { text-align: center; }
@@ -164,15 +176,10 @@
   <div class="gap"></div>
   <table class="m2">
     <tr>
-      <td class="k" style="width: 11.2%;">Place of Supply</td>
-      <td class="v" style="width: 15.2%;">{{ $data['place_of_supply'] }}</td>
-      {{-- PO No. / Against are always listed; when empty a hint stands in for the value (never "—"). --}}
-      <td class="k" style="width: 8.1%;">PO No.</td>
-      <td class="v" style="width: 17.2%;">{{ !empty($data['po_number']) ? $data['po_number'] : '(If Filed then only)' }}</td>
-      <td class="k" style="width: 7.8%;">Against</td>
-      <td class="v" style="width: 20.8%;">{{ !empty($data['against_number']) ? $data['against_number'] : '(In Case of Credit/Debit Note)' }}</td>
-      <td class="k" style="width: 12.5%;">Reverse Charge</td>
-      <td class="v" style="width: 7.2%;">{{ $data['reverse_charge'] ? 'Yes' : 'No' }}</td>
+      @foreach($m2 as $c)
+        <td class="k" style="width: {{ round($c[2] * $m2Scale, 2) }}%;">{{ $c[0] }}</td>
+        <td class="v" style="width: {{ round($c[3] * $m2Scale, 2) }}%;">{{ $c[1] }}</td>
+      @endforeach
     </tr>
   </table>
 
@@ -251,16 +258,16 @@
         <table class="sum">
           <tr><td class="l b">{{ $data['has_tax'] ? 'TOTAL TAXABLE VALUE' : 'TOTAL AMOUNT' }}</td><td class="v">{{ $fmt($sm['taxable_value']) }}</td></tr>
           @if($data['has_tax'])
-            <tr><td class="l">IGST{{ $rate($igstRate) }}</td><td class="v">{{ $interState ? $fmt($sm['igst_amount']) : $na }}</td></tr>
-            <tr><td class="l">CGST{{ $rate($halfRate) }}</td><td class="v">{{ !$interState ? $fmt($sm['cgst_amount']) : $na }}</td></tr>
-            <tr><td class="l">SGST{{ $rate($halfRate) }}</td><td class="v">{{ !$interState ? $fmt($sm['sgst_amount']) : $na }}</td></tr>
+            @if($sampleAll || ($interState && (float) $sm['igst_amount'] != 0))<tr><td class="l">IGST{{ $rate($igstRate) }}</td><td class="v">{{ ($interState && (float) $sm['igst_amount'] != 0) ? $fmt($sm['igst_amount']) : $na }}</td></tr>@endif
+            @if($sampleAll || (!$interState && (float) $sm['cgst_amount'] != 0))<tr><td class="l">CGST{{ $rate($halfRate) }}</td><td class="v">{{ (!$interState && (float) $sm['cgst_amount'] != 0) ? $fmt($sm['cgst_amount']) : $na }}</td></tr>@endif
+            @if($sampleAll || (!$interState && (float) $sm['sgst_amount'] != 0))<tr><td class="l">SGST{{ $rate($halfRate) }}</td><td class="v">{{ (!$interState && (float) $sm['sgst_amount'] != 0) ? $fmt($sm['sgst_amount']) : $na }}</td></tr>@endif
           @endif
           @if($tds)
             <tr><td class="l">{{ $tds === 'tds' ? 'LESS: TDS' : 'ADD: TCS' }}{{ !empty($sm['tds_tcs_section']) ? ' ('.$sm['tds_tcs_section'].')' : '' }}</td><td class="v">{{ $fmt($sm['tds_tcs_amount']) }}</td></tr>
-          @elseif($data['has_tax'])
+          @elseif($sampleAll && $data['has_tax'])
             <tr><td class="l">CESS/TDS/TCS</td><td class="v">{{ $na }}</td></tr>
           @endif
-          <tr><td class="l">Rounded off</td><td class="v">{{ $roundOff == 0 ? $na : (($roundOff < 0 ? '-' : '') . $fmt(abs($roundOff))) }}</td></tr>
+          @if($roundOff != 0)<tr><td class="l">Rounded off</td><td class="v">{{ ($roundOff < 0 ? '-' : '') . $fmt(abs($roundOff)) }}</td></tr>@elseif($sampleAll)<tr><td class="l">Rounded off</td><td class="v">{{ $na }}</td></tr>@endif
           <tr class="gt"><td class="l">Grand Total</td><td class="v">{{ $fmt($sm['grand_total']) }}</td></tr>
         </table>
       </td>
