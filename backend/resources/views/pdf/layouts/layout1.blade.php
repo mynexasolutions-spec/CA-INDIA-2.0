@@ -177,11 +177,11 @@
         <td class="{{ $i === 0 ? 'l' : '' }}">
           <div class="party-name">{{ $party['name'] ?? '—' }}</div>
           <table class="kv">
-            <tr><td class="k">GSTIN:</td><td>{{ $party['gstin'] ?? '' }}</td></tr>
-            <tr><td class="k">State:</td><td>{{ $party['state'] ?? '' }}</td></tr>
-            <tr><td class="k">Address:</td><td>{{ $party['address'] ?? '' }}</td></tr>
-            <tr><td class="k">Email ID:</td><td>{{ $party['email'] ?? '' }}</td></tr>
-            <tr><td class="k">Mobile:</td><td>{{ $party['mobile'] ?? '' }}</td></tr>
+            @if(filled($party['gstin'] ?? null))<tr><td class="k">GSTIN:</td><td>{{ $party['gstin'] }}</td></tr>@endif
+            @if(filled($party['state'] ?? null))<tr><td class="k">State:</td><td>{{ $party['state'] }}</td></tr>@endif
+            @if(filled($party['address'] ?? null))<tr><td class="k">Address:</td><td>{{ $party['address'] }}</td></tr>@endif
+            @if(filled($party['email'] ?? null))<tr><td class="k">Email ID:</td><td>{{ $party['email'] }}</td></tr>@endif
+            @if(filled($party['mobile'] ?? null))<tr><td class="k">Mobile:</td><td>{{ $party['mobile'] }}</td></tr>@endif
           </table>
         </td>
       @endforeach

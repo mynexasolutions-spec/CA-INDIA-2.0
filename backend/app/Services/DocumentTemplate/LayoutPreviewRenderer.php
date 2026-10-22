@@ -78,7 +78,7 @@ class LayoutPreviewRenderer
      * Bump whenever the rendered output changes for the same inputs (a template, the sample data, the footer ...), so
      * cached previews made by older code are not reused.
      */
-    private const CACHE_VERSION = 'v40';
+    private const CACHE_VERSION = 'v41';
 
     /**
      * render(), served from a small file cache shared by the client and admin previews. Rendering costs a second or
@@ -242,6 +242,7 @@ class LayoutPreviewRenderer
             'billing_address' => 'Sample Address, Sample City - 000000',
             'shipping_address' => 'Sample Address, Sample City - 000000',
             'phone' => '0000000000',
+            'email' => 'sample@example.com',
         ]);
 
         $hasTax = $type !== 'bill_of_supply';
