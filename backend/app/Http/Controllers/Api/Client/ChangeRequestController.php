@@ -290,7 +290,7 @@ class ChangeRequestController extends Controller
         // Rate and Taxable Value centred. v19: Layout 2 — logo centred in its box, smaller title and meta rows,
         // PO No./Against always listed with a hint when empty. v20: Layout 2 rebuilt to the new template (ribbon bands; v21: side borders; v22: footer raised, corner triangle reshaped; v23: Layout 1 rebuilt to the new template (continuous form, page border, tax rows always listed),
         // filled title bar, new proportions, tax rows always listed).
-        $key = md5(json_encode([$profile->getAttributes(), $profile->user?->email, $profile->user?->phone, $layoutId, $colour, now()->toDateString(), 'v28']));
+        $key = md5(json_encode([$profile->getAttributes(), $profile->user?->email, $profile->user?->phone, $layoutId, $colour, now()->toDateString(), 'v29']));
         $path = "layout-preview-cache/{$key}.pdf";
 
         if ($disk->exists($path) && $disk->lastModified($path) > now()->subDay()->getTimestamp()) {

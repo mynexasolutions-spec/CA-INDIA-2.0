@@ -79,7 +79,7 @@
   .sec-h { font-weight: bold; font-size: 12.2px; text-transform: uppercase; }
   .sec + .sec { border-top: 1px solid {{ $ink }}; }
   /* dompdf adds the padding on top of a cell's height: these give 52.8pt (amount in words) and 81pt (bank details) */
-  .sec-words { height: 59px; }
+  .sec-words { height: 60px; }
   .sec-bank { height: 97px; }
   .bank td { padding: 1px 0; font-size: 12px; }
   .bank td.k { width: 92px; }
