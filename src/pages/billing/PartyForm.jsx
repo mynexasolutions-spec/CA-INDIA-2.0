@@ -68,7 +68,8 @@ export default function PartyForm() {
   const [gstinFetching, setGstinFetching] = useState(false);
   const [gstinVerified, setGstinVerified] = useState(false);
   const [gstinFetchErr, setGstinFetchErr] = useState('');
-  const [tradeName, setTradeName] = useState('');
+  const [legalName, setLegalName] = useState('');
+  const [proprietorAutofilled, setProprietorAutofilled] = useState(false);
   // Shipping Address auto-fills from Billing Address until the user types into Shipping
   // Address directly — after that, Billing Address edits no longer overwrite it.
   const [shippingTouched, setShippingTouched] = useState(false);
@@ -87,13 +88,14 @@ export default function PartyForm() {
   const fetchGstin = async () => {
     const gstin = (form.gstin || '').trim().toUpperCase();
     if (!GSTIN_REGEX.test(gstin)) { setGstinFetchErr('Enter a valid 15-digit GSTIN first.'); return; }
-    setGstinFetching(true); setGstinFetchErr(''); setGstinVerified(false); setTradeName('');
+    setGstinFetching(true); setGstinFetchErr(''); setGstinVerified(false); setLegalName(''); setProprietorAutofilled(false);
     try {
       const d = await api(`/billing/parties/gstin-lookup?gstin=${gstin}`);
       setForm((f) => ({
         ...f,
         gstin,
-        name:            d.legal_name  || f.name,
+        // Company Name is the trade name; the legal name is used only when there is no trade name.
+        name:            d.trade_name  || d.legal_name || f.name,
         state:           d.state       || f.state,
         state_code:      d.state_code  || f.state_code,
         billing_address: d.address     || f.billing_address,
@@ -104,7 +106,8 @@ export default function PartyForm() {
           ? (d.legal_name || '')
           : f.proprietor_name,
       }));
-      setTradeName(d.trade_name || '');
+      setLegalName(d.legal_name || '');
+      setProprietorAutofilled(!form.proprietor_name && Boolean(d.legal_name) && /^proprietor/i.test(d.business_type || ''));
       setGstinVerified(true);
     } catch (e) {
       setGstinFetchErr(e.message || 'GST lookup failed. Please try again or enter details manually.');
@@ -242,7 +245,7 @@ export default function PartyForm() {
               {gstinVerified && (
                 <div className="pf-msg pf-msg-ok">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
-                  <span>GSTIN Verified — Legal Name, State and Address were filled in below. Please review before saving.</span>
+                  <span>GSTIN Verified — Company Name (Trade Name), State and Address were filled in below. Please review before saving.</span>
                 </div>
               )}
               {gstinFetchErr && (
@@ -256,10 +259,10 @@ export default function PartyForm() {
           ) : <div />}
 
           <SecHead icon="biz" title="Business Information" sub="Legal name and signatory" />
-          <Field label="Company Name" required badge={gstinVerified && Boolean(form.name)} help={tradeName ? `Legal name of the company · Trade name: ${tradeName}` : 'Enter the legal name of the company'}>
+          <Field label="Company Name" required badge={gstinVerified && Boolean(form.name)} help={legalName && legalName !== form.name ? `Trade name of the company · Legal name: ${legalName}` : 'Enter the trade name of the company'}>
             <input className="bp-input" placeholder="Enter company name" value={form.name} onChange={(e) => set('name', e.target.value)} required />
           </Field>
-          <Field label="Proprietor / Authorised Signatory" required help="Enter the name of proprietor or authorised signatory">
+          <Field label="Proprietor / Authorised Signatory" required badge={gstinVerified && proprietorAutofilled && Boolean(form.proprietor_name)} help="Enter the name of proprietor or authorised signatory">
             <input className="bp-input" placeholder="Enter proprietor / authorised signatory name" value={form.proprietor_name} onChange={(e) => set('proprietor_name', e.target.value)} required />
           </Field>
 

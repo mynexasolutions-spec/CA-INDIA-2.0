@@ -294,6 +294,8 @@ class AdminBillingDocumentController extends Controller
 
         $validated = $request->validate([
             'fy' => 'required|string',
+            // Admin has full access: the document number may be corrected (GST: max 16 chars, letters/digits/-//).
+            'number' => ['nullable', 'string', 'max:16', 'regex:/^[A-Za-z0-9\/\-]+$/'],
             'document_date' => 'required|date_format:Y-m-d',
             'is_inter_state' => 'required|boolean',
             'is_reverse_charge' => 'required|boolean',

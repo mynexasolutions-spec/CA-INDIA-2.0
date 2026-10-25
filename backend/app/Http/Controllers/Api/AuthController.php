@@ -226,37 +226,39 @@ class AuthController extends Controller
     {
         $data = $request->validate(['email' => 'required|email']);
         $user = $this->findUserByIdentifier($data['email']);
-        if ($user) {
-            $otp = (string) random_int(100000, 999999);
-            DB::table('password_reset_otps')->updateOrInsert(
-                ['email' => $data['email']],
-                [
-                    'otp_hash' => Hash::make($otp),
-                    'attempts' => 0,
-                    'expires_at' => now()->addMinutes(self::OTP_TTL_MINUTES),
-                    'reset_token_hash' => null,
-                    'reset_token_expires_at' => null,
-                    'updated_at' => now(),
-                    'created_at' => now(),
-                ]
-            );
-            try {
-                Mail::raw(
-                    "Your A B KHAN & ASSOCIATES password reset OTP is: {$otp}\n\n".
-                    'This code is valid for '.self::OTP_TTL_MINUTES." minutes.\n\n".
-                    "If you did not request this, you can safely ignore this email.",
-                    function ($m) use ($user) {
-                        $m->to($user->otpEmail())->subject('Your password reset OTP - A B KHAN & ASSOCIATES');
-                    }
-                );
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('OTP mail failed: '.$e->getMessage());
-            }
+        if (!$user) {
+            throw ValidationException::withMessages(['email' => ['User does not exist.']]);
         }
 
-        // Same response whether or not the account exists, so we never leak which emails are registered.
+        $otp = (string) random_int(100000, 999999);
+        DB::table('password_reset_otps')->updateOrInsert(
+            ['email' => $data['email']],
+            [
+                'otp_hash' => Hash::make($otp),
+                'attempts' => 0,
+                'expires_at' => now()->addMinutes(self::OTP_TTL_MINUTES),
+                'reset_token_hash' => null,
+                'reset_token_expires_at' => null,
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+        try {
+            Mail::raw(
+                "Your A B KHAN & ASSOCIATES password reset OTP is: {$otp}\n\n".
+                'This code is valid for '.self::OTP_TTL_MINUTES." minutes.\n\n".
+                "If you did not request this, you can safely ignore this email.",
+                function ($m) use ($user) {
+                    $m->to($user->otpEmail())->subject('Your password reset OTP - A B KHAN & ASSOCIATES');
+                }
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('OTP mail failed: '.$e->getMessage());
+            throw ValidationException::withMessages(['email' => ['We could not send the OTP email right now. Please try again shortly.']]);
+        }
+
         return response()->json([
-            'message' => 'If an account exists for this email, a verification OTP has been sent.',
+            'message' => 'A verification OTP has been sent to your registered email address.',
             'ttl_minutes' => self::OTP_TTL_MINUTES,
         ]);
     }

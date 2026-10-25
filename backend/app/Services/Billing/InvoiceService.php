@@ -416,13 +416,21 @@ class InvoiceService
             $keepIssued = true;
             $oldGrandTotal = $locked->grand_total ?: $locked->total_amount;
 
+            // Admin may correct the document number; it must stay unique for this client.
+            $newNumber = isset($data['number']) ? trim((string) $data['number']) : '';
+            if ($newNumber !== '' && $newNumber !== $locked->number) {
+                BillingPolicy::assertUniqueNumber($profile, $newNumber, $locked->id);
+            } else {
+                $newNumber = $locked->number;
+            }
+
             // Mirror docPayload call from updateDraft (L84-93), positional args
             $payload = $this->docPayload(
                 $profile,
                 $mergedData,
                 $calc,
                 $type,
-                $locked->number,
+                $newNumber,
                 $isInter,
                 $isRcm,
                 $status,

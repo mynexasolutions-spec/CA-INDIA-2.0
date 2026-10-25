@@ -15,7 +15,8 @@ class GstFilingReminderController extends Controller
     {
         $profile = $request->user()->clientProfile;
 
-        if (!$profile || !$profile->has_gst || $profile->gst_compliance_enabled === false) {
+        // Admin toggle (Clients > Configuration): reminders are off unless explicitly enabled.
+        if (!$profile || !$profile->has_gst || $profile->gst_compliance_enabled === false || !$profile->gst_reminder_enabled) {
             return response()->json(['reminders' => []]);
         }
 

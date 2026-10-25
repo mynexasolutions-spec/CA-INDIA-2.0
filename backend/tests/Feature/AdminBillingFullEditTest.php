@@ -165,6 +165,59 @@ class AdminBillingFullEditTest extends TestCase
         $res->assertJsonPath('message', 'Document updated successfully.');
     }
 
+    public function test_admin_can_change_document_number(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $res = $this->putJson("/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$this->invoice->id}", $this->validPayload(['number' => 'INS/036']));
+        $res->assertStatus(200);
+
+        $this->assertSame('INS/036', $this->invoice->fresh()->number);
+    }
+
+    public function test_omitting_number_keeps_existing_number(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $res = $this->putJson("/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$this->invoice->id}", $this->validPayload());
+        $res->assertStatus(200);
+
+        $this->assertSame('INV-2026-001', $this->invoice->fresh()->number);
+    }
+
+    public function test_changing_number_to_one_already_used_by_client_is_rejected(): void
+    {
+        CommercialDocument::create([
+            'client_profile_id' => $this->client->id,
+            'customer_id' => $this->customer->id,
+            'type' => 'tax_invoice',
+            'number' => 'INS/035',
+            'document_date' => '2026-05-11',
+            'status' => 'issued',
+            'taxable_amount' => 100,
+            'total_amount' => 100,
+            'grand_total' => 100,
+        ]);
+        Sanctum::actingAs($this->admin);
+
+        $res = $this->putJson("/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$this->invoice->id}", $this->validPayload(['number' => 'INS/035']));
+        $res->assertStatus(422);
+
+        $this->assertSame('INV-2026-001', $this->invoice->fresh()->number);
+    }
+
+    public function test_invalid_number_format_is_rejected(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $this->putJson("/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$this->invoice->id}", $this->validPayload(['number' => 'INS 036!']))
+            ->assertStatus(422);
+        $this->putJson("/api/admin/billing/client-directory/{$this->client->id}/documents/tax_invoice/{$this->invoice->id}", $this->validPayload(['number' => str_repeat('A', 17)]))
+            ->assertStatus(422);
+
+        $this->assertSame('INV-2026-001', $this->invoice->fresh()->number);
+    }
+
     public function test_doctype_mismatch_returns_404(): void
     {
         Sanctum::actingAs($this->admin);
@@ -543,13 +596,13 @@ class AdminBillingFullEditTest extends TestCase
     {
         Sanctum::actingAs($this->admin);
 
+        // 'number' is intentionally absent: admin may change it (see test_admin_can_change_document_number).
         $originalNumber = $this->invoice->number;
         $originalStatus = $this->invoice->status;
         $originalCreatedAt = $this->invoice->created_at->toIso8601String();
         $originalIssuedAt = $this->invoice->issued_at->toIso8601String();
 
         $payload = $this->validPayload([
-            'number' => 'HACKED-NUMBER',
             'status' => 'draft',
             'type' => 'credit_note',
             'created_at' => '2020-01-01',

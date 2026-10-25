@@ -30,6 +30,12 @@ export default function Layout() {
     document.body.style.overflow = menuOpen ? 'hidden' : '';
   }, [menuOpen]);
 
+  // The login page fills exactly the space left under the header (see .is-auth-page in index.css).
+  useEffect(() => {
+    document.documentElement.classList.toggle('is-auth-page', isAuthPage);
+    return () => document.documentElement.classList.remove('is-auth-page');
+  }, [isAuthPage]);
+
   return (
     <>
       <Header onOpenMenu={() => setMenuOpen(true)} />

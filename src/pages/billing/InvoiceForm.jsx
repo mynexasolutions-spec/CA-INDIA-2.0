@@ -291,6 +291,12 @@ export default function InvoiceForm({
     setManualNumber(docNumber && !docNumber.startsWith('DRAFT-') ? docNumber : previewNumber);
   }, [isManualNumber, manualNumber, docNumber, previewNumber]);
 
+  // Admin (staff edit) has full access, so the number of any client document can be corrected.
+  const isAdminNumberEdit = staffEditMode && !!readOnlyNumber;
+  useEffect(() => {
+    if (isAdminNumberEdit) setManualNumber(readOnlyNumber);
+  }, [isAdminNumberEdit, readOnlyNumber]);
+
   // Prefill credit/debit notes and amendments from original document (?ref= or dropdown)
   useEffect(() => {
     if (id || !refId) return;
@@ -316,7 +322,7 @@ export default function InvoiceForm({
       type: docType,
       customer_id: partyId ? +partyId : null,
       reference_document_id: refId ? +refId : null,
-      ...(isManualNumber ? { number: manualNumber.trim() } : {}),
+      ...((isManualNumber || isAdminNumberEdit) && manualNumber.trim() ? { number: manualNumber.trim() } : {}),
       document_date: documentDate,
       place_of_supply: placeOfSupply,
       payment_terms: paymentTerms,
@@ -564,7 +570,7 @@ export default function InvoiceForm({
         <form className="bp-form two">
           <label>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>Document No. <InfoDotIcon /></span>
-            {isManualNumber ? (
+            {isManualNumber || isAdminNumberEdit ? (
               <input className="bp-input" value={manualNumber} maxLength={16}
                 onChange={(e) => setManualNumber(e.target.value.replace(/[^A-Za-z0-9/-]/g, ''))}
                 placeholder="Enter document number" />

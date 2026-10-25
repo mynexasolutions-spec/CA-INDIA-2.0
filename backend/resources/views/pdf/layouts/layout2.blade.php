@@ -59,8 +59,8 @@
   /* letterhead */
   .hdr td { vertical-align: middle; }
   .logo { width: 185px; padding: 0 20px 0 0; }
-  /* the logo sits in the middle and centre of its box and is scaled down to fit entirely inside it */
-  .logo-box { width: 100%; border: 1.3px solid {{ $ink }}; }
+  /* the logo sits in the middle and centre of its box (no border) and is scaled down to fit entirely inside it */
+  .logo-box { width: 100%; }
   .logo-box td { height: 104px; padding: 3px; text-align: center; vertical-align: middle; }
   .logo-box img { max-width: 156px; max-height: 96px; }
   .logo-box .ph { font-size: 11.6px; line-height: 1.45; }

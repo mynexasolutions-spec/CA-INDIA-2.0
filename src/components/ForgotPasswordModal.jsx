@@ -155,14 +155,18 @@ export default function ForgotPasswordModal({ open, onClose }) {
   };
 
   const stepIndex = { email: 1, otp: 2, password: 3, success: 4 }[s.step];
+  const StepIcon = { email: IconLock, otp: IconShieldCheck, password: IconLock, success: IconCheckCircle }[s.step];
 
   return (
     <div className="fpm-backdrop" role="presentation" onClick={onClose}>
       <div className="fpm-card" role="dialog" aria-modal="true" aria-label="Forgot password" onClick={(e) => e.stopPropagation()}>
         <div className="fpm-head">
-          <div>
-            <p className="fpm-eyebrow">{s.step !== 'success' ? `Step ${stepIndex} of 3` : 'All done'}</p>
-            <h3>{STEP_TITLES[s.step]}</h3>
+          <div className="fpm-head-main">
+            <span className="fpm-badge" aria-hidden="true"><StepIcon size={22} /></span>
+            <div>
+              <p className="fpm-eyebrow">{s.step !== 'success' ? `Step ${stepIndex} of 3` : 'All done'}</p>
+              <h3>{STEP_TITLES[s.step]}</h3>
+            </div>
           </div>
           <button type="button" className="fpm-close" onClick={onClose} aria-label="Close">
             <IconClose />
