@@ -359,31 +359,44 @@ class GstFilingController extends Controller
         }
 
         // HSN/SAC summary — aggregate line items, grouped by hsn_sac + gst_rate
+        // The GST offline-tool JSON reports HSN separately for B2B (registered recipients) and B2C, so the same
+        // aggregation is also kept per audience (hsn_b2b / hsn_b2c) next to the combined list the page shows.
         $hsnGroups = [];
+        $hsnB2bGroups = [];
+        $hsnB2cGroups = [];
+        $accumulate = function (array &$groups, $item, int $sign): void {
+            $key = ($item->hsn_sac ?: '') . '|' . $item->gst_rate;
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'hsn_sac'       => $item->hsn_sac ?: '',
+                    'description'   => $item->description ?: '',
+                    'gst_rate'      => (float) $item->gst_rate,
+                    'qty'           => 0,
+                    'uqc'           => $item->unit ?: 'NOS',
+                    'taxable_value' => 0,
+                    'igst'          => 0,
+                    'cgst'          => 0,
+                    'sgst'          => 0,
+                    'total'         => 0,
+                ];
+            }
+            $groups[$key]['qty']           += (float) $item->qty * $sign;
+            $groups[$key]['taxable_value'] += (float) $item->taxable_amount * $sign;
+            $groups[$key]['igst']          += (float) $item->igst_amount * $sign;
+            $groups[$key]['cgst']          += (float) $item->cgst_amount * $sign;
+            $groups[$key]['sgst']          += (float) $item->sgst_amount * $sign;
+            $groups[$key]['total']         += (float) $item->total_amount * $sign;
+        };
         foreach ($docs as $doc) {
             $sign = $doc->type === 'credit_note' ? -1 : 1;
+            $isB2b = $doc->customer?->gst_status === 'registered';
             foreach ($doc->lineItems as $item) {
-                $key = ($item->hsn_sac ?: '') . '|' . $item->gst_rate;
-                if (!isset($hsnGroups[$key])) {
-                    $hsnGroups[$key] = [
-                        'hsn_sac'       => $item->hsn_sac ?: '',
-                        'description'   => $item->description ?: '',
-                        'gst_rate'      => (float) $item->gst_rate,
-                        'qty'           => 0,
-                        'uqc'           => $item->unit ?: 'NOS',
-                        'taxable_value' => 0,
-                        'igst'          => 0,
-                        'cgst'          => 0,
-                        'sgst'          => 0,
-                        'total'         => 0,
-                    ];
+                $accumulate($hsnGroups, $item, $sign);
+                if ($isB2b) {
+                    $accumulate($hsnB2bGroups, $item, $sign);
+                } else {
+                    $accumulate($hsnB2cGroups, $item, $sign);
                 }
-                $hsnGroups[$key]['qty']           += (float) $item->qty * $sign;
-                $hsnGroups[$key]['taxable_value'] += (float) $item->taxable_amount * $sign;
-                $hsnGroups[$key]['igst']          += (float) $item->igst_amount * $sign;
-                $hsnGroups[$key]['cgst']          += (float) $item->cgst_amount * $sign;
-                $hsnGroups[$key]['sgst']          += (float) $item->sgst_amount * $sign;
-                $hsnGroups[$key]['total']         += (float) $item->total_amount * $sign;
             }
         }
         $hsnSummary = array_values($hsnGroups);
@@ -393,6 +406,8 @@ class GstFilingController extends Controller
             'doc_type_summary' => $docTypeSummary,
             'doc_type_totals'  => $totals,
             'hsn_summary'      => $hsnSummary,
+            'hsn_b2b'          => array_values($hsnB2bGroups),
+            'hsn_b2c'          => array_values($hsnB2cGroups),
         ]);
     }
 

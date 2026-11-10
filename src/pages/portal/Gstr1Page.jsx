@@ -5,6 +5,8 @@ import { useAuth } from '../../auth/AuthContext';
 import { useClientPortal } from '../../components/portal/ClientPortalContext';
 import { LoadingBlock } from '../../components/Spinner';
 import { buildFyOptions, fyMonthOptions, billingDocPath } from '../billing/billingUtils';
+import { buildGstr1OfflineJson, buildHsnOfflineJson, gstr1OfflineFileName } from './gstr1Json';
+import { buildGstr1PredefinedCsvs, buildHsnCsv } from './gstr1Csv';
 
 /* ── Helpers ───────────────────────────────────────────────────── */
 function money(n) {
@@ -71,7 +73,8 @@ function SectionCard({ icon, title, children, right }) {
 }
 
 /* ── Summary Tab ────────────────────────────────────────────────── */
-function SummaryTab({ summary, loading }) {
+function SummaryTab({ summary, loading, period }) {
+  const { user } = useAuth();
   const [hsnFormat, setHsnFormat] = useState('Excel');
 
   if (loading) return <LoadingBlock label="Loading summary…" minHeight={200} />;
@@ -151,9 +154,24 @@ function SummaryTab({ summary, loading }) {
               <option>JSON</option>
             </select>
             <button type="button"
-              onClick={() => exportTable(hsnFormat, 'gstr1_hsn_summary',
-                ['HSN/SAC Code', 'Description', 'GST %', 'QTY', 'UQC', 'Taxable Value', 'IGST', 'CGST', 'SGST', 'Total Invoice Value'],
-                hsn_summary.map((r) => [r.hsn_sac, r.description, r.gst_rate, r.qty, r.uqc || r.unit || '', r.taxable, r.igst, r.cgst, r.sgst, r.total]))}
+              onClick={() => {
+                if (hsnFormat === 'JSON') {
+                  // GST offline-tool JSON: hsn { hsn_b2b, hsn_b2c }
+                  const gstin = user?.client_profile?.gstin || '';
+                  const json = buildHsnOfflineJson({ gstin, period, hsnB2b: summary.hsn_b2b, hsnB2c: summary.hsn_b2c });
+                  saveBlob(new Blob([JSON.stringify(json)], { type: 'application/json' }), gstr1OfflineFileName(gstin));
+                  return;
+                }
+                if (hsnFormat === 'Predefined CSV') {
+                  // GST offline-tool hsn.csv layout
+                  const f = buildHsnCsv(hsn_summary);
+                  saveBlob(new Blob([f.content], { type: 'text/csv;charset=utf-8' }), f.filename);
+                  return;
+                }
+                exportTable(hsnFormat, 'gstr1_hsn_summary',
+                  ['HSN/SAC Code', 'Description', 'GST %', 'QTY', 'UQC', 'Taxable Value', 'IGST', 'CGST', 'SGST', 'Total Invoice Value'],
+                  hsn_summary.map((r) => [r.hsn_sac, r.description, r.gst_rate, r.qty, r.uqc || r.unit || '', r.taxable_value ?? r.taxable, r.igst, r.cgst, r.sgst, r.total]));
+              }}
               style={{ height: 30, padding: '0 12px', borderRadius: 7, border: 'none', background: '#2563eb', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
               <DownloadIcon /> Export
             </button>
@@ -229,6 +247,7 @@ const DOC_TYPE_OPTIONS = [
 const EXPORT_FORMATS = ['Excel', 'Predefined CSV', 'JSON'];
 
 function DocumentListTab({ gstType, period }) {
+  const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ current_page: 1, last_page: 1, total: 0, per_page: 10 });
   const [page, setPage] = useState(1);
@@ -249,10 +268,35 @@ function DocumentListTab({ gstType, period }) {
     setExporting(true);
     try {
       const { docFrom, docTo } = periodRange();
-      const qs = new URLSearchParams({ gst_type: gstType, doc_from: docFrom, doc_to: docTo, per_page: '1000', page: '1' });
+      const qs = new URLSearchParams({ gst_type: gstType, doc_from: docFrom, doc_to: docTo, per_page: '500', page: '1' });
       if (docType) qs.set('type', docType);
-      const d = await api(`/billing/documents?${qs}`);
-      const list = d.data || [];
+      // The API caps a page at 500 rows — walk every page so a filing export is never silently truncated.
+      const list = [];
+      for (let p = 1, last = 1; p <= last; p += 1) {
+        qs.set('page', String(p));
+        const d = await api(`/billing/documents?${qs}`);
+        list.push(...(d.data || []));
+        last = d.last_page || 1;
+      }
+
+      if (fmt === 'JSON') {
+        // GST offline-tool format (b2b / cdnr / b2cs …), ready to upload on the GST portal.
+        const gstin = user?.client_profile?.gstin || '';
+        const json = buildGstr1OfflineJson({ gstin, period, gstType, docs: list, stateCode: user?.client_profile?.state_code });
+        saveBlob(new Blob([JSON.stringify(json)], { type: 'application/json' }), gstr1OfflineFileName(gstin));
+        return;
+      }
+
+      if (fmt === 'Predefined CSV') {
+        // GST offline-tool CSV templates (b2b,sez,de.csv / cdnr.csv / b2cs.csv …) — one download per file.
+        const files = buildGstr1PredefinedCsvs({ gstType, docs: list, stateCode: user?.client_profile?.state_code });
+        for (let i = 0; i < files.length; i += 1) {
+          saveBlob(new Blob([files[i].content], { type: 'text/csv;charset=utf-8' }), files[i].filename);
+          if (i < files.length - 1) await new Promise((r) => setTimeout(r, 400));
+        }
+        return;
+      }
+
       const withGstin = gstType === 'b2b';
       const headers = ['S. No.', 'Invoice No.', 'Invoice Date', 'Party Name', ...(withGstin ? ['GSTIN'] : []), 'Place of Supply', 'GST %', 'Taxable Value', 'IGST', 'CGST', 'SGST', 'Total Value'];
       const body = list.map((r, i) => [
@@ -792,7 +836,7 @@ export default function Gstr1Page() {
 
       {/* Tab content */}
       {activeTab === 'summary' && (
-        <SummaryTab summary={summary} loading={summaryLoading} />
+        <SummaryTab summary={summary} loading={summaryLoading} period={period} />
       )}
       {activeTab === 'b2b' && <DocumentListTab gstType="b2b" period={period} />}
       {activeTab === 'b2c' && <DocumentListTab gstType="b2c" period={period} />}

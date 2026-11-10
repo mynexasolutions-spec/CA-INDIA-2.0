@@ -156,8 +156,8 @@ class DocumentController extends Controller
                 // B2C = everything that is not a registered (B2B) party, including walk-in sales with no party.
                 $q->whereDoesntHave('customer', fn ($c) => $c->where('gst_status', 'registered'));
             }
-            // GSTR-1 lists show the GST % of each document.
-            $q->with('lineItems:id,commercial_document_id,gst_rate');
+            // GSTR-1 lists show the GST % of each document; the per-line amounts feed the GSTR-1 JSON export.
+            $q->with('lineItems:id,commercial_document_id,gst_rate,taxable_amount,cgst_amount,sgst_amount,igst_amount');
         }
 
         // Filtered aggregate totals (spec §24) — over every row the list is currently showing (all pages,
